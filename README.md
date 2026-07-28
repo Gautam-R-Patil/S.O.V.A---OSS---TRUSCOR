@@ -1,6 +1,22 @@
-<p align="center">
-  <img src="./assets/sova-owl-logo.png" width="190" alt="SOVA geometric owl logo" />
-</p>
+<pre align="center">
+                         .-----------------------.
+                    .---'                         '---.
+                 .-'        /\             /\        '-.
+               .'          /  \.-"""""""-./  \          '.
+              /           /    (  o   o  )    \           \
+             |           |      \   ^   /      |           |
+             |           |       '.___.'       |           |
+              \           \       /|_|\       /           /
+               '.          '._   /_| |_\   _.'          .'
+                 '-._         '--._____.--'         _.-'
+                     '-------------|-------------'
+                                   |
+                                .--'--.
+                                '-----'
+
+                           S  O  V  A
+                    SEE  ---  TEST  ---  PROVE
+</pre>
 
 <h1 align="center">S.O.V.A.</h1>
 
@@ -33,9 +49,20 @@
 
 <br/>
 
-<p align="center">
-  <img src="./assets/sova-hero.png" width="100%" alt="SOVA maps an agent system, discovers a dormant trigger, seals the evidence, and produces a forensic replay" />
-</p>
+<pre align="center">
+  +-------------------+      +---------------------+      +--------------------+
+  |    AGENT SURFACE  | ---> |   SAFE TEST LOOP    | ---> |   EVIDENCE RECORD  |
+  | tools - memory    |      | map - drive - hunt  |      |    .sova-trace     |
+  | MCP - permissions |      | observe - contain   |      | signed - redacted  |
+  +-------------------+      +----------+----------+      +---------+----------+
+                                        |                           |
+                              hidden condition found                 |
+                                        |                           v
+                              +---------v----------+      +--------------------+
+                              |  PORTABLE FINDING  | ---> |  VERIFY - REPLAY   |
+                              |       .sova        |      | EXPLAIN - REGRESS  |
+                              +--------------------+      +--------------------+
+</pre>
 
 ---
 
@@ -518,7 +545,15 @@ Until the security contribution process is published, please do not open public 
 ---
 
 <p align="center">
-  <img src="./assets/sova-owl-logo.png" width="84" alt="SOVA owl mark" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/truscor-mark-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./assets/truscor-mark-light.svg">
+    <img src="./assets/truscor-mark-light.svg" width="58" alt="TRUSCOR mark">
+  </picture>
+</p>
+
+<p align="center">
+  <img src="./assets/truscor-wordmark.png" width="430" alt="TRUSCOR wordmark">
 </p>
 
 <p align="center">
