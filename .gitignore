@@ -1,0 +1,49 @@
+# Private planning, company, IP, and confidential context — never commit
+/TRUSCOR_Bible_v4_0.md
+/SOVA_TRUSCOR_Patent_and_Publication_Strategy_v1_0.md
+/SOVA_OSS_Master_Idea_Doc_v4_7_FINAL.md
+/Atlas_MCP_Confidential_Technical_Report_v1.0 (1).pdf
+/SOVA_OSS_PARTS_INDEX.md
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# SOVA local state and potentially sensitive evidence
+/.sova/
+*.sova-trace
+*.sova-trace.*
+/traces/
+/receipts/
+/artifacts/private/
+/browser-profiles/
+
+# Dependencies and virtual environments
+node_modules/
+.pnpm-store/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Build, coverage, logs, and temporary output
+dist/
+build/
+coverage/
+.coverage
+*.log
+tmp/
+temp/
+.cache/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
