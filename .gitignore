@@ -5,6 +5,22 @@
 /Atlas_MCP_Confidential_Technical_Report_v1.0 (1).pdf
 /SOVA_OSS_PARTS_INDEX.md
 
+# Proprietary engine, intelligence, client, and trade-secret material
+/private/
+/confidential/
+/internal-only/
+/truscor-engine/
+/private-corpus/
+/matched-loss/
+/client-data/
+/client-findings/
+/honeypot-internal/
+/atlas-confidential/
+/trade-secrets/
+*.confidential.*
+*.private.*
+*.secret.*
+
 # Secrets and local configuration
 .env
 .env.*

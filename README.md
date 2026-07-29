@@ -251,7 +251,7 @@ SOVA owns the security method and evidence. Execution providers remain replaceab
 ```mermaid
 flowchart TB
     CLI["CLI / Local SOVA MCP / SDK"]
-    CORE["SOVA engine<br/>mapping • attack planning • trigger search • judging"]
+    CORE["SOVA OSS Core<br/>mapping • attack planning • trigger search • judging"]
     SAFE["Authorization and safety gate<br/>self-owned scope • blast radius • non-destructive defaults"]
     EXEC["ExecutorAdapter"]
     SCRIPT["ScriptedExecutor<br/>deterministic tests"]
@@ -283,6 +283,8 @@ flowchart TB
 - terminal use.
 
 SOVA does **not** outsource its sandboxing, authorization, trigger search, observations, judging, redaction, signing, replay, forensics, or reporting to Atlas. The SOVA core must work with scripted and local executors before Atlas is connected.
+
+Atlas is a separate XAGI Labs project, not SOVA Engine and not a source of TRUSCOR authority. Public SOVA integration will rely only on Atlas's public interface and reproducible behavior of a public release; confidential Atlas material is outside this repository.
 
 ## Planned features
 
@@ -468,6 +470,10 @@ Research claims will require predeclared protocols, strong baselines, repeated t
 | Public identity and README | In progress |
 | Canonical artifact meanings | Accepted in [ADR-0001](./docs/decisions/0001-canonical-artifact-meanings.md) |
 | `.sova` meaning and migration invariants | Accepted in [ADR-0001](./docs/decisions/0001-canonical-artifact-meanings.md) and [ADR-0002](./docs/decisions/0002-versioning-and-lossless-migration.md) |
+| Open/private and SOVA Engine boundary | Accepted in [ADR-0003](./docs/decisions/0003-open-source-and-proprietary-boundary.md) |
+| Self-assessment and TRUSCOR authority boundary | Accepted in [ADR-0004](./docs/decisions/0004-self-assessment-and-truscor-boundary.md) |
+| Public repository boundary check | Active in CI and available locally |
+| OSS licence and trademark policy | Founder decision pending; no executable release yet |
 | `.sova` field schema | Experimental work has not started |
 | `.sova-trace` experimental contract | Not yet implemented |
 | Scripted/local execution | Not yet implemented |
@@ -491,14 +497,24 @@ planted sleeper component
 
 ## Open-source and commercial boundary
 
-SOVA OSS is designed to help users test and understand **their own systems**.
+SOVA OSS is the complete local instrument for users to test and understand systems they are authorized to assess. It is not a crippled edition of a paid product:
 
-- SOVA produces operator-controlled evidence and self-assessments.
-- SOVA does not issue a TRUSCOR certificate or independent attestation.
-- SOVA does not produce financial loss, underwriting, premium, or insurance conclusions.
-- SOVA does not contain TRUSCOR’s private corpus, client-confidential findings, or proprietary commercial risk models.
+- every planned SOVA OSS command and generic security workflow belongs in the public repository;
+- no SOVA OSS feature depends on a TRUSCOR account, service, private plugin, or feature flag;
+- SOVA OSS outputs are visibly labelled operator-controlled self-assessments;
+- SOVA OSS never issues a TRUSCOR certificate, independent attestation, financial-loss conclusion, premium, or underwriting output;
+- SOVA OSS never contains TRUSCOR’s private corpus, corpus-derived tuning, client-confidential findings, matched loss pairs, private honeypot intelligence, commercial risk models, or signature authority.
 
-The separation protects the credibility of both projects: evidence can be open; independent trust cannot be self-issued.
+**SOVA Engine** is the name of TRUSCOR's separate proprietary system. The public runtime is called **SOVA OSS Core** or **SOVA Runtime**. A fork can reproduce and improve the public instrument; open source cannot honestly prevent that. A fork does not receive TRUSCOR's private intelligence, separately governed review process, protected identity, accumulated operating record, commercial relationships, or any authority TRUSCOR may independently establish.
+
+The separation is:
+
+> **SOVA OSS provides the instrument and first-party evidence. TRUSCOR combines private intelligence with separately governed operation and accountability.**
+
+Read [the complete open/private decision](./docs/decisions/0003-open-source-and-proprietary-boundary.md), [the self-assessment decision](./docs/decisions/0004-self-assessment-and-truscor-boundary.md), and [the public repository policy](./docs/governance/public-repository-boundary.md).
+
+> [!NOTE]
+> This pre-alpha repository does not yet contain a `LICENSE` file. The founder licence and trademark gates remain open, so the published design material should not yet be described as a completed licensed OSS release.
 
 ## Contributing
 
