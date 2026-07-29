@@ -117,6 +117,8 @@ Every public change must confirm:
 - [ ] Atlas content comes only from cited public sources or public black-box behavior.
 - [ ] Fixtures are synthetic or have documented public provenance.
 - [ ] Patent, paper, coordinated-disclosure, and third-party-licence gates are cleared.
+- [ ] New public claims are active in the [claims register](../research/claims-register.md).
+- [ ] Mechanism-bearing material passed the [publication and IP review](./publication-and-ip-review.md).
 - [ ] SOVA OSS outputs remain visibly first-party self-assessments.
 - [ ] No TRUSCOR certificate, score, financial, underwriting, or third-party-reliance claim is implied.
 - [ ] No automatic remediation or automatic upload to TRUSCOR was introduced.
@@ -153,3 +155,7 @@ The repository uses:
 - human founder/IP review for semantic disclosure.
 
 Automation catches known paths, markers, and common secrets. It cannot determine whether a novel algorithm or innocuous-looking constant was derived from a trade secret. Human review remains mandatory.
+
+The [publication and IP review](./publication-and-ip-review.md) controls
+research claims, invention holds, papers, demos, benchmark artifacts, and other
+disclosure forms that path scanning alone cannot evaluate.

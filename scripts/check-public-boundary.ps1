@@ -30,7 +30,12 @@ $requiredPublicFiles = @(
     "CONTRIBUTING.md",
     "DUAL_USE_POLICY.md",
     "SECURITY.md",
-    "docs/decisions/0005-topic-00-project-constitution.md"
+    "docs/decisions/0005-topic-00-project-constitution.md",
+    "docs/decisions/0006-topic-01-evidence-go-no-go.md",
+    "docs/governance/publication-and-ip-review.md",
+    "docs/research/claims-register.md",
+    "docs/research/prior-art-and-interoperability.md",
+    "docs/research/predeclared-comparison-protocol.md"
 )
 
 $forbiddenExactPaths = @(
@@ -108,6 +113,7 @@ $contentExclusions = @(
     ".gitignore",
     "scripts/check-public-boundary.ps1",
     "docs/governance/public-repository-boundary.md",
+    "docs/governance/publication-and-ip-review.md",
     "docs/decisions/0003-open-source-and-proprietary-boundary.md"
 )
 
@@ -126,6 +132,24 @@ $confidentialMarkers = @(
     "ATLAS CONFIDENTIAL",
     "TRADE SECRET"
 )
+
+$claimControlExclusions = @(
+    "docs/research/claims-register.md",
+    "docs/research/prior-art-and-interoperability.md",
+    "docs/governance/publication-and-ip-review.md",
+    "docs/decisions/0006-topic-01-evidence-go-no-go.md"
+)
+
+$retiredClaimPatterns = [ordered]@{
+    "conditional-trigger category described as unoccupied" = 'conditional[- ]trigger.{0,80}\b(unoccupied|nobody)\b'
+    "attacker/recorder exclusivity claim" = '\bonly system where the attacker and (the )?recorder\b'
+    "universal attack-to-evidence absence claim" = '\bnobody connects.{0,120}\b(attack|evidence)\b'
+    "counterfactual attribution described as unaddressed" = '\bcounterfactual.{0,80}\bunaddressed\b'
+    "universal reproduction-rate novelty claim" = '\b(reproduction rate|semantic reproduction).{0,80}\bnobody\b'
+    "Phantom Fuzzer unmatched claim" = '\bPhantom Fuzzer.{0,80}\bunmatched\b'
+    "obsolete blanket EU enforcement date" = '\benforcement powers (activate|activated) (on )?2 August 2026\b'
+    "adversarial-testing-specific fine claim" = '\b(EUR\s*)?15\s*(million|m).{0,80}\badversarial[- ]testing\b'
+}
 
 foreach ($candidateFile in $candidateFiles) {
     $normalized = $candidateFile.Replace("\", "/")
@@ -162,6 +186,20 @@ foreach ($candidateFile in $candidateFiles) {
     foreach ($marker in $confidentialMarkers) {
         if ($content.IndexOf($marker, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
             $violations.Add("confidentiality marker '$marker' in $normalized")
+        }
+    }
+
+    if (($extension -eq ".md") -and
+        ($claimControlExclusions -notcontains $normalized)) {
+        foreach ($entry in $retiredClaimPatterns.GetEnumerator()) {
+            if ([regex]::IsMatch(
+                $content,
+                $entry.Value,
+                [Text.RegularExpressions.RegexOptions]::IgnoreCase -bor
+                [Text.RegularExpressions.RegexOptions]::Singleline
+            )) {
+                $violations.Add("retired public claim '$($entry.Key)' in $normalized")
+            }
         }
     }
 }

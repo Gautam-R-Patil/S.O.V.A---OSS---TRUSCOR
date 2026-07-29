@@ -464,6 +464,15 @@ The principal research directions are:
 
 Research claims will require predeclared protocols, strong baselines, repeated trials, ground truth, uncertainty, ethics review, and reproducible artifacts. Paper and patent decisions will be made before irreversible public disclosure.
 
+The Topic 01 evidence controls are now public:
+
+- the [claims register](./docs/research/claims-register.md) records what is verified, provisional, unverified, retired, or still a value hypothesis;
+- the [prior-art and interoperability matrix](./docs/research/prior-art-and-interoperability.md) records what SOVA will build, integrate, import, interoperate with, or deliberately skip;
+- the [predeclared comparison protocol](./docs/research/predeclared-comparison-protocol.md) freezes the target classes, strong baselines, budgets, objective oracles, repeated trials, false-positive rules, and evidence gates before results exist;
+- the [publication and IP review](./docs/governance/publication-and-ip-review.md) prevents vulnerability, invention, private-data, and unsupported-claim disclosure.
+
+The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes no present claim that it catches defects other tools miss or attributes failures correctly. Those statements must be earned against the frozen protocol.
+
 ## Project status
 
 | Area | Status |
@@ -475,6 +484,8 @@ Research claims will require predeclared protocols, strong baselines, repeated t
 | Open/private and SOVA Engine boundary | Accepted in [ADR-0003](./docs/decisions/0003-open-source-and-proprietary-boundary.md) |
 | Self-assessment and TRUSCOR authority boundary | Accepted in [ADR-0004](./docs/decisions/0004-self-assessment-and-truscor-boundary.md) |
 | Topic 00 project constitution | Accepted in [ADR-0005](./docs/decisions/0005-topic-00-project-constitution.md) |
+| Topic 01 claims, prior art, experiment, and publication decision | Accepted in [ADR-0006](./docs/decisions/0006-topic-01-evidence-go-no-go.md) |
+| Comparative evidence gates 01-A and 01-B | **Not run - unproven; comparative claims prohibited** |
 | Public repository boundary check | Active in CI and available locally |
 | Repository licence | [Apache License 2.0](./LICENSE) |
 | Trademark and fork naming | [SOVA-OSS policy active](./TRADEMARKS.md) |

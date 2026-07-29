@@ -10,6 +10,10 @@ Describe the public change and why it belongs in SOVA OSS.
 - [ ] Atlas-specific content comes only from a cited public source or reproducible behavior of a public release.
 - [ ] Fixtures are synthetic or have documented public provenance.
 - [ ] Patent, paper, coordinated-disclosure, and third-party-licence gates are cleared.
+- [ ] Every new or changed factual, comparative, legal, market, standards, or novelty claim has an active entry in the [claims register](../docs/research/claims-register.md).
+- [ ] Comparative language cites a frozen protocol, exact revisions, budgets, uncertainty, and an immutable run-bundle digest.
+- [ ] The [publication and IP checklist](../docs/governance/publication-and-ip-review.md) was completed for mechanism-bearing code, papers, benchmark artifacts, demos, or releases.
+- [ ] This change contains no invention-hold method, benchmark answer key, unpatched exploit detail, or private/corpus-derived tuning.
 - [ ] Every commit includes a Developer Certificate of Origin `Signed-off-by` line.
 - [ ] SOVA OSS outputs remain visibly first-party self-assessments.
 - [ ] The change does not imply a TRUSCOR certificate, score, financial conclusion, or third-party reliance.
