@@ -34,6 +34,19 @@ def render(source: Path = SOURCE) -> str:
     """Render deterministic Markdown from the glossary TOML source."""
     raw = tomllib.loads(source.read_text(encoding="utf-8"))
     terms = cast("list[Term]", raw["term"])
+    names = [item["term"].casefold() for item in terms]
+    if len(names) != len(set(names)):
+        message = "glossary terms must be unique ignoring case"
+        raise ValueError(message)
+    for item in terms:
+        if (
+            not item["term"].strip()
+            or not item["definition"].strip()
+            or item["status"] not in {"accepted", "planned", "deprecated"}
+            or not item["source"].strip()
+        ):
+            message = f"invalid glossary entry: {item!r}"
+            raise ValueError(message)
     ordered = sorted(terms, key=lambda item: item["term"].casefold())
     rows = [
         "<!-- status: implemented -->",
@@ -42,8 +55,8 @@ def render(source: Path = SOURCE) -> str:
         "# SOVA glossary",
         "",
         "This glossary is generated from `docs/glossary.toml`. Accepted terms come",
-        "from the controlling decisions. Topic 03 must reconcile its data-model",
-        "vocabulary here; the generator check makes later drift visible in CI.",
+        "from controlling decisions. Topic 03 reconciled the shared domain language;",
+        "the generator check makes later semantic drift visible in CI.",
         "",
         "| Term | Definition | State | Source |",
         "|---|---|---|---|",

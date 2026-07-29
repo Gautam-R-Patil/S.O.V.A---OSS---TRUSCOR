@@ -24,6 +24,12 @@ repos:
         language: system
         pass_filenames: false
 
+      - id: generated-contracts
+        name: Generated contract references
+        entry: uv run --locked python scripts/generate_taxonomy.py --check
+        language: system
+        pass_filenames: false
+
       - id: public-boundary
         name: Public repository boundary
         entry: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-public-boundary.ps1

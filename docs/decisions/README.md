@@ -15,6 +15,7 @@ silently rewrite it.
 | [0005](./0005-topic-00-project-constitution.md) | Topic 00 project constitution | Accepted |
 | [0006](./0006-topic-01-evidence-go-no-go.md) | Topic 01 evidence and publication go/no-go | Accepted |
 | [0007](./0007-topic-02-engineering-foundation.md) | Topic 02 engineering foundation | Accepted |
+| [0008](./0008-topic-03-domain-contracts.md) | Topic 03 shared domain and version contracts | Accepted |
 
 Use the next zero-padded number. Every ADR states its status, date, owner,
 scope, decision, alternatives, consequences, and superseded decisions.

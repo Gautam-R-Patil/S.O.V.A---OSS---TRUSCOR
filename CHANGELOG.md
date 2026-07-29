@@ -17,6 +17,13 @@ have independent version ledgers.
   compatibility, performance-budget, and failure-injection controls.
 - Repository governance, documentation states, glossary generation, research
   artifact indexing, methodology versioning, issue routing, and release rules.
+- Experimental `sova.domain` contract primitives for strict versions,
+  SHA-256 fingerprints, UUIDv7 logical identities, and explicit context.
+- Five-axis non-destructive finding lifecycle and stable failure codes.
+- Versioned twelve-class `sova.attack` taxonomy with standard/custom profile
+  rules and version-pinned OWASP, MITRE ATLAS, CWE, and CAPEC mappings.
+- Six-dimensional frozen-denominator observed coverage, exploration budgets,
+  stopping rules, and source-example reconciliation.
 
 ### Security
 

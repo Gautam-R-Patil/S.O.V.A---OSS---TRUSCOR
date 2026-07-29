@@ -21,3 +21,10 @@ version = "1.0.0"
 status = "active"
 source = "docs/governance/publication-and-ip-review.md"
 change = "Initial publication, invention, disclosure, and claim-review method."
+
+[[methodology]]
+id = "SOVA-OBSERVED-COVERAGE"
+version = "0.1.0"
+status = "experimental"
+source = "docs/contracts/coverage-model.md"
+change = "Initial frozen-denominator coverage vector, exploration-budget, and stopping-rule contract."

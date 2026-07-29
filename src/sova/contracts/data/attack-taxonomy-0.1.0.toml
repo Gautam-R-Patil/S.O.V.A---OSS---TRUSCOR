@@ -1,0 +1,366 @@
+# SPDX-License-Identifier: Apache-2.0
+
+taxonomy_id = "sova.attack"
+version = "0.1.0"
+status = "experimental"
+owner = "SOVA OSS maintainers"
+released = "2026-07-29"
+
+standard_profile = [
+  "SOVA-ATK-001",
+  "SOVA-ATK-002",
+  "SOVA-ATK-003",
+  "SOVA-ATK-004",
+  "SOVA-ATK-005",
+  "SOVA-ATK-006",
+  "SOVA-ATK-007",
+  "SOVA-ATK-008",
+  "SOVA-ATK-009",
+  "SOVA-ATK-010",
+  "SOVA-ATK-011",
+  "SOVA-ATK-012",
+]
+
+[[taxon]]
+id = "SOVA-ATK-001"
+title = "Prompt and instruction manipulation"
+definition = "Attempts to alter an agent's goals, instruction priority, interpretation, or control flow through direct, indirect, encoded, retrieved, or cross-context instructions."
+status = "active"
+
+[[taxon.mapping]]
+framework = "OWASP Agentic Top 10"
+catalog_version = "2026"
+identifier = "ASI01"
+title = "Agent Goal Hijack"
+relationship = "broader"
+url = "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0051"
+title = "LLM Prompt Injection"
+relationship = "broader"
+url = "https://atlas.mitre.org/techniques/AML.T0051"
+
+[[taxon.mapping]]
+framework = "CAPEC"
+catalog_version = "3.9"
+identifier = "CAPEC-152"
+title = "Inject Unexpected Items"
+relationship = "related"
+url = "https://capec.mitre.org/data/definitions/152.html"
+
+[[taxon]]
+id = "SOVA-ATK-002"
+title = "Tool and permission misuse"
+definition = "Attempts to make an agent invoke a tool, identity, approval path, delegated authority, or permission outside the operator's intended purpose or least-authority boundary."
+status = "active"
+
+[[taxon.mapping]]
+framework = "OWASP Agentic Top 10"
+catalog_version = "2026"
+identifier = "ASI02"
+title = "Tool Misuse and Exploitation"
+relationship = "broader"
+url = "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+
+[[taxon.mapping]]
+framework = "OWASP Agentic Top 10"
+catalog_version = "2026"
+identifier = "ASI03"
+title = "Identity and Privilege Abuse"
+relationship = "related"
+url = "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0053"
+title = "AI Agent Tool Invocation"
+relationship = "broader"
+url = "https://atlas.mitre.org/techniques/AML.T0053"
+
+[[taxon.mapping]]
+framework = "CWE"
+catalog_version = "4.20"
+identifier = "CWE-250"
+title = "Execution with Unnecessary Privileges"
+relationship = "related"
+url = "https://cwe.mitre.org/data/definitions/250.html"
+
+[[taxon]]
+id = "SOVA-ATK-003"
+title = "Secret access and exfiltration"
+definition = "Attempts to discover, access, infer, retain, disclose, or transmit credentials, private data, system prompts, or other protected information through model, tool, agent, or network paths."
+status = "active"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0098"
+title = "AI Agent Tool Credential Harvesting"
+relationship = "broader"
+url = "https://atlas.mitre.org/techniques/AML.T0098"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0086"
+title = "Exfiltration via AI Agent Tool Invocation"
+relationship = "broader"
+url = "https://atlas.mitre.org/techniques/AML.T0086"
+
+[[taxon.mapping]]
+framework = "CWE"
+catalog_version = "4.20"
+identifier = "CWE-200"
+title = "Exposure of Sensitive Information to an Unauthorized Actor"
+relationship = "related"
+url = "https://cwe.mitre.org/data/definitions/200.html"
+
+[[taxon]]
+id = "SOVA-ATK-004"
+title = "Filesystem, process, and network effects"
+definition = "Attempts to cause unauthorized or unsafe host effects through file operations, process creation or control, command execution, network access, service interaction, or resource consumption."
+status = "active"
+
+[[taxon.mapping]]
+framework = "OWASP Agentic Top 10"
+catalog_version = "2026"
+identifier = "ASI05"
+title = "Unexpected Code Execution (RCE)"
+relationship = "broader"
+url = "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0112"
+title = "Machine Compromise"
+relationship = "broader"
+url = "https://atlas.mitre.org/techniques/AML.T0112"
+
+[[taxon.mapping]]
+framework = "CWE"
+catalog_version = "4.20"
+identifier = "CWE-78"
+title = "Improper Neutralization of Special Elements used in an OS Command"
+relationship = "related"
+url = "https://cwe.mitre.org/data/definitions/78.html"
+
+[[taxon]]
+id = "SOVA-ATK-005"
+title = "Memory and retrieval poisoning"
+definition = "Attempts to insert, alter, prioritize, persist, or retrieve hostile content through memory, retrieval-augmented generation, context stores, caches, histories, or knowledge sources."
+status = "active"
+
+[[taxon.mapping]]
+framework = "OWASP Agentic Top 10"
+catalog_version = "2026"
+identifier = "ASI06"
+title = "Memory and Context Poisoning"
+relationship = "broader"
+url = "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0080.000"
+title = "AI Agent Context Poisoning: Memory"
+relationship = "broader"
+url = "https://atlas.mitre.org/techniques/AML.T0080/000"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0070"
+title = "RAG Poisoning"
+relationship = "broader"
+url = "https://atlas.mitre.org/techniques/AML.T0070"
+
+[[taxon]]
+id = "SOVA-ATK-006"
+title = "Tool integrity and rug-pull behavior"
+definition = "Attempts to exploit an MCP server, skill, plugin, tool description, dependency, or approval-time/runtime difference whose identity, implementation, metadata, or behavior has changed or is untrusted."
+status = "active"
+
+[[taxon.mapping]]
+framework = "OWASP Agentic Top 10"
+catalog_version = "2026"
+identifier = "ASI04"
+title = "Agentic Supply Chain Vulnerabilities"
+relationship = "broader"
+url = "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0109"
+title = "AI Supply Chain Rug Pull"
+relationship = "broader"
+url = "https://atlas.mitre.org/techniques/AML.T0109"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0110"
+title = "AI Agent Tool Poisoning"
+relationship = "broader"
+url = "https://atlas.mitre.org/techniques/AML.T0110"
+
+[[taxon.mapping]]
+framework = "CWE"
+catalog_version = "4.20"
+identifier = "CWE-829"
+title = "Inclusion of Functionality from Untrusted Control Sphere"
+relationship = "related"
+url = "https://cwe.mitre.org/data/definitions/829.html"
+
+[[taxon]]
+id = "SOVA-ATK-007"
+title = "Cross-agent and delegated-action failures"
+definition = "Attempts to exploit delegation, impersonation, confused-deputy behavior, message integrity, identity propagation, or trust-boundary failures between agents, sub-agents, orchestrators, and downstream actors."
+status = "active"
+
+[[taxon.mapping]]
+framework = "OWASP Agentic Top 10"
+catalog_version = "2026"
+identifier = "ASI07"
+title = "Insecure Inter-Agent Communication"
+relationship = "broader"
+url = "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+
+[[taxon.mapping]]
+framework = "OWASP Agentic Top 10"
+catalog_version = "2026"
+identifier = "ASI03"
+title = "Identity and Privilege Abuse"
+relationship = "related"
+url = "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+
+[[taxon]]
+id = "SOVA-ATK-008"
+title = "Multi-turn and persistent-state attacks"
+definition = "Attempts whose security effect depends on ordered interactions, invocation count, delayed execution, accumulated context, state persistence, self-replication, or behavior spanning multiple runs."
+status = "active"
+
+[[taxon.mapping]]
+framework = "OWASP Agentic Top 10"
+catalog_version = "2026"
+identifier = "ASI06"
+title = "Memory and Context Poisoning"
+relationship = "related"
+url = "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0094"
+title = "Delay Execution of LLM Instructions"
+relationship = "broader"
+url = "https://atlas.mitre.org/techniques/AML.T0094"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0061"
+title = "LLM Prompt Self-Replication"
+relationship = "related"
+url = "https://atlas.mitre.org/techniques/AML.T0061"
+
+[[taxon]]
+id = "SOVA-ATK-009"
+title = "Conditional and dormant triggers"
+definition = "Attempts to discover or activate behavior gated by a hidden conjunction of input, history, identity, environment, timing, state, tool sequence, invocation count, or other condition."
+status = "active"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0094"
+title = "Delay Execution of LLM Instructions"
+relationship = "related"
+url = "https://atlas.mitre.org/techniques/AML.T0094"
+
+[[taxon.mapping]]
+framework = "OWASP Agentic Top 10"
+catalog_version = "2026"
+identifier = "ASI10"
+title = "Rogue Agents"
+relationship = "related"
+url = "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+
+[[taxon]]
+id = "SOVA-ATK-010"
+title = "Compositional and emergent chains"
+definition = "Attempts where individually permitted components, tools, agents, permissions, or actions compose into an unsafe capability, cascading failure, or security effect not attributable to one step alone."
+status = "active"
+
+[[taxon.mapping]]
+framework = "OWASP Agentic Top 10"
+catalog_version = "2026"
+identifier = "ASI08"
+title = "Cascading Failures"
+relationship = "broader"
+url = "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0053"
+title = "AI Agent Tool Invocation"
+relationship = "related"
+url = "https://atlas.mitre.org/techniques/AML.T0053"
+
+[[taxon]]
+id = "SOVA-ATK-011"
+title = "Browser and computer interaction abuse"
+definition = "Attempts to misuse rendered content, clicks, forms, downloads, uploads, clipboard, keyboard, pointer, accessibility, visual targeting, or other browser and desktop interaction paths."
+status = "active"
+
+[[taxon.mapping]]
+framework = "OWASP Agentic Top 10"
+catalog_version = "2026"
+identifier = "ASI02"
+title = "Tool Misuse and Exploitation"
+relationship = "related"
+url = "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0100"
+title = "AI Agent Clickbait"
+relationship = "broader"
+url = "https://atlas.mitre.org/techniques/AML.T0100"
+
+[[taxon]]
+id = "SOVA-ATK-012"
+title = "Irreversible and high-consequence action attempts"
+definition = "Attempts to cause or approach destructive, financially material, legally significant, safety-critical, externally published, privileged, or otherwise difficult-to-reverse effects."
+status = "active"
+
+[[taxon.mapping]]
+framework = "OWASP Agentic Top 10"
+catalog_version = "2026"
+identifier = "ASI08"
+title = "Cascading Failures"
+relationship = "related"
+url = "https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0101"
+title = "Data Destruction via AI Agent Tool Invocation"
+relationship = "broader"
+url = "https://atlas.mitre.org/techniques/AML.T0101"
+
+[[taxon.mapping]]
+framework = "MITRE ATLAS"
+catalog_version = "5.6.0"
+identifier = "AML.T0048"
+title = "External Harms"
+relationship = "broader"
+url = "https://atlas.mitre.org/techniques/AML.T0048"

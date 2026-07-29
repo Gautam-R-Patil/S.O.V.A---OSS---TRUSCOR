@@ -93,6 +93,7 @@ uv run pytest --cov=sova --cov-branch
 uv export --locked --quiet --format requirements.txt --all-groups --no-emit-project --output-file audit-requirements.txt
 uv run pip-audit --strict --cache-dir .cache/pip-audit --requirement audit-requirements.txt --no-deps --disable-pip
 uv run python scripts/generate_glossary.py --check
+uv run python scripts/generate_taxonomy.py --check
 uv run python scripts/check_repository.py
 ```
 
@@ -111,9 +112,9 @@ Install the local checks:
 uv run pre-commit install --hook-type pre-commit --hook-type commit-msg
 ```
 
-The placeholder CLI is the only implemented product code at Topic 02. Do not
-represent planned security commands, schemas, or evidence capabilities as
-shipped.
+The placeholder CLI and Topic 03 domain-contract library are the only
+implemented product code. Do not represent planned security commands, artifact
+schemas, execution, or evidence capabilities as shipped.
 
 ## Research and citation
 

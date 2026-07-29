@@ -1,4 +1,4 @@
-version = 1
+version = 2
 updated = 2026-07-29
 
 [[term]]
@@ -126,3 +126,333 @@ term = "TRUSCOR"
 definition = "The company that maintains SOVA OSS and separately operates proprietary systems and independent commercial processes outside this repository."
 status = "accepted"
 source = "decisions/0004-self-assessment-and-truscor-boundary.md"
+
+[[term]]
+term = "agent"
+definition = "A system component that selects and coordinates one or more actions toward a goal using a model, rules, tools, state, or delegation."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "component"
+definition = "A separately identifiable part of a target or execution environment whose interface, version, provenance, capabilities, or behavior can be declared or observed."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "MCP server"
+definition = "A component implementing a versioned Model Context Protocol interface that exposes tools, resources, prompts, or related capabilities to a client."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "skill"
+definition = "A named package of instructions, resources, or workflows loaded by an agent host; a skill is not itself assumed to be executable code."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "plugin"
+definition = "An installable extension that adds code, data, interfaces, skills, tools, or integrations to a host and creates a distinct supply-chain boundary."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "sub-agent"
+definition = "An agent invoked or delegated to by another agent or orchestrator with its own identity, context, capabilities, or execution boundary."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "tool"
+definition = "A named callable interface through which an agent or operator requests a bounded operation; its declaration is not proof of implementation or permission."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "model"
+definition = "A version-identifiable computational model that produces outputs from inputs and configuration; a model is not automatically an agent."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "target"
+definition = "The exact system, component set, or environment under an explicitly authorized SOVA evaluation."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "owned target"
+definition = "A target whose operator has documented authority to authorize the evaluation; ownership is evidence for authorization, not a substitute for the per-run authorization decision."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "public component"
+definition = "A component whose code, package, interface, or service is publicly accessible; public availability alone does not authorize active testing."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "bundled target"
+definition = "An intentionally vulnerable or synthetic target distributed for safe local demonstrations, conformance tests, or research baselines."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "capability"
+definition = "A possible operation or effect reachable by a component under stated conditions, whether declared, observed, inferred, or unknown."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "permission"
+definition = "Authority granted to an identity to attempt a named operation on a resource under stated scope and conditions."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "identity"
+definition = "The principal, workload, user, agent, service, or signing entity to which authority, actions, or evidence provenance is bound."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "approval gate"
+definition = "A human or policy decision that must be satisfied before a defined consequential action can proceed; it is recorded separately from ordinary permission."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "effect"
+definition = "An observed or attempted change to target, environment, external, or human-visible state caused through an action."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "egress"
+definition = "Movement or attempted movement of data, requests, or artifacts across a declared trust, process, host, account, or network boundary."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "transitive reach"
+definition = "Capabilities or resources reachable through one or more delegation, tool, identity, or component edges beyond a component's direct surface."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "attack"
+definition = "An authorized adversarial test strategy intended to exercise a security boundary or elicit a security-relevant behavior."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "condition"
+definition = "A testable predicate over input, history, identity, timing, environment, state, capability, or prior action."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "trigger"
+definition = "A condition or conjunction of conditions whose satisfaction changes security-relevant behavior relative to a declared baseline."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "mutation"
+definition = "A controlled, recorded change to an input, condition, sequence, state, or configuration used to explore behavioral differences."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "sequence"
+definition = "An ordered set of interactions or state transitions whose order is part of the test meaning."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "attempt"
+definition = "One proposed trial that binds a concrete sequence, mutations, conditions, and expected observation requirements; it may fail before execution begins."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "run"
+definition = "One realized, bounded, authorized execution under a fixed interpretation context, producing at most one canonical run trace."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "campaign"
+definition = "A versioned collection of related attempts and runs governed by a shared objective and protocol without merging their evidence or authorization."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "observation"
+definition = "A timestamped, source-identified measurement recorded by a sensor or executor without by itself interpreting security significance."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "oracle"
+definition = "A versioned explicit rule that evaluates observations against declared criteria, preferably deterministically."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "judge"
+definition = "A separately versioned evaluator used when an oracle cannot fully decide an outcome; its inputs, configuration, uncertainty, and limitations are recorded."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "verdict"
+definition = "The bounded output of one named oracle or judge about an attempt or run; it is an input to, not a synonym for, a finding."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "severity"
+definition = "The estimated seriousness of a finding under a named versioned rubric; it does not express confidence, likelihood, or proof."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "harm"
+definition = "A realized or credibly possible adverse effect on confidentiality, integrity, availability, safety, finances, rights, operations, or people."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "confidence"
+definition = "A method-bound expression of evidential support for a proposition, reported with its calibration, inputs, uncertainty, and limitations."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "evidence"
+definition = "Recorded material offered to support or challenge a proposition, with enough provenance and context to assess relevance and integrity."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "trace"
+definition = "An inert ordered record of one run that binds observations and execution context; in SOVA the canonical form is a `.sova-trace`."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "artifact"
+definition = "A bounded persisted object with declared type, identity, version, provenance, and content digest."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "provenance"
+definition = "The documented origin, authorship, transformations, custody, and supporting references of data, evidence, or an artifact."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "signature"
+definition = "Cryptographic integrity and signer-provenance material evaluated under a named trust policy; it does not prove observation truth or security significance."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "timestamp"
+definition = "A recorded time value whose clock source, precision, and trust basis are declared; a trusted timestamp is explicitly distinguished from a local clock reading."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "redaction"
+definition = "A declared transformation that removes, replaces, masks, or withholds protected content while preserving explicit evidence of what class of information changed."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "commitment"
+definition = "Cryptographic material that binds concealed content so authorized later verification can detect substitution without requiring public disclosure."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "playback"
+definition = "Inert deterministic presentation of already recorded evidence; playback never operates the original target."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "reproduction rate"
+definition = "The count of eligible trials meeting the declared semantic outcome divided by all eligible trials, reported with exclusions, method, context, and uncertainty."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "reconstruction"
+definition = "A provenance-backed ordering and interpretation of relevant events from available evidence, with gaps and uncertainty retained."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "decision point"
+definition = "A supported state in a run at which a different input, policy, permission, component output, or action could change a relevant outcome."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "hypothesis"
+definition = "A falsifiable proposed explanation or trigger condition linked to evidence and a planned test."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "intervention"
+definition = "A controlled change to one declared factor while holding or recording other relevant conditions for causal comparison."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "counterfactual"
+definition = "A comparison between a baseline and an intervention run used to estimate how an outcome changes when a declared factor changes."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "attribution"
+definition = "A bounded conclusion about likely causal responsibility supported by reconstruction and interventions, reported with alternatives, confidence, and limitations."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "standard profile"
+definition = "The complete active native attack taxonomy at one exact version, executed under one exact standard methodology for comparable results."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "custom profile"
+definition = "A user-selected subset, extension, scenario set, attacker, judge, or method that remains valid for local use but is marked non-standard and non-comparable."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "taxonomy version"
+definition = "The exact independent semantic version of the classification system used to label attacks and results."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "methodology version"
+definition = "The exact independent semantic version of the protocol governing how a test, measurement, judgment, or analysis was performed."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"
+
+[[term]]
+term = "observed coverage"
+definition = "A per-dimension count and ratio of frozen declared surfaces actually exercised within a recorded budget and stopping rule; it is not theoretical attack-space or safety coverage."
+status = "accepted"
+source = "decisions/0008-topic-03-domain-contracts.md"

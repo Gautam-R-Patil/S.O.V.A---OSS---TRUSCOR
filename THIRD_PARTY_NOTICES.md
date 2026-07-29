@@ -26,6 +26,26 @@ Transitive development dependencies and exact versions are recorded in
 `uv.lock`. GitHub Actions are pinned to immutable full commit SHAs and are
 updated through reviewed Dependabot pull requests.
 
+## Referenced classification catalogs
+
+The native SOVA taxonomy contains factual identifiers, titles, relationships,
+catalog versions, and links for interoperability. It does not claim endorsement
+by the catalog owners.
+
+- MITRE ATLAS data: Copyright 2021–2025 The MITRE Corporation, licensed under
+  Apache License 2.0. SOVA mappings pin ATLAS data release 5.6.0.
+- CWE: Copyright © 2006–2026 The MITRE Corporation. CWE and its associated
+  references are used under the
+  [CWE Terms of Use](https://cwe.mitre.org/about/termsofuse.html). CWE is a
+  trademark of The MITRE Corporation.
+- CAPEC: Copyright © The MITRE Corporation. CAPEC identifiers and references
+  are used under the
+  [CAPEC Terms of Use](https://capec.mitre.org/about/termsofuse.html). CAPEC is
+  a trademark of The MITRE Corporation.
+- OWASP Top 10 for Agentic Applications 2026: © OWASP Foundation, licensed
+  under CC BY-SA 4.0. SOVA uses the published ASI identifiers and titles as
+  versioned mappings and links to the original work.
+
 Before adding a runtime dependency, contributor tooling, fixture, copied code,
 model, dataset, binary, or action:
 

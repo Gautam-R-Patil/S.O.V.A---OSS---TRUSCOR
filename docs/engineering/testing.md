@@ -19,6 +19,11 @@ security.
 Later end-to-end security experiments live in a separate harness and produce
 run bundles. They do not replace ordinary tests.
 
+Topic 03 contract tests specifically prove strict version and digest parsing,
+UUIDv7 identity, external-reference validation, lifecycle transitions,
+taxonomy integrity, explicit historical context, frozen coverage denominators,
+and budget/stopping semantics.
+
 ## Determinism
 
 - The default seed is `20260729`.
@@ -58,6 +63,10 @@ Production package branch coverage must be at least 95%. Coverage is a missing
 test indicator, not a security score. Critical authorization, safety, parser,
 integrity, redaction, and recovery code requires explicit behavioral tests even
 when line coverage is already high.
+
+Code coverage is also distinct from SOVA observed attack-surface coverage. The
+latter is the six-dimensional vector defined in
+[the observed coverage contract](../contracts/coverage-model.md).
 
 ## Performance and resources
 

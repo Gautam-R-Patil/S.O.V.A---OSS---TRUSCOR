@@ -61,6 +61,9 @@ jobs:
       - name: Check generated glossary
         run: uv run --locked python scripts/generate_glossary.py --check
 
+      - name: Check generated attack taxonomy
+        run: uv run --locked python scripts/generate_taxonomy.py --check
+
       - name: Check repository policy
         run: uv run --locked python scripts/check_repository.py
 

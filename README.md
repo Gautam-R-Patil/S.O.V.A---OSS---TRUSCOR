@@ -42,11 +42,11 @@
 ---
 
 > [!IMPORTANT]
-> **SOVA is pre-alpha.** The repository now contains a buildable, tested engineering foundation and a placeholder `sova` CLI. The security commands and artifact schemas described below remain planned and must not be interpreted as released capabilities.
+> **SOVA is pre-alpha.** The repository now contains a buildable engineering foundation, executable shared-domain contracts, and a placeholder `sova` CLI. The security commands and artifact schemas described below remain planned and must not be interpreted as released capabilities.
 
-## Engineering foundation
+## Implemented foundation and contracts
 
-The implemented Topic 02 surface is intentionally small and honest:
+The implemented Topic 02–03 surface is intentionally small and honest:
 
 ```bash
 git clone https://github.com/Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR.git
@@ -68,10 +68,19 @@ It provides:
   goldens, performance budgets, fault injection, and crash recovery tests;
 - permanent decision, invention, claim, research-artifact, methodology,
   glossary, changelog, security, and release-control homes.
+- strict semantic versions, SHA-256 fingerprints, UUIDv7 logical identifiers,
+  explicit absence semantics, and stable machine-classifiable contract errors;
+- a non-destructive five-axis finding lifecycle and version-qualified external
+  vulnerability references;
+- the experimental twelve-class `sova.attack` taxonomy with standard/custom
+  profile rules and pinned interoperability mappings;
+- a six-dimensional observed-coverage vector with frozen denominators,
+  exploration budgets, stopping rules, and no universal “percent safe” score.
 
 Read [ADR-0007](./docs/decisions/0007-topic-02-engineering-foundation.md),
-the [development guide](./docs/engineering/development.md), and the
-[testing strategy](./docs/engineering/testing.md).
+[ADR-0008](./docs/decisions/0008-topic-03-domain-contracts.md), the
+[shared contracts](./docs/contracts/README.md), and the
+[generated attack taxonomy](./docs/taxonomy/sova-attack-taxonomy.md).
 
 ## Why SOVA
 
@@ -515,8 +524,10 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Topic 00 project constitution | Accepted in [ADR-0005](./docs/decisions/0005-topic-00-project-constitution.md) |
 | Topic 01 claims, prior art, experiment, and publication decision | Accepted in [ADR-0006](./docs/decisions/0006-topic-01-evidence-go-no-go.md) |
 | Topic 02 repository, language, quality, documentation, and public-safety foundation | Implemented in [ADR-0007](./docs/decisions/0007-topic-02-engineering-foundation.md) |
+| Topic 03 shared vocabulary, lifecycle, taxonomy, coverage, and version contracts | Implemented in [ADR-0008](./docs/decisions/0008-topic-03-domain-contracts.md) |
 | Comparative evidence gates 01-A and 01-B | **Not run - unproven; comparative claims prohibited** |
 | Placeholder `sova` CLI | Implemented; `--help` and `--version` only |
+| `sova.contracts` Python API | Implemented and experimental at `0.1.0` contract level |
 | Python package and locked contributor environment | Implemented as `sova-oss` / `uv.lock`; not published to PyPI |
 | Cross-platform CI and quality/security gates | Implemented |
 | Public repository boundary check | Active in CI and locally |

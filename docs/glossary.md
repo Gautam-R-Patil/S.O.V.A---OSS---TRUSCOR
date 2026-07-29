@@ -4,29 +4,84 @@
 # SOVA glossary
 
 This glossary is generated from `docs/glossary.toml`. Accepted terms come
-from the controlling decisions. Topic 03 must reconcile its data-model
-vocabulary here; the generator check makes later drift visible in CI.
+from controlling decisions. Topic 03 reconciled the shared domain language;
+the generator check makes later semantic drift visible in CI.
 
 | Term | Definition | State | Source |
 |---|---|---|---|
 | `.sova` | A portable declarative adversarial scenario. It has executable intent only through an explicit validated, bound, and authorized SOVA run. | accepted | [source](./decisions/0001-canonical-artifact-meanings.md) |
 | `.sova-trace` | The inert canonical record of one execution, including ordered observations, input bindings, redactions, completion state, artifacts, and integrity material. | accepted | [source](./decisions/0001-canonical-artifact-meanings.md) |
+| `agent` | A system component that selects and coordinates one or more actions toward a goal using a model, rules, tools, state, or delegation. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `approval gate` | A human or policy decision that must be satisfied before a defined consequential action can proceed; it is recorded separately from ordinary permission. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `artifact` | A bounded persisted object with declared type, identity, version, provenance, and content digest. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
 | `Atlas MCP` | An optional replaceable execution provider for browser, computer, and terminal use; it is not SOVA's security, evidence, authorization, or attestation architecture. | accepted | [source](./decisions/0005-topic-00-project-constitution.md) |
+| `attack` | An authorized adversarial test strategy intended to exercise a security boundary or elicit a security-relevant behavior. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `attempt` | One proposed trial that binds a concrete sequence, mutations, conditions, and expected observation requirements; it may fail before execution begins. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
 | `attestation` | An independently governed claim on which another party may rely. SOVA OSS does not issue TRUSCOR attestations. | accepted | [source](./decisions/0004-self-assessment-and-truscor-boundary.md) |
+| `attribution` | A bounded conclusion about likely causal responsibility supported by reconstruction and interventions, reported with alternatives, confidence, and limitations. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `bundled target` | An intentionally vulnerable or synthetic target distributed for safe local demonstrations, conformance tests, or research baselines. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `campaign` | A versioned collection of related attempts and runs governed by a shared objective and protocol without merging their evidence or authorization. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `capability` | A possible operation or effect reachable by a component under stated conditions, whether declared, observed, inferred, or unknown. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `commitment` | Cryptographic material that binds concealed content so authorized later verification can detect substitution without requiring public disclosure. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `component` | A separately identifiable part of a target or execution environment whose interface, version, provenance, capabilities, or behavior can be declared or observed. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `condition` | A testable predicate over input, history, identity, timing, environment, state, capability, or prior action. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `confidence` | A method-bound expression of evidential support for a proposition, reported with its calibration, inputs, uncertainty, and limitations. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
 | `controlled re-execution` | A fresh run of the same scenario under pinned or explicitly equivalent conditions. | accepted | [source](./decisions/0001-canonical-artifact-meanings.md) |
+| `counterfactual` | A comparison between a baseline and an intervention run used to estimate how an outcome changes when a declared factor changes. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `custom profile` | A user-selected subset, extension, scenario set, attacker, judge, or method that remains valid for local use but is marked non-standard and non-comparable. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `decision point` | A supported state in a run at which a different input, policy, permission, component output, or action could change a relevant outcome. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `effect` | An observed or attempted change to target, environment, external, or human-visible state caused through an action. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `egress` | Movement or attempted movement of data, requests, or artifacts across a declared trust, process, host, account, or network boundary. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `evidence` | Recorded material offered to support or challenge a proposition, with enough provenance and context to assess relevance and integrity. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
 | `ExecutorAdapter` | A replaceable public boundary through which SOVA requests bounded execution capabilities without transferring SOVA's safety or evidence responsibilities. | accepted | [source](./decisions/0007-topic-02-engineering-foundation.md) |
 | `finding` | A versioned security conclusion supported by named scenario and trace digests, with lifecycle, uncertainty, severity, and limitation metadata. | accepted | [source](./decisions/0001-canonical-artifact-meanings.md) |
+| `harm` | A realized or credibly possible adverse effect on confidentiality, integrity, availability, safety, finances, rights, operations, or people. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `hypothesis` | A falsifiable proposed explanation or trigger condition linked to evidence and a planned test. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `identity` | The principal, workload, user, agent, service, or signing entity to which authority, actions, or evidence provenance is bound. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `intervention` | A controlled change to one declared factor while holding or recording other relevant conditions for causal comparison. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `judge` | A separately versioned evaluator used when an oracle cannot fully decide an outcome; its inputs, configuration, uncertainty, and limitations are recorded. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
 | `LocalSandboxExecutor` | The planned SOVA-owned restricted local executor used for the no-Atlas vertical slice. | planned | [source](./decisions/0006-topic-01-evidence-go-no-go.md) |
 | `map report` | An inert capability and inventory graph that distinguishes declared, observed, inferred, and unknown reach with provenance. | accepted | [source](./decisions/0001-canonical-artifact-meanings.md) |
+| `MCP server` | A component implementing a versioned Model Context Protocol interface that exposes tools, resources, prompts, or related capabilities to a client. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `methodology version` | The exact independent semantic version of the protocol governing how a test, measurement, judgment, or analysis was performed. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `model` | A version-identifiable computational model that produces outputs from inputs and configuration; a model is not automatically an agent. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `mutation` | A controlled, recorded change to an input, condition, sequence, state, or configuration used to explore behavioral differences. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `observation` | A timestamped, source-identified measurement recorded by a sensor or executor without by itself interpreting security significance. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `observed coverage` | A per-dimension count and ratio of frozen declared surfaces actually exercised within a recorded budget and stopping rule; it is not theoretical attack-space or safety coverage. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `oracle` | A versioned explicit rule that evaluates observations against declared criteria, preferably deterministically. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `owned target` | A target whose operator has documented authority to authorize the evaluation; ownership is evidence for authorization, not a substitute for the per-run authorization decision. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `permission` | Authority granted to an identity to attempt a named operation on a resource under stated scope and conditions. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `playback` | Inert deterministic presentation of already recorded evidence; playback never operates the original target. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `plugin` | An installable extension that adds code, data, interfaces, skills, tools, or integrations to a host and creates a distinct supply-chain boundary. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
 | `portable vulnerability artifact` | A scenario whose immutable digest is cited by a lifecycle-qualified finding supported by trace evidence; a scenario alone is not a confirmed vulnerability. | accepted | [source](./decisions/0001-canonical-artifact-meanings.md) |
+| `provenance` | The documented origin, authorship, transformations, custody, and supporting references of data, evidence, or an artifact. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `public component` | A component whose code, package, interface, or service is publicly accessible; public availability alone does not authorize active testing. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `reconstruction` | A provenance-backed ordering and interpretation of relevant events from available evidence, with gaps and uncertainty retained. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `redaction` | A declared transformation that removes, replaces, masks, or withholds protected content while preserving explicit evidence of what class of information changed. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
 | `registry entry` | Inert discovery and lifecycle metadata that points to immutable scenario content and verification records without executing it. | accepted | [source](./decisions/0001-canonical-artifact-meanings.md) |
 | `report` | A derived human or ecosystem view of canonical artifacts; it is not an evidence root. | accepted | [source](./decisions/0001-canonical-artifact-meanings.md) |
+| `reproduction rate` | The count of eligible trials meeting the declared semantic outcome divided by all eligible trials, reported with exclusions, method, context, and uncertainty. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `run` | One realized, bounded, authorized execution under a fixed interpretation context, producing at most one canonical run trace. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
 | `ScriptedExecutor` | A planned deterministic executor used to test SOVA orchestration, observations, and failure behavior without live external systems. | planned | [source](./decisions/0006-topic-01-evidence-go-no-go.md) |
 | `self-assessment` | Evidence generated by an operator about a system they control, without independent TRUSCOR review or third-party reliance. | accepted | [source](./decisions/0004-self-assessment-and-truscor-boundary.md) |
 | `semantic reproduction` | Repeatedly testing whether the same material security outcome recurs when bit-for-bit replay is unavailable, with conditions, trials, and uncertainty reported. | planned | [source](./decisions/0002-versioning-and-lossless-migration.md) |
+| `sequence` | An ordered set of interactions or state transitions whose order is part of the test meaning. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `severity` | The estimated seriousness of a finding under a named versioned rubric; it does not express confidence, likelihood, or proof. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `signature` | Cryptographic integrity and signer-provenance material evaluated under a named trust policy; it does not prove observation truth or security significance. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `skill` | A named package of instructions, resources, or workflows loaded by an agent host; a skill is not itself assumed to be executable code. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
 | `SOVA Engine` | TRUSCOR's separate proprietary system; it is not the public SOVA OSS runtime or a hidden dependency of it. | accepted | [source](./decisions/0003-open-source-and-proprietary-boundary.md) |
 | `SOVA OSS` | The complete local-first open-source instrument for authorized AI-agent security mapping, testing, evidence, replay, and analysis. | accepted | [source](./decisions/0005-topic-00-project-constitution.md) |
 | `SOVA OSS Core` | The public runtime and architecture owned by this repository; also called SOVA Runtime. | accepted | [source](./decisions/0003-open-source-and-proprietary-boundary.md) |
+| `standard profile` | The complete active native attack taxonomy at one exact version, executed under one exact standard methodology for comparable results. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `sub-agent` | An agent invoked or delegated to by another agent or orchestrator with its own identity, context, capabilities, or execution boundary. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `target` | The exact system, component set, or environment under an explicitly authorized SOVA evaluation. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
 | `target manifest` | An inert local declaration of target interfaces, adapters, expected capabilities, entry points, and secret references; it is not authorization. | accepted | [source](./decisions/0001-canonical-artifact-meanings.md) |
+| `taxonomy version` | The exact independent semantic version of the classification system used to label attacks and results. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `timestamp` | A recorded time value whose clock source, precision, and trust basis are declared; a trusted timestamp is explicitly distinguished from a local clock reading. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `tool` | A named callable interface through which an agent or operator requests a bounded operation; its declaration is not proof of implementation or permission. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `trace` | An inert ordered record of one run that binds observations and execution context; in SOVA the canonical form is a `.sova-trace`. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
 | `trace playback` | Deterministic inspection of the observations already recorded in a trace; it never operates the original target. | accepted | [source](./decisions/0001-canonical-artifact-meanings.md) |
+| `transitive reach` | Capabilities or resources reachable through one or more delegation, tool, identity, or component edges beyond a component's direct surface. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
+| `trigger` | A condition or conjunction of conditions whose satisfaction changes security-relevant behavior relative to a declared baseline. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |
 | `TRUSCOR` | The company that maintains SOVA OSS and separately operates proprietary systems and independent commercial processes outside this repository. | accepted | [source](./decisions/0004-self-assessment-and-truscor-boundary.md) |
+| `verdict` | The bounded output of one named oracle or judge about an attempt or run; it is an input to, not a synonym for, a finding. | accepted | [source](./decisions/0008-topic-03-domain-contracts.md) |

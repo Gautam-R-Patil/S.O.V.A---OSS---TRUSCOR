@@ -9,7 +9,7 @@ Linux. CI records the concrete GitHub-hosted images used for each commit.
 
 Install [uv](https://docs.astral.sh/uv/) and clone the repository. No model API
 key, SOVA account, TRUSCOR service, Atlas runtime, Docker daemon, or telemetry
-opt-in is required for Topic 02 development.
+opt-in is required for current foundation and contract development.
 
 ## Bootstrap
 
@@ -34,6 +34,7 @@ uv run pytest --cov=sova --cov-branch --cov-report=term-missing
 uv export --locked --quiet --format requirements.txt --all-groups --no-emit-project --output-file audit-requirements.txt
 uv run pip-audit --strict --cache-dir .cache/pip-audit --requirement audit-requirements.txt --no-deps --disable-pip
 uv run python scripts/generate_glossary.py --check
+uv run python scripts/generate_taxonomy.py --check
 uv run python scripts/check_repository.py
 ```
 
@@ -70,7 +71,7 @@ uv build
 ```
 
 The result is a pure-Python wheel and source distribution under `dist/`. Build
-outputs are ignored. Topic 02 does not publish them to PyPI.
+outputs are ignored. The pre-alpha package has not been published to PyPI.
 
 ## Platform notes
 
