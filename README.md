@@ -1,6 +1,5 @@
 <p align="center">
-  <img src="./assets/call_fZji7204IdxsNOH5NElwpkK8![Uploading call_fZji7204IdxsNOH5NElwpkK8.png…]()
-" width="190" alt="SOVA owl logo" />
+  <img src="./assets/sova-owl-logo.svg" width="190" alt="SOVA owl logo" />
 </p>
 
 <h1 align="center">S.O.V.A.</h1>
