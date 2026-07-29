@@ -1,22 +1,6 @@
-<pre align="center">
-                         .-----------------------.
-                    .---'                         '---.
-                 .-'        /\             /\        '-.
-               .'          /  \.-"""""""-./  \          '.
-              /           /    (  o   o  )    \           \
-             |           |      \   ^   /      |           |
-             |           |       '.___.'       |           |
-              \           \       /|_|\       /           /
-               '.          '._   /_| |_\   _.'          .'
-                 '-._         '--._____.--'         _.-'
-                     '-------------|-------------'
-                                   |
-                                .--'--.
-                                '-----'
-
-                           S  O  V  A
-                    SEE  ---  TEST  ---  PROVE
-</pre>
+<p align="center">
+  <img src="./assets/sova-owl-logo.png" width="190" alt="SOVA owl logo" />
+</p>
 
 <h1 align="center">S.O.V.A.</h1>
 
@@ -49,20 +33,9 @@
 
 <br/>
 
-<pre align="center">
-  +-------------------+      +---------------------+      +--------------------+
-  |    AGENT SURFACE  | ---> |   SAFE TEST LOOP    | ---> |   EVIDENCE RECORD  |
-  | tools - memory    |      | map - drive - hunt  |      |    .sova-trace     |
-  | MCP - permissions |      | observe - contain   |      | signed - redacted  |
-  +-------------------+      +----------+----------+      +---------+----------+
-                                        |                           |
-                              hidden condition found                 |
-                                        |                           v
-                              +---------v----------+      +--------------------+
-                              |  PORTABLE FINDING  | ---> |  VERIFY - REPLAY   |
-                              |       .sova        |      | EXPLAIN - REGRESS  |
-                              +--------------------+      +--------------------+
-</pre>
+<p align="center">
+  <img src="./assets/sova-hero.png" width="100%" alt="SOVA maps an agent system, discovers a dormant trigger, seals the evidence, and produces a forensic replay" />
+</p>
 
 ---
 
