@@ -16,6 +16,7 @@
 <p align="center">
   <a href="https://truscor.org"><img alt="TRUSCOR" src="https://img.shields.io/badge/TRUSCOR-Project%20Home-0B8793?style=for-the-badge"></a>
   <a href="https://github.com/Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR"><img alt="Status" src="https://img.shields.io/badge/STATUS-PRE--ALPHA-FFB000?style=for-the-badge"></a>
+  <a href="./LICENSE"><img alt="Apache License 2.0" src="https://img.shields.io/badge/LICENSE-Apache--2.0-D22128?style=for-the-badge"></a>
   <img alt="Local first" src="https://img.shields.io/badge/LOCAL--FIRST-YES-00B8D9?style=for-the-badge">
   <img alt="Telemetry" src="https://img.shields.io/badge/TELEMETRY-OFF%20BY%20DEFAULT-172B4D?style=for-the-badge">
   <img alt="Bring your own model" src="https://img.shields.io/badge/MODEL-BRING%20YOUR%20OWN-6554C0?style=for-the-badge">
@@ -28,6 +29,7 @@
   <a href="#the-planned-developer-experience">Usage</a> •
   <a href="#safety-by-construction">Safety</a> •
   <a href="#project-status">Status</a> •
+  <a href="#licence-attribution-and-citation">Governance</a> •
   <a href="#connect">Connect</a>
 </p>
 
@@ -472,8 +474,11 @@ Research claims will require predeclared protocols, strong baselines, repeated t
 | `.sova` meaning and migration invariants | Accepted in [ADR-0001](./docs/decisions/0001-canonical-artifact-meanings.md) and [ADR-0002](./docs/decisions/0002-versioning-and-lossless-migration.md) |
 | Open/private and SOVA Engine boundary | Accepted in [ADR-0003](./docs/decisions/0003-open-source-and-proprietary-boundary.md) |
 | Self-assessment and TRUSCOR authority boundary | Accepted in [ADR-0004](./docs/decisions/0004-self-assessment-and-truscor-boundary.md) |
+| Topic 00 project constitution | Accepted in [ADR-0005](./docs/decisions/0005-topic-00-project-constitution.md) |
 | Public repository boundary check | Active in CI and available locally |
-| OSS licence and trademark policy | Founder decision pending; no executable release yet |
+| Repository licence | [Apache License 2.0](./LICENSE) |
+| Trademark and fork naming | [SOVA-OSS policy active](./TRADEMARKS.md) |
+| Dual-use and coordinated disclosure | [Policies active](./DUAL_USE_POLICY.md) |
 | `.sova` field schema | Experimental work has not started |
 | `.sova-trace` experimental contract | Not yet implemented |
 | Scripted/local execution | Not yet implemented |
@@ -511,16 +516,31 @@ The separation is:
 
 > **SOVA OSS provides the instrument and first-party evidence. TRUSCOR combines private intelligence with separately governed operation and accountability.**
 
-Read [the complete open/private decision](./docs/decisions/0003-open-source-and-proprietary-boundary.md), [the self-assessment decision](./docs/decisions/0004-self-assessment-and-truscor-boundary.md), and [the public repository policy](./docs/governance/public-repository-boundary.md).
+Read [the complete open/private decision](./docs/decisions/0003-open-source-and-proprietary-boundary.md), [the self-assessment decision](./docs/decisions/0004-self-assessment-and-truscor-boundary.md), [the Topic 00 constitution](./docs/decisions/0005-topic-00-project-constitution.md), and [the public repository policy](./docs/governance/public-repository-boundary.md).
 
-> [!NOTE]
-> This pre-alpha repository does not yet contain a `LICENSE` file. The founder licence and trademark gates remain open, so the published design material should not yet be described as a completed licensed OSS release.
+## Licence, attribution, and citation
+
+SOVA OSS is licensed under the [Apache License 2.0](./LICENSE). Developers, researchers, individuals, enterprises, and commercial users may use, modify, distribute, and build on the public repository subject to that licence.
+
+When distributing SOVA OSS or a derivative work, preserve the licence, relevant copyright and attribution notices, the contents of [NOTICE](./NOTICE), and clear notices for modified files as required by Apache-2.0. The licence also includes an express patent grant from contributors and does not grant rights to use project trademarks.
+
+Apache-2.0 does not require a private internal user or a service that never distributes the software to advertise TRUSCOR publicly. That restriction is deliberate: adding a field-of-use or mandatory-promotion condition would make the project less interoperable and could prevent it from meeting accepted open-source criteria. Distributed copies and forks do carry enforceable notice obligations.
+
+For papers, reports, theses, benchmarks, and datasets, use the repository's [CITATION.cff](./CITATION.cff). GitHub exposes it through **Cite this repository**. Citation is a research-norm request in addition to the legal notice obligations for software distribution.
+
+**SOVA-OSS™** is the canonical project mark. The software licence does not license the name or owl logo. Materially modified forks must use a distinct primary name and may describe themselves truthfully as “based on SOVA-OSS” or “a fork of SOVA-OSS.” See the complete [trademark and fork-naming policy](./TRADEMARKS.md).
 
 ## Contributing
 
-The project is pre-alpha. Public contribution rules, dual-use policy, security policy, and coordinated-disclosure process will be added before executable offensive capabilities or registry submissions are accepted.
+The project is pre-alpha, but its contribution and safety rules are active now:
 
-Future contribution areas will include:
+- read [CONTRIBUTING.md](./CONTRIBUTING.md) before proposing a change;
+- sign every commit using the [Developer Certificate of Origin](https://developercertificate.org/) (`git commit -s`);
+- follow the [dual-use policy](./DUAL_USE_POLICY.md) for scenarios, fixtures, search methods, and registry content;
+- report vulnerabilities privately under [SECURITY.md](./SECURITY.md);
+- respect the [public repository boundary](./docs/governance/public-repository-boundary.md) and [trademark policy](./TRADEMARKS.md).
+
+Contribution areas will include:
 
 - target and framework adapters;
 - deterministic oracles;
@@ -532,7 +552,7 @@ Future contribution areas will include:
 - replay and visualization;
 - documentation and reproducibility.
 
-Until the security contribution process is published, please do not open public issues containing live credentials, private traces, unpatched exploit payloads, or confidential target information.
+Never open public issues containing live credentials, private traces, unpatched exploit payloads, or confidential target information.
 
 ## Connect
 
@@ -579,4 +599,8 @@ Until the security contribution process is published, please do not open public 
 
 <p align="center">
   Built in the open by <a href="https://truscor.org">TRUSCOR</a>, with execution infrastructure from the wider <a href="https://xagilabs.com">XAGI Labs</a> ecosystem.
+</p>
+
+<p align="center">
+  SOVA-OSS™ and the SOVA owl logo are trademarks of TRUSCOR. Apache-2.0 licenses the software, not the marks.
 </p>

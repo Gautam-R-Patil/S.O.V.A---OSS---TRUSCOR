@@ -6,6 +6,7 @@ The controlling decisions are:
 
 - [ADR-0003 — SOVA OSS and proprietary SOVA Engine boundary](../decisions/0003-open-source-and-proprietary-boundary.md)
 - [ADR-0004 — SOVA OSS self-assessment and TRUSCOR authority boundary](../decisions/0004-self-assessment-and-truscor-boundary.md)
+- [ADR-0005 — Topic 00 project constitution](../decisions/0005-topic-00-project-constitution.md)
 
 ## Classification
 
@@ -140,6 +141,10 @@ Deleting the latest file is not sufficient because Git history and downstream cl
 
 The repository uses:
 
+- Apache-2.0 licensing, a preserved `NOTICE`, and machine-readable citation metadata;
+- the SOVA-OSS trademark and fork-naming policy;
+- Developer Certificate of Origin sign-offs for contributor provenance;
+- published dual-use and coordinated-disclosure rules;
 - exact and class-based `.gitignore` rules;
 - `powershell -ExecutionPolicy Bypass -File scripts/check-public-boundary.ps1` on Windows, or `pwsh ./scripts/check-public-boundary.ps1` where PowerShell 7 is available;
 - a pull-request template;

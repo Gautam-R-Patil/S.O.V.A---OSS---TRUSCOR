@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param()
 
+# SPDX-License-Identifier: Apache-2.0
+
 $ErrorActionPreference = "Stop"
 
 function Fail {
@@ -19,6 +21,17 @@ $candidateFiles = @(& git -C $repositoryRoot ls-files --cached --others --exclud
 if ($LASTEXITCODE -ne 0) {
     Fail "Unable to enumerate tracked and unignored files."
 }
+
+$requiredPublicFiles = @(
+    "LICENSE",
+    "NOTICE",
+    "CITATION.cff",
+    "TRADEMARKS.md",
+    "CONTRIBUTING.md",
+    "DUAL_USE_POLICY.md",
+    "SECURITY.md",
+    "docs/decisions/0005-topic-00-project-constitution.md"
+)
 
 $forbiddenExactPaths = @(
     "TRUSCOR_Bible_v4_0.md",
@@ -54,6 +67,12 @@ $forbiddenSecretPaths = @(
 
 $violations = [Collections.Generic.List[string]]::new()
 
+foreach ($requiredFile in $requiredPublicFiles) {
+    if ($candidateFiles -notcontains $requiredFile) {
+        $violations.Add("required public governance file is missing: $requiredFile")
+    }
+}
+
 foreach ($candidateFile in $candidateFiles) {
     $normalized = $candidateFile.Replace("\", "/").TrimStart([char[]]"./")
     $lower = $normalized.ToLowerInvariant()
@@ -79,7 +98,7 @@ foreach ($candidateFile in $candidateFiles) {
 }
 
 $textExtensions = @(
-    ".md", ".txt", ".json", ".jsonl", ".yaml", ".yml", ".toml", ".ini",
+    ".md", ".txt", ".cff", ".json", ".jsonl", ".yaml", ".yml", ".toml", ".ini",
     ".xml", ".html", ".css", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
     ".py", ".rs", ".go", ".java", ".kt", ".swift", ".rb", ".php", ".sh",
     ".ps1", ".psm1", ".cs", ".cpp", ".c", ".h", ".hpp", ".sql"
@@ -115,7 +134,9 @@ foreach ($candidateFile in $candidateFiles) {
     }
 
     $extension = [IO.Path]::GetExtension($normalized).ToLowerInvariant()
-    if ($textExtensions -notcontains $extension) {
+    $leaf = [IO.Path]::GetFileName($normalized)
+    if (($textExtensions -notcontains $extension) -and
+        ($leaf -notin @("LICENSE", "NOTICE"))) {
         continue
     }
 

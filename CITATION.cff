@@ -1,0 +1,18 @@
+cff-version: "1.2.0"
+message: "If you use SOVA OSS in software, research, a paper, benchmark, dataset, or publication, please cite this repository and the release or commit you used."
+title: "SOVA OSS: Security and Offensive Vulnerability Adversary"
+abstract: "A local-first open-source workbench for mapping, adversarially testing, tracing, reproducing, and analyzing AI-agent security behavior."
+authors:
+  - family-names: "Patil"
+    given-names: "Gautam R."
+  - name: "TRUSCOR"
+repository-code: "https://github.com/Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR"
+url: "https://truscor.org"
+license: "Apache-2.0"
+keywords:
+  - "AI agent security"
+  - "adversarial testing"
+  - "MCP security"
+  - "security evidence"
+  - "reproducibility"
+  - "forensics"

@@ -10,6 +10,7 @@ Describe the public change and why it belongs in SOVA OSS.
 - [ ] Atlas-specific content comes only from a cited public source or reproducible behavior of a public release.
 - [ ] Fixtures are synthetic or have documented public provenance.
 - [ ] Patent, paper, coordinated-disclosure, and third-party-licence gates are cleared.
+- [ ] Every commit includes a Developer Certificate of Origin `Signed-off-by` line.
 - [ ] SOVA OSS outputs remain visibly first-party self-assessments.
 - [ ] The change does not imply a TRUSCOR certificate, score, financial conclusion, or third-party reliance.
 - [ ] The change does not automatically remediate a target or upload data to TRUSCOR.

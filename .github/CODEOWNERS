@@ -1,0 +1,18 @@
+# Default public-repository owner
+* @Gautam-R-Patil
+
+# Controlling governance and trust boundaries
+/LICENSE @Gautam-R-Patil
+/NOTICE @Gautam-R-Patil
+/TRADEMARKS.md @Gautam-R-Patil
+/DUAL_USE_POLICY.md @Gautam-R-Patil
+/SECURITY.md @Gautam-R-Patil
+/CITATION.cff @Gautam-R-Patil
+/docs/decisions/ @Gautam-R-Patil
+/docs/governance/ @Gautam-R-Patil
+
+# Future high-risk implementation surfaces
+/schemas/ @Gautam-R-Patil
+/registry/ @Gautam-R-Patil
+/src/search/ @Gautam-R-Patil
+/src/execution/ @Gautam-R-Patil
