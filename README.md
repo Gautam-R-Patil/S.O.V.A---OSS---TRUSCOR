@@ -145,9 +145,11 @@ A `.sova` file is planned as an open, versioned way to encode a complete agent-s
 - expected tool calls or state changes;
 - deterministic and semantic success oracles;
 - cleanup requirements;
-- reproduction metadata.
+- a declared reproduction procedure and known limitations.
 
 The goal is simple: a vulnerability should become a file another person can inspect and run—not only a screenshot and a paragraph.
+
+A `.sova` describes the experiment; it becomes the executable part of a confirmed vulnerability only when a separate finding cites supporting trace evidence.
 
 ### `.sova-trace` — the evidence record
 
@@ -162,6 +164,8 @@ A `.sova-trace` is planned to carry:
 - a standard signed envelope and offline verification path.
 
 SOVA will build on open telemetry and signing conventions rather than inventing private cryptography. Its claims will remain bounded by a published threat model.
+
+The accepted [artifact meanings decision](./docs/decisions/0001-canonical-artifact-meanings.md) separates scenarios, target manifests, traces, maps, findings, reports, and registry entries so execution, observation, and judgment cannot be confused.
 
 ### Semantic reproduction
 
@@ -342,7 +346,7 @@ sova detonate ./my-agent --hunt-triggers --authorize
 
 # 5. Verify and replay portable evidence
 sova verify ./run.sova-trace
-sova replay ./finding.sova --target ./my-agent
+sova replay ./scenario.sova --target ./my-agent
 
 # 6. Reconstruct an incident
 sova forensics ./incident.sova-trace
@@ -440,6 +444,7 @@ Research claims will require predeclared protocols, strong baselines, repeated t
 |---|---|
 | Vision and scope | Defined |
 | Public identity and README | In progress |
+| Canonical artifact meanings | Accepted in [ADR-0001](./docs/decisions/0001-canonical-artifact-meanings.md) |
 | `.sova` invariants | Not yet frozen |
 | `.sova-trace` experimental contract | Not yet implemented |
 | Scripted/local execution | Not yet implemented |
