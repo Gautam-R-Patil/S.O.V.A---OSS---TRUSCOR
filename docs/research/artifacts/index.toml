@@ -1,0 +1,7 @@
+index_version = 1
+updated = 2026-07-29
+entries = []
+
+[state]
+result = "empty"
+reason = "No SOVA experiment has run; Topic 01 evidence gates remain NOT RUN - UNPROVEN."

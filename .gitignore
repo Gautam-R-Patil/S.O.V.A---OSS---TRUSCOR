@@ -39,6 +39,9 @@
 /artifacts/private/
 /browser-profiles/
 
+# Only explicitly synthetic, provenance-recorded trace goldens may be public
+!/tests/fixtures/golden/trace/*.sova-trace
+
 # Dependencies and virtual environments
 node_modules/
 .pnpm-store/
@@ -46,13 +49,20 @@ node_modules/
 venv/
 __pycache__/
 *.py[cod]
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
 
 # Build, coverage, logs, and temporary output
 dist/
 build/
 coverage/
 .coverage
+htmlcov/
 *.log
+audit-requirements.txt
 tmp/
 temp/
 .cache/

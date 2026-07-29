@@ -6,6 +6,10 @@
 
 ## Report privately
 
+If GitHub displays **Report a vulnerability** on the repository Security page,
+use that private vulnerability-reporting form. Otherwise use the email route
+below.
+
 Email `gautam@truscor.org` with the subject:
 
 ```text

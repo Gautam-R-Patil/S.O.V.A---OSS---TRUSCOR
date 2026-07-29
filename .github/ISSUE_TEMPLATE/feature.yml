@@ -1,0 +1,43 @@
+name: Feature proposal
+description: Propose a public SOVA OSS capability or workflow improvement.
+title: "[FEATURE] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user problem without private or client context.
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe observable behavior and how it would be tested.
+    validations:
+      required: true
+
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety, privacy, and authorization
+      description: Identify new capabilities, data, effects, or failure modes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Artifact and compatibility impact
+      description: Note schema, migration, adapter, CLI, or platform implications.
+
+  - type: checkboxes
+    id: disclosure
+    attributes:
+      label: Disclosure confirmation
+      options:
+        - label: This public proposal contains no invention-hold mechanism, private data, credential, or confidential target detail.
+          required: true
+        - label: I have checked the public repository boundary and dual-use policy.
+          required: true

@@ -1,0 +1,23 @@
+ledger_version = 1
+updated = 2026-07-29
+
+[[methodology]]
+id = "SOVA-REPO-FOUNDATION"
+version = "0.1.0"
+status = "active"
+source = "docs/decisions/0007-topic-02-engineering-foundation.md"
+change = "Initial repository, packaging, quality, provenance, and project-control method."
+
+[[methodology]]
+id = "SOVA-COMP-01"
+version = "1.0.0"
+status = "frozen-unexecuted"
+source = "docs/research/predeclared-comparison-protocol.md"
+change = "Predeclared comparison protocol frozen before implementation or results."
+
+[[methodology]]
+id = "SOVA-PUBLICATION-REVIEW"
+version = "1.0.0"
+status = "active"
+source = "docs/governance/publication-and-ip-review.md"
+change = "Initial publication, invention, disclosure, and claim-review method."

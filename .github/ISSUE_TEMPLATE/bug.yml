@@ -1,0 +1,60 @@
+name: Defect report
+description: Report a reproducible defect without sensitive target or trace data.
+title: "[BUG] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not submit credentials, private traces, client data, confidential
+        targets, or unpatched third-party vulnerabilities. Use SECURITY.md for
+        a private security report.
+
+  - type: input
+    id: version
+    attributes:
+      label: SOVA version or commit
+      placeholder: 0.1.0a0 or full commit SHA
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform family
+      options:
+        - Linux
+        - macOS
+        - Windows
+        - Other or unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed and expected behavior
+      description: State what happened and what bounded behavior you expected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal safe reproduction
+      description: Use synthetic data and remove all credentials and target identifiers.
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation already performed
+      placeholder: Commands, test names, seed, and relevant logs with secrets removed
+
+  - type: checkboxes
+    id: boundary
+    attributes:
+      label: Public-boundary confirmation
+      options:
+        - label: This report contains no credential, private trace, client data, confidential mechanism, or unpatched third-party vulnerability.
+          required: true

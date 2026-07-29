@@ -7,13 +7,26 @@
 /TRADEMARKS.md @Gautam-R-Patil
 /DUAL_USE_POLICY.md @Gautam-R-Patil
 /SECURITY.md @Gautam-R-Patil
+/CODE_OF_CONDUCT.md @Gautam-R-Patil
 /CITATION.cff @Gautam-R-Patil
+/CHANGELOG.md @Gautam-R-Patil
+/THIRD_PARTY_NOTICES.md @Gautam-R-Patil
+/pyproject.toml @Gautam-R-Patil
+/uv.lock @Gautam-R-Patil
+/.github/ @Gautam-R-Patil
+/scripts/ @Gautam-R-Patil
 /docs/decisions/ @Gautam-R-Patil
 /docs/governance/ @Gautam-R-Patil
 /docs/research/ @Gautam-R-Patil
+/docs/methodology/ @Gautam-R-Patil
+/docs/glossary.toml @Gautam-R-Patil
 
 # Future high-risk implementation surfaces
 /schemas/ @Gautam-R-Patil
 /registry/ @Gautam-R-Patil
+/src/ @Gautam-R-Patil
+/tests/compat/ @Gautam-R-Patil
+/tests/fixtures/ @Gautam-R-Patil
+/tests/failure/ @Gautam-R-Patil
 /src/search/ @Gautam-R-Patil
 /src/execution/ @Gautam-R-Patil

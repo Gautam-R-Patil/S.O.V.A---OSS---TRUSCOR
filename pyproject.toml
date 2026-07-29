@@ -1,0 +1,178 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sova-oss"
+version = "0.1.0a0"
+description = "Local-first AI-agent security testing and evidence workbench."
+readme = "README.md"
+requires-python = ">=3.11,<3.15"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [
+  { name = "Gautam R. Patil" },
+  { name = "SOVA OSS contributors" },
+]
+maintainers = [
+  { name = "Gautam R. Patil", email = "gautam@truscor.org" },
+]
+keywords = [
+  "agent-security",
+  "ai-security",
+  "mcp",
+  "reproducibility",
+  "security-testing",
+]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Security",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.scripts]
+sova = "sova.cli:main"
+
+[project.urls]
+Documentation = "https://github.com/Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR#readme"
+Issues = "https://github.com/Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR/issues"
+Repository = "https://github.com/Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR"
+Security = "https://github.com/Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR/security/policy"
+
+[dependency-groups]
+dev = [
+  "mypy>=2.3,<3",
+  "pip-audit>=2.10,<3",
+  "pre-commit>=4.5,<5",
+  "pytest>=9,<10",
+  "pytest-cov>=7,<8",
+  "ruff>=0.15,<0.17",
+]
+
+[tool.uv]
+required-version = ">=0.11.3,<0.12"
+default-groups = ["dev"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/CHANGELOG.md",
+  "/CONTRIBUTING.md",
+  "/DUAL_USE_POLICY.md",
+  "/LICENSE",
+  "/NOTICE",
+  "/README.md",
+  "/SECURITY.md",
+  "/TRADEMARKS.md",
+  "/src",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sova"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["private"]
+
+[tool.ruff.lint]
+select = [
+  "A",
+  "ANN",
+  "ARG",
+  "ASYNC",
+  "B",
+  "BLE",
+  "C4",
+  "DTZ",
+  "E",
+  "EXE",
+  "F",
+  "FA",
+  "FBT",
+  "FLY",
+  "FURB",
+  "G",
+  "I",
+  "ICN",
+  "INP",
+  "LOG",
+  "N",
+  "PERF",
+  "PIE",
+  "PL",
+  "PTH",
+  "PYI",
+  "RET",
+  "RSE",
+  "RUF",
+  "S",
+  "SIM",
+  "SLOT",
+  "T10",
+  "T20",
+  "TC",
+  "TRY",
+  "UP",
+  "W",
+]
+ignore = [
+  "ANN401",
+  "COM812",
+  "ISC001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*.py" = ["S603", "S607", "T201"]
+"tests/**/*.py" = ["PLR2004", "S101", "S603"]
+
+[tool.ruff.format]
+docstring-code-format = true
+line-ending = "lf"
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "scripts", "tests"]
+exclude = ["private"]
+warn_unreachable = true
+
+[tool.pytest.ini_options]
+addopts = [
+  "--import-mode=importlib",
+  "--strict-config",
+  "--strict-markers",
+  "-ra",
+]
+minversion = "9.0"
+testpaths = ["tests"]
+markers = [
+  "compat: schema, migration, or adapter compatibility contract",
+  "failure: deterministic fault-injection and crash-recovery contract",
+  "integration: boundary-spanning or installed-entry-point test",
+  "performance: performance or resource-budget contract",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["sova"]
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+skip_covered = true

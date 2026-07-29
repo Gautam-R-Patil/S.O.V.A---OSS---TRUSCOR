@@ -11,6 +11,9 @@ Read:
 - [the security and coordinated-disclosure policy](SECURITY.md);
 - [the trademark policy](TRADEMARKS.md);
 - [the controlling project decisions](docs/decisions/0005-topic-00-project-constitution.md).
+- [the development environment](docs/engineering/development.md);
+- [the testing strategy](docs/engineering/testing.md);
+- [the repository controls](docs/governance/repository-controls.md).
 
 Do not submit credentials, private traces, client data, confidential target details, unpatched exploit payloads, restricted proprietary methods, or material you do not have the right to publish.
 
@@ -74,6 +77,43 @@ Keep pull requests narrow and include:
 - paper, patent, licence, and disclosure status when applicable.
 
 Complete the pull-request boundary checklist. Maintainers may ask for a change to be split, withheld pending disclosure, or recreated with synthetic data.
+
+## Development workflow
+
+SOVA uses CPython 3.11–3.14, a `src/` package layout, `uv`, and a checked-in
+universal lockfile:
+
+```bash
+uv sync --locked
+uv run sova --version
+uv run ruff format --check .
+uv run ruff check .
+uv run mypy
+uv run pytest --cov=sova --cov-branch
+uv export --locked --quiet --format requirements.txt --all-groups --no-emit-project --output-file audit-requirements.txt
+uv run pip-audit --strict --cache-dir .cache/pip-audit --requirement audit-requirements.txt --no-deps --disable-pip
+uv run python scripts/generate_glossary.py --check
+uv run python scripts/check_repository.py
+```
+
+Run the public-boundary script using the command for your platform in the
+[development guide](docs/engineering/development.md). CI is the authoritative
+Windows, macOS, Linux, and supported-Python result.
+
+New runtime or build dependencies require the
+[dependency and supply-chain review](docs/governance/dependency-policy.md).
+Every fixture or dataset requires the
+[provenance record](docs/governance/fixture-and-dataset-provenance.md).
+
+Install the local checks:
+
+```bash
+uv run pre-commit install --hook-type pre-commit --hook-type commit-msg
+```
+
+The placeholder CLI is the only implemented product code at Topic 02. Do not
+represent planned security commands, schemas, or evidence capabilities as
+shipped.
 
 ## Research and citation
 

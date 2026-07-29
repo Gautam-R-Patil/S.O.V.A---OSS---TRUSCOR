@@ -1,0 +1,37 @@
+minimum_pre_commit_version: "4.0.0"
+default_install_hook_types: [pre-commit, commit-msg]
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: Ruff format check
+        entry: uv run --locked ruff format --check
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
+
+      - id: ruff
+        name: Ruff lint
+        entry: uv run --locked ruff check
+        language: system
+        types_or: [python, pyi]
+        pass_filenames: false
+
+      - id: repository-policy
+        name: Repository policy
+        entry: uv run --locked python scripts/check_repository.py
+        language: system
+        pass_filenames: false
+
+      - id: public-boundary
+        name: Public repository boundary
+        entry: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-public-boundary.ps1
+        language: system
+        pass_filenames: false
+
+      - id: dco-signoff
+        name: DCO sign-off
+        entry: uv run --locked python scripts/check_dco.py --commit-msg
+        language: system
+        stages: [commit-msg]

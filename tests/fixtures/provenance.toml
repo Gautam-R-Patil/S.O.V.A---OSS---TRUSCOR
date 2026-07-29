@@ -1,0 +1,18 @@
+version = 1
+policy = "docs/governance/fixture-and-dataset-provenance.md"
+
+[[fixture]]
+path = "tests/fixtures/golden/scenario/unsupported-pre-schema.sova"
+provenance_class = "synthetic"
+license = "Apache-2.0"
+expected = "reject"
+sha256 = "e0cd1338a515462ba20a79e0c6864bce65bd971d60c21551563ac4f50eddaa64"
+purpose = "Reserve the scenario golden-fixture workflow without defining a pre-Topic-04 schema."
+
+[[fixture]]
+path = "tests/fixtures/golden/trace/unsupported-pre-schema.sova-trace"
+provenance_class = "synthetic"
+license = "Apache-2.0"
+expected = "reject"
+sha256 = "93935d63547be39d4416b38385d56bb48e7993d784456c0a3f45217cf67e4db8"
+purpose = "Reserve the trace golden-fixture workflow without defining a pre-Topic-05 schema."

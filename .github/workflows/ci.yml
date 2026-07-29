@@ -1,0 +1,162 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONHASHSEED: "0"
+  SOVA_TEST_SEED: "20260729"
+  UV_LOCKED: "1"
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.3"
+          python-version: "3.11"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize locked environment
+        run: uv sync --locked
+
+      - name: Check lockfile
+        run: uv lock --check
+
+      - name: Check formatting
+        run: uv run --locked ruff format --check .
+
+      - name: Lint source and tests
+        run: uv run --locked ruff check .
+
+      - name: Check types
+        run: uv run --locked mypy
+
+      - name: Test with branch coverage
+        run: >-
+          uv run --locked pytest
+          --cov=sova
+          --cov-branch
+          --cov-report=term-missing
+          --cov-fail-under=95
+
+      - name: Check generated glossary
+        run: uv run --locked python scripts/generate_glossary.py --check
+
+      - name: Check repository policy
+        run: uv run --locked python scripts/check_repository.py
+
+      - name: Audit Python dependencies
+        run: |
+          uv export --locked --quiet --format requirements.txt --all-groups --no-emit-project --output-file audit-requirements.txt
+          uv run --locked pip-audit --strict --progress-spinner off --cache-dir .cache/pip-audit --requirement audit-requirements.txt --no-deps --disable-pip
+
+      - name: Build source and wheel distributions
+        run: uv build
+
+      - name: Smoke-test built wheel
+        shell: bash
+        run: uv run --isolated --no-project --python 3.11 --with "$(find dist -name '*.whl' -print -quit)" sova --version
+
+  platform:
+    name: Platform (${{ matrix.os }}, Python ${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: "3.11"
+          - os: ubuntu-latest
+            python: "3.12"
+          - os: ubuntu-latest
+            python: "3.13"
+          - os: ubuntu-latest
+            python: "3.14"
+          - os: windows-latest
+            python: "3.11"
+          - os: windows-latest
+            python: "3.14"
+          - os: macos-latest
+            python: "3.11"
+          - os: macos-latest
+            python: "3.14"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.3"
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize locked environment
+        run: uv sync --locked
+
+      - name: Run complete test suite
+        run: uv run --locked pytest
+
+      - name: Build package
+        run: uv build
+
+      - name: Exercise CLI
+        run: uv run --locked sova --version
+
+  dco:
+    name: DCO
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check pull-request commits
+        if: github.event_name == 'pull_request'
+        run: >-
+          python scripts/check_dco.py
+          --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+
+      - name: Confirm direct-push convention
+        if: github.event_name != 'pull_request'
+        run: python -c "print('DCO_CHECK=NOT_APPLICABLE_TO_PUSH_RANGE')"
+
+  ci-gate:
+    name: CI gate
+    if: always()
+    needs: [quality, platform, dco]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every CI job
+        env:
+          QUALITY: ${{ needs.quality.result }}
+          PLATFORM: ${{ needs.platform.result }}
+          DCO: ${{ needs.dco.result }}
+        run: |
+          test "$QUALITY" = "success"
+          test "$PLATFORM" = "success"
+          test "$DCO" = "success"

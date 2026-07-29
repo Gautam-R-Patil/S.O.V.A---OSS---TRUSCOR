@@ -1,0 +1,59 @@
+name: Research result
+description: Propose a reproducible, publication-cleared research artifact.
+title: "[RESEARCH] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not submit an invention-hold method, embargoed vulnerability, private
+        dataset, client result, or unsupported comparative claim.
+
+  - type: input
+    id: claim
+    attributes:
+      label: Claims-register ID and current evidence state
+      placeholder: C-### — verified/provisional/unverified/retired/value hypothesis
+    validations:
+      required: true
+
+  - type: input
+    id: protocol
+    attributes:
+      label: Frozen protocol and version
+      placeholder: SOVA-COMP-01 1.0.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: Immutable artifacts
+      description: List public locators, exact revisions, digests, seeds, and run-bundle IDs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: result
+    attributes:
+      label: Result, uncertainty, and limitations
+    validations:
+      required: true
+
+  - type: textarea
+    id: provenance
+    attributes:
+      label: Data, target, model, and fixture provenance
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: gates
+    attributes:
+      label: Publication gates
+      options:
+        - label: Patent, paper, coordinated-disclosure, ethics, licence, and privacy review is complete.
+          required: true
+        - label: Negative and inconclusive results are retained under the frozen protocol.
+          required: true
+        - label: The wording is bounded to the cited evidence and does not imply independent TRUSCOR attestation.
+          required: true

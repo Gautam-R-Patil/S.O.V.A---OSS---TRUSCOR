@@ -1,0 +1,6 @@
+version = 1
+
+[cli_version]
+max_wall_seconds = 5.0
+max_output_bytes = 128
+rationale = "A generous cross-platform regression ceiling for the dependency-free placeholder CLI."

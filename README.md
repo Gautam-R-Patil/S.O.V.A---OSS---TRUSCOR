@@ -42,7 +42,36 @@
 ---
 
 > [!IMPORTANT]
-> **SOVA is under active development.** This repository currently presents the product direction and public identity. The commands and interfaces below describe the intended developer experience; they must not be interpreted as a released package or completed security capability.
+> **SOVA is pre-alpha.** The repository now contains a buildable, tested engineering foundation and a placeholder `sova` CLI. The security commands and artifact schemas described below remain planned and must not be interpreted as released capabilities.
+
+## Engineering foundation
+
+The implemented Topic 02 surface is intentionally small and honest:
+
+```bash
+git clone https://github.com/Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR.git
+cd S.O.V.A---OSS---TRUSCOR
+uv sync --locked
+uv run sova --version
+uv run pytest
+```
+
+It provides:
+
+- the canonical `sova-oss` Python distribution, `sova` import namespace, and
+  `sova` command;
+- CPython 3.11–3.14 support across Windows, macOS, and Linux CI;
+- a dependency-free runtime package with no SOVA-hosted service requirement;
+- locked development dependencies, formatting, linting, strict typing, branch
+  coverage, dependency audit, CodeQL, secret scanning, and build checks;
+- deterministic seeds, compatibility directories, provenance-controlled
+  goldens, performance budgets, fault injection, and crash recovery tests;
+- permanent decision, invention, claim, research-artifact, methodology,
+  glossary, changelog, security, and release-control homes.
+
+Read [ADR-0007](./docs/decisions/0007-topic-02-engineering-foundation.md),
+the [development guide](./docs/engineering/development.md), and the
+[testing strategy](./docs/engineering/testing.md).
 
 ## Why SOVA
 
@@ -478,15 +507,19 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Area | Status |
 |---|---|
 | Vision and scope | Defined |
-| Public identity and README | In progress |
+| Public identity and README | Active |
 | Canonical artifact meanings | Accepted in [ADR-0001](./docs/decisions/0001-canonical-artifact-meanings.md) |
 | `.sova` meaning and migration invariants | Accepted in [ADR-0001](./docs/decisions/0001-canonical-artifact-meanings.md) and [ADR-0002](./docs/decisions/0002-versioning-and-lossless-migration.md) |
 | Open/private and SOVA Engine boundary | Accepted in [ADR-0003](./docs/decisions/0003-open-source-and-proprietary-boundary.md) |
 | Self-assessment and TRUSCOR authority boundary | Accepted in [ADR-0004](./docs/decisions/0004-self-assessment-and-truscor-boundary.md) |
 | Topic 00 project constitution | Accepted in [ADR-0005](./docs/decisions/0005-topic-00-project-constitution.md) |
 | Topic 01 claims, prior art, experiment, and publication decision | Accepted in [ADR-0006](./docs/decisions/0006-topic-01-evidence-go-no-go.md) |
+| Topic 02 repository, language, quality, documentation, and public-safety foundation | Implemented in [ADR-0007](./docs/decisions/0007-topic-02-engineering-foundation.md) |
 | Comparative evidence gates 01-A and 01-B | **Not run - unproven; comparative claims prohibited** |
-| Public repository boundary check | Active in CI and available locally |
+| Placeholder `sova` CLI | Implemented; `--help` and `--version` only |
+| Python package and locked contributor environment | Implemented as `sova-oss` / `uv.lock`; not published to PyPI |
+| Cross-platform CI and quality/security gates | Implemented |
+| Public repository boundary check | Active in CI and locally |
 | Repository licence | [Apache License 2.0](./LICENSE) |
 | Trademark and fork naming | [SOVA-OSS policy active](./TRADEMARKS.md) |
 | Dual-use and coordinated disclosure | [Policies active](./DUAL_USE_POLICY.md) |
@@ -495,7 +528,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Scripted/local execution | Not yet implemented |
 | Atlas adapter | Awaiting validated integration |
 | Sleeper demonstration | Not yet implemented |
-| CLI / SDK / local MCP | Not yet implemented |
+| Security CLI commands / SDK / local MCP | Not yet implemented |
 | Registry and community surfaces | Not yet implemented |
 
 The first engineering objective is a no-Atlas vertical slice:
@@ -546,6 +579,8 @@ For papers, reports, theses, benchmarks, and datasets, use the repository's [CIT
 The project is pre-alpha, but its contribution and safety rules are active now:
 
 - read [CONTRIBUTING.md](./CONTRIBUTING.md) before proposing a change;
+- set up the locked environment using the [development guide](./docs/engineering/development.md);
+- follow the [testing strategy](./docs/engineering/testing.md) and [repository controls](./docs/governance/repository-controls.md);
 - sign every commit using the [Developer Certificate of Origin](https://developercertificate.org/) (`git commit -s`);
 - follow the [dual-use policy](./DUAL_USE_POLICY.md) for scenarios, fixtures, search methods, and registry content;
 - report vulnerabilities privately under [SECURITY.md](./SECURITY.md);

@@ -30,6 +30,21 @@ $requiredPublicFiles = @(
     "CONTRIBUTING.md",
     "DUAL_USE_POLICY.md",
     "SECURITY.md",
+    "CODE_OF_CONDUCT.md",
+    "CHANGELOG.md",
+    "THIRD_PARTY_NOTICES.md",
+    "pyproject.toml",
+    "uv.lock",
+    "docs/decisions/0007-topic-02-engineering-foundation.md",
+    "docs/governance/repository-controls.md",
+    "docs/governance/invention-handling.md",
+    "docs/governance/fixture-and-dataset-provenance.md",
+    "docs/engineering/development.md",
+    "docs/engineering/testing.md",
+    "docs/documentation-status.md",
+    "docs/glossary.md",
+    "docs/methodology/versions.toml",
+    "docs/research/artifacts/index.toml",
     "docs/decisions/0005-topic-00-project-constitution.md",
     "docs/decisions/0006-topic-01-evidence-go-no-go.md",
     "docs/governance/publication-and-ip-review.md",
@@ -100,6 +115,11 @@ foreach ($candidateFile in $candidateFiles) {
     if ($lower -match '\.(pem|key|p12|pfx)$') {
         $violations.Add("private key or certificate container is tracked: $normalized")
     }
+
+    if (($lower.Contains(".sova-trace")) -and
+        (-not $lower.StartsWith("tests/fixtures/golden/trace/"))) {
+        $violations.Add("raw trace outside approved synthetic fixtures: $normalized")
+    }
 }
 
 $textExtensions = @(
@@ -123,6 +143,12 @@ $secretPatterns = [ordered]@{
     "AWS access key" = '\b(AKIA|ASIA)[A-Z0-9]{16}\b'
     "Google API key" = '\bAIza[0-9A-Za-z_-]{30,}\b'
     "OpenAI-style API key" = '\bsk-[A-Za-z0-9_-]{20,}\b'
+    "Anthropic API key" = '\bsk-ant-[A-Za-z0-9_-]{20,}\b'
+    "GitLab token" = '\bglpat-[A-Za-z0-9_-]{20,}\b'
+    "Hugging Face token" = '\bhf_[A-Za-z0-9]{20,}\b'
+    "npm access token" = '\bnpm_[A-Za-z0-9]{30,}\b'
+    "Slack token" = '\bxox[baprs]-[A-Za-z0-9-]{20,}\b'
+    "Stripe live secret" = '\bsk_live_[A-Za-z0-9]{20,}\b'
 }
 
 $confidentialMarkers = @(
