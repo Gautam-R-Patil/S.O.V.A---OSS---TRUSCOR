@@ -26,7 +26,7 @@ This decision freezes the meanings and working names below. It does **not** free
 | Human report | `*.html`, `*.md`, or `*.pdf` | Derived presentation of maps, findings, traces, methods, and limitations | Inert and non-canonical | Explicit export only |
 | Registry entry | `entry.json` in a versioned registry path | Inert discovery and lifecycle metadata pointing to immutable scenario content and verification records | Inert; registry browsing and sync never execute scenarios | Public only after registry review |
 
-Every machine-readable artifact will carry an explicit type discriminator such as `sova.scenario`, `sova.target`, `sova.trace`, `sova.map`, `sova.finding`, or `sova.registry-entry`. Topic 00.3 will settle the version fields and compatibility contract.
+Every machine-readable artifact will carry an explicit type discriminator such as `sova.scenario`, `sova.target`, `sova.trace`, `sova.map`, `sova.finding`, or `sova.registry-entry`. [ADR-0002](./0002-versioning-and-lossless-migration.md) defines the version fields, compatibility promise, migration rules, and `1.0.0` evidence gate.
 
 ## Normative meanings
 
@@ -260,7 +260,7 @@ Rejected because importing a community scenario would become equivalent to accep
 ## Consequences
 
 - Existing examples and documentation must stop using `.sova` for map reports or agent configuration.
-- Topic 00.3 can version each artifact family independently while sharing common identity and reference rules.
+- ADR-0002 versions each artifact family independently while sharing common identity and reference rules.
 - Topic 04 can design `.sova` without also becoming a target-config, result, or registry schema.
 - Topic 05 can design `.sova-trace` as an inert evidence package and define what sealing proves.
 - Topic 09 owns `*.sova-map.json`.

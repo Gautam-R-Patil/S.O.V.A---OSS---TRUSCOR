@@ -167,6 +167,28 @@ SOVA will build on open telemetry and signing conventions rather than inventing 
 
 The accepted [artifact meanings decision](./docs/decisions/0001-canonical-artifact-meanings.md) separates scenarios, target manifests, traces, maps, findings, reports, and registry entries so execution, observation, and judgment cannot be confused.
 
+### Versioning without lock-in
+
+The accepted [versioning and lossless-migration policy](./docs/decisions/0002-versioning-and-lossless-migration.md) is designed so a future SOVA release can continue reading every stable `.sova` version and migrate old artifacts forward without silent data loss.
+
+The promise is deliberately precise:
+
+- the original file is never overwritten by default;
+- every source value, payload, attachment, ordering rule, oracle, and safety constraint is preserved;
+- implicit old defaults become explicit equivalent values;
+- future-only information that did not exist is marked `unknown`, never fabricated;
+- unsupported required behavior fails closed;
+- the migrated artifact keeps provenance to the original digest but receives its own digest and signature.
+
+The planned local workflow is:
+
+```bash
+sova migrate scenario.sova --check
+sova migrate scenario.sova --to latest --require-lossless
+```
+
+SOVA will use experimental `0.x` schemas until real scenarios, migration rehearsals, independent implementations, and hostile-input tests justify `1.0.0`.
+
 ### Semantic reproduction
 
 Hosted model execution is not reliably bit-for-bit deterministic. SOVA therefore separates:
@@ -445,7 +467,8 @@ Research claims will require predeclared protocols, strong baselines, repeated t
 | Vision and scope | Defined |
 | Public identity and README | In progress |
 | Canonical artifact meanings | Accepted in [ADR-0001](./docs/decisions/0001-canonical-artifact-meanings.md) |
-| `.sova` invariants | Not yet frozen |
+| `.sova` meaning and migration invariants | Accepted in [ADR-0001](./docs/decisions/0001-canonical-artifact-meanings.md) and [ADR-0002](./docs/decisions/0002-versioning-and-lossless-migration.md) |
+| `.sova` field schema | Experimental work has not started |
 | `.sova-trace` experimental contract | Not yet implemented |
 | Scripted/local execution | Not yet implemented |
 | Atlas adapter | Awaiting validated integration |
