@@ -143,11 +143,15 @@ sova hash behavior.sova
 sova hash behavior.sova --content
 sova compat old.sova --to 0.1.0
 sova migrate old.sova new.sova --to 0.1.0
+sova compare first.sova-trace second.sova-trace
 ```
 
 `inspect` renders escaped inert Markdown. `lint` distinguishes valid but risky
 authoring choices from structural failure. A capsule without a scenario is
 valid for collection or incident work but is not re-executable.
+
+`compare` is inert and compares selected declared observable outcomes. It does
+not perform controlled re-execution and is not a general semantic judge.
 
 ## Lifecycle
 

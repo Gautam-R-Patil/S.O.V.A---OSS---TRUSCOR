@@ -146,3 +146,14 @@ def test_secret_shaped_scenario_content_is_rejected_before_packaging(tmp_path: P
     with pytest.raises(FormatError) as error:
         build_capsule(tmp_path / "unsafe.sova", manifest, scenario=scenario)
     assert error.value.issue.code == "SOVA-CAPSULE-SECRET-MATERIAL"
+
+
+def test_secret_environment_accepts_only_opaque_references(tmp_path: Path) -> None:
+    manifest = capsule_manifest_template(title="Reference", summary="Reference", author="Tester")
+    scenario = scenario_template(title="Reference", purpose="Verify opaque reference gate")
+    scenario["procedure"]["steps"][0]["inputs"] = {
+        "secretEnv": {"SOVA_TEST_SECRET": "not-an-opaque-reference"}
+    }
+    with pytest.raises(FormatError) as error:
+        build_capsule(tmp_path / "invalid-secret-reference.sova", manifest, scenario=scenario)
+    assert error.value.issue.code == "SOVA-CAPSULE-SECRET-REFERENCE"

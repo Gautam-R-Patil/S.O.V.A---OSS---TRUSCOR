@@ -35,6 +35,12 @@
 - migration provenance and non-overwrite.
 - explicit recovered-prefix semantics after an interrupted writer;
 - redaction-placeholder and redaction-record consistency checks.
+- strict opaque secret-reference syntax in capsules and just-in-time provider
+  resolution without writing the resolved value into normal outcomes;
+- provider exceptions converted into crash evidence without retaining the
+  potentially sensitive exception message;
+- declared-outcome comparison becomes inconclusive on recorder-reported loss,
+  non-full content capture, or absent selected evidence families.
 
 ## Out of scope or not guaranteed
 
@@ -49,6 +55,8 @@
 - power-loss durability on filesystems/platforms that do not honor the
   requested flush or sync operation;
 - perfect secret detection;
+- protection of a resolved secret from the explicitly allowlisted child
+  process, operating system, debugger, or memory inspection;
 - deterministic behavior across stochastic or changed runtimes;
 - non-repudiation, unforgeability, causality proof, or hidden-thought capture.
 

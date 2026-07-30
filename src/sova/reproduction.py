@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from sova.formats import PackageReader, strict_json_loads, validate_document
 from sova.formats.errors import FormatError
 from sova.models import ScriptedModel, ScriptedModelError
+from sova.oracles import ObservableRecord, evaluate_oracles
 from sova.trace import TraceReader, TraceWriter
 
 if TYPE_CHECKING:
@@ -28,12 +29,18 @@ class ReproductionResult:
 
 @dataclass(frozen=True, slots=True)
 class ComparisonResult:
-    """A deterministic comparison, not an LLM semantic judgment."""
+    """An integrity-checked declared-outcome comparison.
+
+    This deliberately small public comparator is not the private experimental
+    semantic-reproduction research mechanism.
+    """
 
     equivalent: bool
     left_outcomes: tuple[tuple[str, Any], ...]
     right_outcomes: tuple[tuple[str, Any], ...]
-    method: str = "sova.observable-outcome-exact/0.1"
+    status: str
+    limitations: tuple[str, ...]
+    method: str = "sova.declared-outcome-exact/0.4"
 
 
 def _scenario(capsule: Path) -> dict[str, Any]:
@@ -84,6 +91,8 @@ def reproduce_with_scripted_model(
     )
     completion = "completed"
     attempted = 0
+    records: list[ObservableRecord] = []
+    evidence_parents: list[str] = []
     try:
         for step in scenario["procedure"]["steps"]:
             attempted += 1
@@ -96,6 +105,7 @@ def reproduce_with_scripted_model(
                     {"step": step["id"], "text": prompt},
                     phase=step["id"],
                 )
+                records.append(ObservableRecord("prompt.sent", prompt_id, {"text": prompt}))
                 turn = model.respond(prompt)
                 response_id = writer.append(
                     "model.response",
@@ -108,13 +118,23 @@ def reproduce_with_scripted_model(
                     phase=step["id"],
                     parents=[prompt_id] if prompt_id else [],
                 )
+                records.append(
+                    ObservableRecord(
+                        "model.response",
+                        response_id,
+                        {"text": turn.response_text, **(turn.structured or {})},
+                    )
+                )
+                if response_id is not None:
+                    evidence_parents.append(response_id)
                 for tool_call in turn.tool_calls:
-                    writer.append(
+                    tool_id = writer.append(
                         "tool.requested",
                         {"step": step["id"], **tool_call},
                         phase=step["id"],
                         parents=[response_id] if response_id else [],
                     )
+                    records.append(ObservableRecord("tool.requested", tool_id, tool_call))
             elif action == "agent.request-tool":
                 request_id = writer.append(
                     "tool.requested",
@@ -127,12 +147,39 @@ def reproduce_with_scripted_model(
                     phase=step["id"],
                     parents=[request_id] if request_id else [],
                 )
+                records.extend(
+                    (
+                        ObservableRecord(
+                            "tool.requested",
+                            request_id,
+                            step["inputs"],
+                        ),
+                        ObservableRecord(
+                            "blocked.approval",
+                            None,
+                            {"reason": "no runtime approval supplied"},
+                        ),
+                    )
+                )
             else:
                 raise FormatError(  # noqa: TRY301
                     "SOVA-REPRODUCE-UNSUPPORTED-ACTION",
                     f"synthetic harness does not support action: {action}",
                 )
-        writer.append("run.completed", {"steps": attempted, "modelTurns": model.consumed})
+        report = evaluate_oracles(scenario["oracles"], records)
+        writer.append(
+            "oracle.completed",
+            report.to_mapping(),
+            parents=evidence_parents,
+        )
+        writer.append(
+            "run.completed",
+            {
+                "steps": attempted,
+                "modelTurns": model.consumed,
+                "oracleStatus": report.status.value,
+            },
+        )
     except (FormatError, ScriptedModelError) as error:
         completion = "failed"
         writer.append(
@@ -167,19 +214,81 @@ def compare_observable_outcomes(
     *,
     kinds: Sequence[str] = ("model.response", "oracle.completed"),
 ) -> ComparisonResult:
-    """Compare declared observable event payloads exactly and deterministically."""
-    selected = set(kinds)
+    """Compare declared observable payloads after offline integrity checks.
 
-    def outcomes(path: Path) -> tuple[tuple[str, Any], ...]:
-        return tuple(
-            (event["kind"], event["payload"])
-            for event in TraceReader(path).events()
-            if event["kind"] in selected
+    Any recorder-reported event loss or non-full content capture makes the
+    result inconclusive. A caller must not convert missing evidence into
+    equivalence.
+    """
+    selected = set(kinds)
+    if not selected:
+        raise FormatError(
+            "SOVA-COMPARE-KINDS",
+            "at least one observable event kind is required",
         )
 
-    left_outcomes = outcomes(left)
-    right_outcomes = outcomes(right)
-    return ComparisonResult(left_outcomes == right_outcomes, left_outcomes, right_outcomes)
+    def portable_payload(kind: str, payload: Any) -> Any:
+        if kind != "oracle.completed" or not isinstance(payload, dict):
+            return payload
+        normalized = dict(payload)
+        results = normalized.get("results")
+        if isinstance(results, list):
+            normalized["results"] = [
+                {
+                    key: value
+                    for key, value in result.items()
+                    if key not in {"evidence_event_ids", "observed"}
+                }
+                if isinstance(result, dict)
+                else result
+                for result in results
+            ]
+        return normalized
+
+    def outcomes(path: Path) -> tuple[tuple[tuple[str, Any], ...], tuple[str, ...]]:
+        reader = TraceReader(path)
+        reader.verify()
+        manifest = reader.manifest()
+        losses: list[str] = []
+        dropped = manifest["capturePolicy"]["droppedEventCount"]
+        if dropped:
+            losses.append(f"recorder reported {dropped} dropped event(s)")
+        if manifest["contentCapture"] != "full":
+            losses.append(f"content capture was {manifest['contentCapture']!r}, not 'full'")
+        events = reader.events()
+        missing = sorted(
+            kind for kind in selected if not any(event["kind"] == kind for event in events)
+        )
+        if missing:
+            losses.append(f"selected event kinds were absent: {', '.join(missing)}")
+        return tuple(
+            (event["kind"], portable_payload(event["kind"], event["payload"]))
+            for event in events
+            if event["kind"] in selected
+        ), tuple(losses)
+
+    left_outcomes, left_losses = outcomes(left)
+    right_outcomes, right_losses = outcomes(right)
+    limitations = (
+        *(f"left: {item}" for item in left_losses),
+        *(f"right: {item}" for item in right_losses),
+    )
+    if limitations:
+        status = "inconclusive"
+        equivalent = False
+    elif left_outcomes == right_outcomes:
+        status = "equivalent"
+        equivalent = True
+    else:
+        status = "divergent"
+        equivalent = False
+    return ComparisonResult(
+        equivalent,
+        left_outcomes,
+        right_outcomes,
+        status,
+        limitations,
+    )
 
 
 __all__ = [

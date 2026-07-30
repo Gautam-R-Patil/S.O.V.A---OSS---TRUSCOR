@@ -1,7 +1,7 @@
 # SOVA OSS claims register
 
 - **Register version:** 1.0
-- **Evidence snapshot:** 2026-07-29
+- **Evidence snapshot:** 2026-07-31
 - **Register owner:** Gautam R. Patil
 - **Next competitive recheck:** 2026-08-29
 - **Legal review state:** qualified counsel not yet recorded
@@ -89,18 +89,21 @@ guidance, or original research:
 |---|---|---|---|---|---|---|---|
 | P-01 | SOVA OSS is intended to be local-first, account-free, bring-your-own-model, and without automatic telemetry. | PROVISIONAL | Product owner | SRC-LOCAL-ADR | 2026-07-29 | 2026-10-27 | Say “designed” or “planned” until tested. |
 | P-02 | SOVA OSS is a complete public instrument rather than a trial for SOVA Engine. | PROVISIONAL | Product owner | SRC-LOCAL-ADR | 2026-07-29 | 2026-10-27 | Governance is accepted; completeness is not implemented. |
-| P-03 | Atlas is optional and replaceable; SOVA owns authorization, sandboxing, search, evidence, replay, and forensics. | PROVISIONAL | Architecture owner | SRC-LOCAL-ADR | 2026-07-29 | 2026-10-27 | Design commitment, not an interoperability result. |
-| P-04 | `.sova` will encode a portable adversarial scenario and `.sova-trace` an inert evidence record. | PROVISIONAL | Format owner | SRC-LOCAL-ADR | 2026-07-29 | 2026-10-27 | Accepted meaning; schema and implementations remain experimental. |
+| P-03 | Atlas is optional and replaceable; SOVA owns authorization, containment selection, observation, judging, evidence, replay, and verification. | VERIFIED | Architecture owner | SRC-LOCAL-ADR; [ADR-0010](../decisions/0010-executor-contract-and-no-atlas-backends.md) | 2026-07-31 | 2026-10-29 | Verified for the current provider-neutral contract and two no-Atlas backends; not an Atlas interoperability result. |
+| P-04 | Experimental `.sova` is a portable AI-behavior capsule that can contain a scenario and related evidence; `.sova-trace` is the canonical low-level observable event/evidence stream. | VERIFIED | Format owner | [ADR-0009](../decisions/0009-sova-behavior-capsule-and-trace-model.md); implemented schemas and conformance tests | 2026-07-31 | Before 0.2 | Bounded to experimental `0.1.0`; not a stable-1.0, adoption, or novelty claim. |
 | P-05 | Stable `.sova` artifacts will migrate forward without silent semantic or data loss. | PROVISIONAL | Format owner | [ADR-0002](../decisions/0002-versioning-and-lossless-migration.md) | 2026-07-29 | Before 1.0 | Compatibility promise; requires conformance tests before `1.0.0`. |
 | P-06 | SOVA evidence is operator-controlled self-assessment, not TRUSCOR attestation. | VERIFIED | Governance owner | [ADR-0004](../decisions/0004-self-assessment-and-truscor-boundary.md) | 2026-07-29 | 2027-01-29 | Allowed as a project-boundary statement. |
 | P-07 | `map`, `check`, `detonate`, `compose`, `arena`, `rehearse`, `forensics`, `evidence`, `sentinel`, `registry`, `adjudicate`, and `disclose` are available. | UNVERIFIED | Release owner | Repository status | 2026-07-29 | Every release | Prohibited. They are planned commands, not released capabilities. |
 | P-08 | `sova map` delivers useful first value within five minutes of a cold install. | VALUE HYPOTHESIS | Product owner | No usability run yet | 2026-07-29 | Before beta | Keep as an engineering target. |
 | P-09 | `sova check` completes a representative component test in 60 seconds. | VALUE HYPOTHESIS | Product owner | No performance run yet | 2026-07-29 | Before alpha | Keep as a budget/profile target, not a guarantee. |
-| P-10 | SOVA traces are signed and tamper-evident under a published threat model. | PROVISIONAL | Evidence owner | SRC-DSSE; SRC-SIGSTORE | 2026-07-29 | Before evidence release | Say “planned”; never say tamper-proof or unforgeable. |
+| P-10 | SOVA traces can be DSSE-compatible Ed25519 signed and are tamper-evident for covered bytes under the published threat model. | VERIFIED | Evidence owner | SRC-DSSE; SRC-SIGSTORE; [threat model](../specifications/threat-model.md); integrity and hostile-input tests | 2026-07-31 | Before 0.2 | Included-key verification establishes no external signer identity; never say tamper-proof or unforgeable. |
 | P-11 | Semantic reproduction is a rate over repeated trials, not exact deterministic rerun. | VERIFIED | Research owner | Project definition; SRC-PROTOCOL | 2026-07-29 | 2026-10-27 | Allowed as SOVA terminology, not as a novelty claim. |
 | P-12 | The registry is pull-only and sends no target, trace, credential, or finding data. | PROVISIONAL | Privacy owner | SRC-LOCAL-ADR | 2026-07-29 | Before registry release | Must be enforced and network-tested before factual use. |
 | P-13 | SOVA can continuously detect safety regressions after model or component updates. | UNVERIFIED | Sentinel owner | No implementation or longitudinal result | 2026-07-29 | Before sentinel release | Say “planned regression testing.” |
 | P-14 | SOVA can assign the responsible model, tool, memory, orchestration, permission, or environment layer. | UNVERIFIED | Forensics owner | Gate 01-B not run | 2026-07-29 | After Gate 01-B | Prohibited as achieved capability. |
+| P-15 | One safe owned conditional-behavior capsule can be executed through scripted and restricted-local backends, inspected, played back inertly, compared on declared outcomes, repackaged with both traces, and verified offline without Atlas. | VERIFIED | Architecture owner | `tests/integration/test_no_atlas_complete_vertical_slice.py`; hosted CI for the cited commit | 2026-07-31 | Every executor-contract change | Bounded to the deterministic fixture; host execution is not a security sandbox. |
+| P-16 | The public exact declared-outcome comparator refuses equivalence when a source trace is invalid or reports dropped events, non-full capture, or an absent selected event family. | VERIFIED | Evidence owner | `sova.reproduction`; reproduction failure tests | 2026-07-31 | Before 0.2 | This is not the private experimental semantic-reproduction mechanism or a general semantic judge. |
+| P-17 | The restricted-local executor can resolve strict opaque `sova-secret:` references just in time without storing the resolved value in the capsule or normal trace outcome. | VERIFIED | Privacy owner | executor/capsule integration tests; [executor contract](../specifications/executor-contract-0.1.md) | 2026-07-31 | Every secret-boundary change | The allowlisted child and host may observe the in-memory value; this is not a hardware secret boundary. |
 
 ## Market, incident, and operational claims
 

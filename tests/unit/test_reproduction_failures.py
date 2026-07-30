@@ -11,7 +11,7 @@ from sova.capsule import build_capsule, capsule_manifest_template, scenario_temp
 from sova.formats.errors import FormatError
 from sova.models import ScriptedModel, ScriptedModelError, ScriptedTurn
 from sova.reproduction import compare_observable_outcomes, reproduce_with_scripted_model
-from sova.trace import TraceReader
+from sova.trace import TraceReader, TraceWriter
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -122,7 +122,46 @@ def test_comparison_detects_different_observable_outcomes(tmp_path: Path) -> Non
         model=ScriptedModel([ScriptedTurn("prompt", "right")]),
         authorization=auth,
     )
-    assert not compare_observable_outcomes(left.trace_path, right.trace_path).equivalent
+    comparison = compare_observable_outcomes(left.trace_path, right.trace_path)
+    assert not comparison.equivalent
+    assert comparison.status == "divergent"
+
+
+def test_comparison_refuses_equivalence_when_recorder_reports_loss(
+    tmp_path: Path,
+) -> None:
+    paths = (tmp_path / "left.sova-trace", tmp_path / "right.sova-trace")
+    for path in paths:
+        writer = TraceWriter(path, capture_profile="lite")
+        assert writer.append("memory.read", {"value": "filtered"}) is None
+        writer.append(
+            "oracle.completed",
+            {
+                "status": "pass",
+                "results": [],
+                "method": "fixture",
+                "limitations": [],
+            },
+        )
+        writer.finalize(completion="completed")
+
+    comparison = compare_observable_outcomes(
+        paths[0],
+        paths[1],
+        kinds=("oracle.completed",),
+    )
+    assert not comparison.equivalent
+    assert comparison.status == "inconclusive"
+    assert comparison.limitations == (
+        "left: recorder reported 1 dropped event(s)",
+        "right: recorder reported 1 dropped event(s)",
+    )
+
+
+def test_comparison_requires_at_least_one_kind(tmp_path: Path) -> None:
+    with pytest.raises(FormatError) as error:
+        compare_observable_outcomes(tmp_path / "left", tmp_path / "right", kinds=())
+    assert error.value.issue.code == "SOVA-COMPARE-KINDS"
 
 
 def test_scripted_reproduction_supports_parameter_context_tool_calls_and_approval(

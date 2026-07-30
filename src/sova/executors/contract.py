@@ -36,6 +36,21 @@ class OutcomeStatus(StrEnum):
     PARTIAL = "partial"
 
 
+class FailureCause(StrEnum):
+    """Bounded causal category; `unknown` prevents false attribution."""
+
+    NONE = "none"
+    TARGET = "target"
+    EXECUTOR = "executor"
+    POLICY = "policy"
+    ENVIRONMENT = "environment"
+    EVIDENCE = "evidence"
+    TIMEOUT = "timeout"
+    CANCELLATION = "cancellation"
+    UNSUPPORTED = "unsupported"
+    UNKNOWN = "unknown"
+
+
 @dataclass(frozen=True, slots=True)
 class Capability:
     """One exact executor feature and its retry/effect contract."""
@@ -101,6 +116,13 @@ class EvidenceReference:
     size: int
 
 
+class SecretProvider(Protocol):
+    """Resolve an opaque secret reference only for the lifetime of an action."""
+
+    def resolve(self, reference: str) -> str:
+        """Return a secret without exposing it through capsule or trace data."""
+
+
 @dataclass(frozen=True, slots=True)
 class ActionOutcome:
     """Normalized provider result with explicit verification and limitations."""
@@ -114,6 +136,25 @@ class ActionOutcome:
     retryable: bool = False
     error_code: str | None = None
     limitations: tuple[str, ...] = ()
+    failure_cause: FailureCause = FailureCause.NONE
+
+    def __post_init__(self) -> None:
+        inferred = {
+            OutcomeStatus.SUCCEEDED: FailureCause.NONE,
+            OutcomeStatus.TIMEOUT: FailureCause.TIMEOUT,
+            OutcomeStatus.CANCELLED: FailureCause.CANCELLATION,
+            OutcomeStatus.DENIED: FailureCause.POLICY,
+            OutcomeStatus.UNSUPPORTED: FailureCause.UNSUPPORTED,
+            OutcomeStatus.PARTIAL: FailureCause.EVIDENCE,
+            OutcomeStatus.FAILED: FailureCause.UNKNOWN,
+        }[self.status]
+        if self.failure_cause == FailureCause.NONE and inferred != FailureCause.NONE:
+            object.__setattr__(self, "failure_cause", inferred)
+        if self.status == OutcomeStatus.SUCCEEDED and self.failure_cause != FailureCause.NONE:
+            raise FormatError(
+                "SOVA-EXECUTOR-FAILURE-CAUSE",
+                "a succeeded outcome cannot declare a failure cause",
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +165,7 @@ class ExecutionContext:
     authorization: dict[str, Any]
     artifacts: dict[str, bytes] = field(default_factory=dict)
     environment: dict[str, str] = field(default_factory=dict)
+    secret_provider: SecretProvider | None = None
 
     def __post_init__(self) -> None:
         if not self.workspace.resolve().is_dir():
@@ -183,7 +225,9 @@ __all__ = [
     "EvidenceReference",
     "ExecutionContext",
     "Executor",
+    "FailureCause",
     "OutcomeStatus",
+    "SecretProvider",
     "SideEffect",
     "negotiate",
 ]

@@ -173,6 +173,37 @@ def test_trace_validate_verify_and_playback_commands(
     assert json.loads(capsys.readouterr().out)["selectedEventCount"] == 1
 
 
+def test_compare_command_reports_declared_outcome_equivalence(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    left = tmp_path / "left.sova-trace"
+    right = tmp_path / "right.sova-trace"
+    for path in (left, right):
+        writer = TraceWriter(path)
+        writer.append(
+            "oracle.completed",
+            {
+                "status": "pass",
+                "results": [
+                    {
+                        "status": "pass",
+                        "expected": "TRIGGERED",
+                        "observed": ["TRIGGERED"],
+                        "evidence_event_ids": [str(path)],
+                    }
+                ],
+            },
+        )
+        writer.finalize()
+
+    assert main(["compare", str(left), str(right), "--kind", "oracle.completed"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["equivalent"] is True
+    assert report["method"] == "sova.declared-outcome-exact/0.4"
+    assert report["status"] == "equivalent"
+
+
 def test_cli_recovers_interrupted_trace(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     trace = tmp_path / "interrupted.sova-trace"
     writer = TraceWriter(trace, durability="forensic")

@@ -3,9 +3,9 @@ updated = 2026-07-29
 
 [[term]]
 term = ".sova"
-definition = "A portable declarative adversarial scenario. It has executable intent only through an explicit validated, bound, and authorized SOVA run."
+definition = "A portable, versioned, inert-by-default AI-behavior capsule that can contain or reference separately typed scenarios, traces, environments, artifacts, evaluations, findings, hypotheses, provenance, citation, disclosure, and authorship material."
 status = "accepted"
-source = "decisions/0001-canonical-artifact-meanings.md"
+source = "decisions/0009-sova-behavior-capsule-and-trace-model.md"
 
 [[term]]
 term = ".sova-trace"
@@ -45,9 +45,9 @@ source = "decisions/0001-canonical-artifact-meanings.md"
 
 [[term]]
 term = "LocalSandboxExecutor"
-definition = "The planned SOVA-owned restricted local executor used for the no-Atlas vertical slice."
-status = "planned"
-source = "decisions/0006-topic-01-evidence-go-no-go.md"
+definition = "A retired name that must not be used for ordinary host-process restrictions; the implemented no-Atlas backend is RestrictedLocalExecutor and explicitly is not a security sandbox."
+status = "deprecated"
+source = "decisions/0010-executor-contract-and-no-atlas-backends.md"
 
 [[term]]
 term = "map report"
@@ -75,9 +75,9 @@ source = "decisions/0001-canonical-artifact-meanings.md"
 
 [[term]]
 term = "ScriptedExecutor"
-definition = "A planned deterministic executor used to test SOVA orchestration, observations, and failure behavior without live external systems."
-status = "planned"
-source = "decisions/0006-topic-01-evidence-go-no-go.md"
+definition = "The implemented deterministic executor used to test SOVA orchestration, observations, conformance, and failure behavior without live external systems."
+status = "accepted"
+source = "decisions/0010-executor-contract-and-no-atlas-backends.md"
 
 [[term]]
 term = "self-assessment"

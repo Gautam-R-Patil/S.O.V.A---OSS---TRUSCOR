@@ -66,9 +66,11 @@ def test_no_network_reproduction_is_verifiable_and_repeatable(tmp_path: Path) ->
     )
 
     assert first.completion == second.completion == "completed"
-    assert TraceReader(first.trace_path).verify().event_count == 6
+    assert TraceReader(first.trace_path).verify().event_count == 7
     comparison = compare_observable_outcomes(first.trace_path, second.trace_path)
     assert comparison.equivalent
+    oracle = next(TraceReader(first.trace_path).query(kind_prefix="oracle.completed"))
+    assert oracle["payload"]["status"] == "pass"
     assert any(
         event["payload"].get("structured", {}).get("label") == "TRIGGERED"
         for event in TraceReader(first.trace_path).query(kind_prefix="model.")

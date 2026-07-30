@@ -5,15 +5,19 @@ from __future__ import annotations
 
 import sys
 import threading
+import time
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
 from sova.executors import (
+    ActionOutcome,
     ActionRequest,
     CancellationToken,
     Capability,
     ExecutionContext,
+    FailureCause,
     OutcomeStatus,
     RestrictedLocalExecutor,
     ScriptedAction,
@@ -21,8 +25,31 @@ from sova.executors import (
     SideEffect,
     negotiate,
 )
+from sova.executors.runner import _expanded_steps
 from sova.formats import sha256_digest
 from sova.formats.errors import FormatError
+
+
+class _SecretProvider:
+    def __init__(self, value: str) -> None:
+        self.value = value
+        self.references: list[str] = []
+
+    def resolve(self, reference: str) -> str:
+        self.references.append(reference)
+        return self.value
+
+
+class _RaisingSecretProvider:
+    def resolve(self, reference: str) -> str:
+        del reference
+        raise RuntimeError
+
+
+class _NonStringSecretProvider:
+    def resolve(self, reference: str) -> str:
+        del reference
+        return cast("str", 42)
 
 
 @pytest.fixture
@@ -428,3 +455,449 @@ def test_local_process_rejects_malformed_inputs_and_limits(
     for value in (1023, 64 * 1024 * 1024 + 1):
         with pytest.raises(FormatError, match="between"):
             RestrictedLocalExecutor(max_output_bytes=value)
+
+
+def test_local_process_resolves_only_opaque_ephemeral_secret_references(
+    tmp_path: Path,
+) -> None:
+    provider = _SecretProvider("private-value")
+    context = ExecutionContext(
+        workspace=tmp_path,
+        authorization={"decision": "allowed"},
+        secret_provider=provider,
+    )
+    executor = RestrictedLocalExecutor(
+        executable_allowlist=(Path(sys.executable),),
+        environment_allowlist=frozenset({"SOVA_TEST_SECRET"}),
+    )
+    outcome = executor.execute(
+        _request(
+            "process.exec",
+            {
+                "argv": [
+                    sys.executable,
+                    "-c",
+                    "import os; print(len(os.environ['SOVA_TEST_SECRET']))",
+                ],
+                "secretEnv": {"SOVA_TEST_SECRET": "sova-secret:opaque-test-reference"},
+            },
+        ),
+        context,
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.SUCCEEDED
+    assert outcome.output["stdout"].strip() == str(len(provider.value))
+    assert provider.value not in repr(outcome)
+    assert provider.references == ["sova-secret:opaque-test-reference"]
+
+    denied = executor.execute(
+        _request(
+            "process.exec",
+            {
+                "argv": [sys.executable, "-c", "print('not-started')"],
+                "secretEnv": {"SOVA_TEST_SECRET": "sova-secret:missing-provider"},
+            },
+        ),
+        ExecutionContext(tmp_path, {"decision": "allowed"}),
+        CancellationToken(),
+    )
+    assert denied.status == OutcomeStatus.DENIED
+    assert denied.error_code == "SOVA-LOCAL-SECRET-PROVIDER"
+
+    malformed = executor.execute(
+        _request(
+            "process.exec",
+            {
+                "argv": [sys.executable, "-c", "print('not-started')"],
+                "secretEnv": {"SOVA_TEST_SECRET": "plaintext-secret"},
+            },
+        ),
+        context,
+        CancellationToken(),
+    )
+    assert malformed.status == OutcomeStatus.DENIED
+    assert malformed.error_code == "SOVA-LOCAL-SECRET-REFERENCE"
+
+
+@pytest.mark.parametrize(
+    ("provider", "expected_code"),
+    [
+        (_RaisingSecretProvider(), "SOVA-LOCAL-SECRET-RESOLUTION"),
+        (_NonStringSecretProvider(), "SOVA-LOCAL-SECRET-RESOLUTION"),
+    ],
+)
+def test_local_secret_provider_failures_are_normalized_without_details(
+    tmp_path: Path,
+    provider: object,
+    expected_code: str,
+) -> None:
+    executor = RestrictedLocalExecutor(
+        executable_allowlist=(Path(sys.executable),),
+        environment_allowlist=frozenset({"SOVA_TEST_SECRET"}),
+    )
+    context = ExecutionContext(
+        tmp_path,
+        {"decision": "allowed"},
+        secret_provider=cast("Any", provider),
+    )
+    outcome = executor.execute(
+        _request(
+            "process.exec",
+            {
+                "argv": [sys.executable, "-c", "print('not-started')"],
+                "secretEnv": {"SOVA_TEST_SECRET": "sova-secret:failure-fixture"},
+            },
+        ),
+        context,
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.DENIED
+    assert outcome.error_code == expected_code
+    assert "RuntimeError" not in repr(outcome)
+
+
+def test_local_secret_reference_conflict_and_nonallowlisted_key_fail(
+    tmp_path: Path,
+) -> None:
+    executor = RestrictedLocalExecutor(
+        executable_allowlist=(Path(sys.executable),),
+        environment_allowlist=frozenset({"APP_MODE"}),
+    )
+    context = ExecutionContext(
+        tmp_path,
+        {"decision": "allowed"},
+        secret_provider=_SecretProvider("value"),
+    )
+    conflict = executor.execute(
+        _request(
+            "process.exec",
+            {
+                "argv": [sys.executable, "-c", "print('not-started')"],
+                "env": {"APP_MODE": "plain"},
+                "secretEnv": {"APP_MODE": "sova-secret:conflict"},
+            },
+        ),
+        context,
+        CancellationToken(),
+    )
+    assert conflict.error_code == "SOVA-LOCAL-SECRET-CONFLICT"
+
+    with pytest.raises(FormatError) as denied:
+        executor.execute(
+            _request(
+                "process.exec",
+                {
+                    "argv": [sys.executable, "-c", "print('not-started')"],
+                    "secretEnv": {"NOT_ALLOWED": "sova-secret:denied"},
+                },
+            ),
+            context,
+            CancellationToken(),
+        )
+    assert denied.value.issue.code == "SOVA-LOCAL-ENVIRONMENT-DENIED"
+
+
+@pytest.mark.parametrize(
+    "resources",
+    [
+        [],
+        {"unknown": 1},
+        {"maxCpuSeconds": True},
+        {"maxOutputBytes": True},
+    ],
+)
+def test_local_process_rejects_malformed_resource_objects(
+    context: ExecutionContext,
+    resources: object,
+) -> None:
+    with pytest.raises(FormatError) as error:
+        _local().execute(
+            _request(
+                "process.exec",
+                {
+                    "argv": [sys.executable, "-c", "print('not-started')"],
+                    "resources": resources,
+                },
+            ),
+            context,
+            CancellationToken(),
+        )
+    assert error.value.issue.code == "SOVA-LOCAL-RESOURCE-LIMIT"
+
+
+@pytest.mark.parametrize(
+    ("resource", "value"),
+    [
+        ("maxCpuSeconds", 1),
+        ("maxMemoryBytes", 16 * 1024 * 1024),
+        ("maxProcesses", 1),
+    ],
+)
+def test_local_process_rejects_unenforceable_resource_limits_before_start(
+    context: ExecutionContext,
+    resource: str,
+    value: int,
+) -> None:
+    marker = context.workspace / f"should-not-exist-{resource}"
+    outcome = _local().execute(
+        _request(
+            "process.exec",
+            {
+                "argv": [
+                    sys.executable,
+                    "-c",
+                    (
+                        "from pathlib import Path; "
+                        f"Path('should-not-exist-{resource}').write_text('bad')"
+                    ),
+                ],
+                "resources": {resource: value},
+            },
+        ),
+        context,
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.UNSUPPORTED
+    assert outcome.error_code == "SOVA-LOCAL-RESOURCE-LIMIT-UNSUPPORTED"
+    assert "rejected before process creation" in outcome.limitations[1]
+    assert not marker.exists()
+
+
+def test_supervised_background_process_lifecycle_and_cleanup(
+    context: ExecutionContext,
+) -> None:
+    executor = _local()
+    capabilities = {capability.identifier for capability in executor.capabilities()}
+    assert {
+        "process.spawn/0.1",
+        "process.status/0.1",
+        "process.stop/0.1",
+    } <= capabilities
+    spawned = executor.execute(
+        _request(
+            "process.spawn",
+            {
+                "argv": [
+                    sys.executable,
+                    "-c",
+                    "import time; print('ready', flush=True); time.sleep(30)",
+                ]
+            },
+            timeout=5,
+        ),
+        context,
+        CancellationToken(),
+    )
+    assert spawned.status == OutcomeStatus.SUCCEEDED
+    handle = spawned.output["handle"]
+    status = executor.execute(
+        _request("process.status", {"handle": handle}),
+        context,
+        CancellationToken(),
+    )
+    assert status.status == OutcomeStatus.SUCCEEDED
+    assert status.output["state"] in {"running", "terminal"}
+    stopped = executor.execute(
+        _request("process.stop", {"handle": handle}),
+        context,
+        CancellationToken(),
+    )
+    assert stopped.status == OutcomeStatus.SUCCEEDED
+    assert stopped.output["state"] == "terminal"
+    assert stopped.output["childStatus"] in {"cancelled", "succeeded"}
+    missing = executor.execute(
+        _request("process.status", {"handle": handle}),
+        context,
+        CancellationToken(),
+    )
+    assert missing.error_code == "SOVA-LOCAL-PROCESS-HANDLE-MISSING"
+    executor.close()
+    closed = executor.execute(
+        _request("artifact.read", {"digest": next(iter(context.artifacts))}),
+        context,
+        CancellationToken(),
+    )
+    assert closed.error_code == "SOVA-LOCAL-CLOSED"
+
+
+def test_supervisor_enforces_background_timeout(
+    context: ExecutionContext,
+) -> None:
+    with _local() as executor:
+        spawned = executor.execute(
+            _request(
+                "process.spawn",
+                {"argv": [sys.executable, "-c", "import time; time.sleep(30)"]},
+                timeout=0.05,
+            ),
+            context,
+            CancellationToken(),
+        )
+        handle = spawned.output["handle"]
+        deadline = time.monotonic() + 5
+        child_status = None
+        while time.monotonic() < deadline:
+            status = executor.execute(
+                _request("process.status", {"handle": handle}),
+                context,
+                CancellationToken(),
+            )
+            child_status = status.output.get("childStatus")
+            if child_status is not None:
+                break
+            time.sleep(0.01)
+        assert child_status == "timeout"
+        collected = executor.execute(
+            _request("process.stop", {"handle": handle}),
+            context,
+            CancellationToken(),
+        )
+        assert collected.output["childStatus"] == "timeout"
+
+
+def test_supervisor_enforces_background_cancellation(
+    context: ExecutionContext,
+) -> None:
+    token = CancellationToken()
+    with _local() as executor:
+        spawned = executor.execute(
+            _request(
+                "process.spawn",
+                {"argv": [sys.executable, "-c", "import time; time.sleep(30)"]},
+                timeout=5,
+            ),
+            context,
+            token,
+        )
+        handle = spawned.output["handle"]
+        token.cancel()
+        deadline = time.monotonic() + 5
+        child_status = None
+        while time.monotonic() < deadline:
+            status = executor.execute(
+                _request("process.status", {"handle": handle}),
+                context,
+                CancellationToken(),
+            )
+            child_status = status.output.get("childStatus")
+            if child_status is not None:
+                break
+            time.sleep(0.01)
+        assert child_status == "cancelled"
+        collected = executor.execute(
+            _request("process.stop", {"handle": handle}),
+            context,
+            CancellationToken(),
+        )
+        assert collected.output["childStatus"] == "cancelled"
+
+
+def test_reusable_sequence_expansion_and_fail_closed_cycles() -> None:
+    nested = {
+        "sequences": [
+            {
+                "id": "inner",
+                "steps": [
+                    {
+                        "id": "read",
+                        "action": "artifact.read",
+                        "inputs": {},
+                    }
+                ],
+            },
+            {
+                "id": "outer",
+                "steps": [
+                    {
+                        "id": "call-inner",
+                        "action": "sova.sequence.call",
+                        "inputs": {"sequence": "inner"},
+                    }
+                ],
+            },
+        ],
+        "procedure": {
+            "steps": [
+                {
+                    "id": "call-outer",
+                    "action": "sova.sequence.call",
+                    "inputs": {"sequence": "outer"},
+                }
+            ]
+        },
+    }
+    assert [step["id"] for step in _expanded_steps(nested)] == ["read"]
+
+    missing = {
+        "sequences": [],
+        "procedure": {
+            "steps": [
+                {
+                    "id": "missing",
+                    "action": "sova.sequence.call",
+                    "inputs": {"sequence": "absent"},
+                }
+            ]
+        },
+    }
+    with pytest.raises(FormatError) as unknown:
+        _expanded_steps(missing)
+    assert unknown.value.issue.code == "SOVA-RUN-SEQUENCE"
+
+    cycle = {
+        "sequences": [
+            {
+                "id": "loop",
+                "steps": [
+                    {
+                        "id": "again",
+                        "action": "sova.sequence.call",
+                        "inputs": {"sequence": "loop"},
+                    }
+                ],
+            }
+        ],
+        "procedure": {
+            "steps": [
+                {
+                    "id": "start",
+                    "action": "sova.sequence.call",
+                    "inputs": {"sequence": "loop"},
+                }
+            ]
+        },
+    }
+    with pytest.raises(FormatError) as recursive:
+        _expanded_steps(cycle)
+    assert recursive.value.issue.code == "SOVA-RUN-SEQUENCE-CYCLE"
+
+
+@pytest.mark.parametrize(
+    ("status", "cause"),
+    [
+        (OutcomeStatus.SUCCEEDED, FailureCause.NONE),
+        (OutcomeStatus.FAILED, FailureCause.UNKNOWN),
+        (OutcomeStatus.TIMEOUT, FailureCause.TIMEOUT),
+        (OutcomeStatus.CANCELLED, FailureCause.CANCELLATION),
+        (OutcomeStatus.DENIED, FailureCause.POLICY),
+        (OutcomeStatus.UNSUPPORTED, FailureCause.UNSUPPORTED),
+        (OutcomeStatus.PARTIAL, FailureCause.EVIDENCE),
+    ],
+)
+def test_outcome_failure_cause_is_explicit_and_conservative(
+    status: OutcomeStatus,
+    cause: FailureCause,
+) -> None:
+    outcome = ActionOutcome("request", status, SideEffect.READ, {})
+    assert outcome.failure_cause == cause
+
+    if status == OutcomeStatus.SUCCEEDED:
+        with pytest.raises(FormatError) as error:
+            ActionOutcome(
+                "request",
+                status,
+                SideEffect.READ,
+                {},
+                failure_cause=FailureCause.EXECUTOR,
+            )
+        assert error.value.issue.code == "SOVA-EXECUTOR-FAILURE-CAUSE"

@@ -13,6 +13,7 @@ claiming that the field set is ready for `1.0`.
 - [privacy and selective disclosure](./privacy-and-disclosure.md)
 - [format threat model](./threat-model.md)
 - [executor capability contract](./executor-contract-0.1.md)
+- [observable oracles and declared-outcome comparison](./observable-oracles-0.1.md)
 
 The normative JSON Schema 2020-12 files ship in
 [`src/sova/schemas`](../../src/sova/schemas/README.md). Python is the reference

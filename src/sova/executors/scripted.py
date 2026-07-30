@@ -14,6 +14,7 @@ from sova.executors.contract import (
     Capability,
     EvidenceReference,
     ExecutionContext,
+    FailureCause,
     OutcomeStatus,
     SideEffect,
 )
@@ -35,6 +36,7 @@ class ScriptedAction:
     retryable: bool = False
     error_code: str | None = None
     limitations: tuple[str, ...] = ("Synthetic deterministic executor result.",)
+    failure_cause: FailureCause = FailureCause.NONE
 
 
 class ScriptedExecutor:
@@ -134,6 +136,7 @@ class ScriptedExecutor:
             retryable=step.retryable,
             error_code=step.error_code,
             limitations=step.limitations,
+            failure_cause=step.failure_cause,
         )
 
 

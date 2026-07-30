@@ -18,7 +18,8 @@ treated as a trust root.
 
 SOVA uses exact versioned capability negotiation over a minimal provider-neutral
 executor protocol. Requests, outcomes, evidence, effects, cancellation,
-timeouts, retry metadata, limitations, and post-action verification are
+timeouts, retry metadata, bounded failure-cause categories, limitations, and
+post-action verification are
 normalized by the protocol.
 
 The open-source reference implementation provides:
@@ -26,7 +27,8 @@ The open-source reference implementation provides:
 1. `ScriptedExecutor` for deterministic, credential-free conformance and fault
    injection;
 2. `RestrictedLocalExecutor` for content-addressed artifact reads and optional
-   shell-free execution of explicitly allowlisted absolute executables.
+   shell-free execution of explicitly allowlisted absolute executables,
+   including supervised background-process lifecycle.
 
 The same public capsule is tested against both backends. Provider adapters own
 only execution mechanics. SOVA retains authorization, safety policy,
@@ -54,6 +56,14 @@ backend. This initial check is not the complete Topic 07 authorization model.
 - Local process execution is intentionally narrow and unsuitable for hostile
   targets until true containment exists.
 - Provider-specific fidelity must be declared rather than silently invented.
+- Strict `sova-secret:` references may be resolved just in time by an injected
+  provider; malformed references and durable secret values are rejected.
+- Provider exceptions become explicit crash records without copying their
+  potentially sensitive messages into the trace.
+- Duration and output limits are enforced. CPU, memory, and process-count
+  guarantees fail before execution when this backend cannot enforce them.
+- A provider success flag is an observation, not the behavioral verdict;
+  SOVA-owned deterministic oracles evaluate recorded outcomes.
 
 ## Alternatives rejected
 

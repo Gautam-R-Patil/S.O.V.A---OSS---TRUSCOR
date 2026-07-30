@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
@@ -35,6 +36,41 @@ class DomainProfile(StrEnum):
     BEHAVIORAL_INTERPRETABILITY = "behavioral-interpretability"
     INCIDENT_FORENSICS = "incident-forensics"
     RESEARCH_PUBLICATION = "research-publication"
+
+
+_OPAQUE_SECRET_REFERENCE = re.compile(r"^sova-secret:[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$")
+
+
+def _allowed_secret_reference_paths(value: Any, path: str = "$") -> set[str]:
+    """Validate inert secret references while rejecting embedded secret values."""
+    allowed: set[str] = set()
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}"
+            if key == "secretEnv":
+                if (
+                    not isinstance(child, dict)
+                    or not child
+                    or not all(
+                        isinstance(name, str)
+                        and name
+                        and isinstance(reference, str)
+                        and _OPAQUE_SECRET_REFERENCE.fullmatch(reference)
+                        for name, reference in child.items()
+                    )
+                ):
+                    raise FormatError(
+                        "SOVA-CAPSULE-SECRET-REFERENCE",
+                        "secretEnv must contain only non-empty sova-secret: references",
+                        path=child_path,
+                    )
+                allowed.update(f"{child_path}.{name}" for name in child)
+                continue
+            allowed.update(_allowed_secret_reference_paths(child, child_path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            allowed.update(_allowed_secret_reference_paths(child, f"{path}[{index}]"))
+    return allowed
 
 
 class CaptureProfile(StrEnum):
@@ -161,12 +197,16 @@ def build_capsule(
     """Build one deterministic `.sova` package and return its SHA-256 digest."""
     writer = PackageWriter(manifest)
     if scenario is not None:
+        allowed_secret_paths = _allowed_secret_reference_paths(scenario)
         _redacted, secret_records = Redactor().redact(scenario)
-        if secret_records:
+        unsafe_records = [
+            record for record in secret_records if record["path"] not in allowed_secret_paths
+        ]
+        if unsafe_records:
             raise FormatError(
                 "SOVA-CAPSULE-SECRET-MATERIAL",
                 "scenario contains secret-shaped material; use a fixture or secret reference",
-                details={"paths": [record["path"] for record in secret_records]},
+                details={"paths": [record["path"] for record in unsafe_records]},
             )
         writer.add_json(
             role="scenario",

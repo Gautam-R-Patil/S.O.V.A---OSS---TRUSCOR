@@ -28,6 +28,7 @@ from sova.formats import (
     validate_document,
 )
 from sova.formats.errors import FormatError
+from sova.reproduction import compare_observable_outcomes
 from sova.trace import TraceReader, recover_trace
 from sova.trace.otel import export_event
 
@@ -136,6 +137,19 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     query_parser.add_argument("--start", type=int, default=0)
     query_parser.add_argument("--stop", type=int)
     query_parser.set_defaults(handler=_query)
+
+    compare_parser = commands.add_parser(
+        "compare",
+        help="compare declared observable outcomes from two traces without re-execution",
+    )
+    compare_parser.add_argument("left", type=_path)
+    compare_parser.add_argument("right", type=_path)
+    compare_parser.add_argument(
+        "--kind",
+        action="append",
+        help="event kind to compare; repeat to select multiple kinds",
+    )
+    compare_parser.set_defaults(handler=_compare)
 
     export_parser = commands.add_parser(
         "export",
@@ -290,6 +304,13 @@ def _query(args: argparse.Namespace) -> int:
     ):
         sys.stdout.buffer.write(canonical_json_bytes(event) + b"\n")
     return 0
+
+
+def _compare(args: argparse.Namespace) -> int:
+    kinds = tuple(args.kind) if args.kind else ("model.response", "oracle.completed")
+    result = compare_observable_outcomes(args.left, args.right, kinds=kinds)
+    sys.stdout.buffer.write(canonical_json_bytes(asdict(result)) + b"\n")
+    return 0 if result.equivalent else 1
 
 
 def _export(args: argparse.Namespace) -> int:

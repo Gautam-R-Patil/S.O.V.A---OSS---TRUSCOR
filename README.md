@@ -44,14 +44,15 @@
 > [!IMPORTANT]
 > **SOVA is pre-alpha.** The repository now implements experimental `0.1`
 > `.sova` capsule and `.sova-trace` contracts, deterministic and restricted
-> local executors, safe local tooling, and shared domain primitives. Live
+> local executors, observable deterministic oracles, safe local tooling, and
+> shared domain primitives. Live
 > capture integrations, adaptive trigger search, causal forensics, and the
 > broader security commands remain under development.
 
 ## Implemented foundation, capsules, and traces
 
-The implemented Topic 02–05 foundation is intentionally experimental and
-honest:
+The implemented Topic 02–06 engineering foundation is intentionally
+experimental and honest:
 
 ```bash
 git clone https://github.com/Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR.git
@@ -92,7 +93,12 @@ It provides:
   fidelity loss instead of inventing missing evidence.
 - an exact versioned executor capability contract, deterministic
   `ScriptedExecutor`, and an explicitly non-sandboxed `RestrictedLocalExecutor`
-  that can reproduce a safe content-addressed capsule fixture without Atlas.
+  with strict opaque secret references, supervised child processes, visible
+  unsupported resource limits, and explicit crash evidence;
+- deterministic observable oracles and an integrity-checked declared-outcome
+  comparator that returns `inconclusive` when required evidence was lost;
+- a safe complete no-Atlas capsule → trace → playback → controlled execution →
+  comparison → evidence-capsule → independent-offline-verification fixture.
 
 Read [ADR-0007](./docs/decisions/0007-topic-02-engineering-foundation.md),
 [ADR-0008](./docs/decisions/0008-topic-03-domain-contracts.md), the
@@ -555,7 +561,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Topic 02 repository, language, quality, documentation, and public-safety foundation | Implemented in [ADR-0007](./docs/decisions/0007-topic-02-engineering-foundation.md) |
 | Topic 03 shared vocabulary, lifecycle, taxonomy, coverage, and version contracts | Implemented in [ADR-0008](./docs/decisions/0008-topic-03-domain-contracts.md) |
 | Comparative evidence gates 01-A and 01-B | **Not run - unproven; comparative claims prohibited** |
-| Local `sova` format CLI | Implemented experimentally: template, pack, validate, lint, inspect, hash, migrate, verify, playback |
+| Local `sova` format CLI | Implemented experimentally: template, pack, validate, lint, inspect, hash, compatibility, migrate, verify, query, playback, compare, export, recover |
 | `sova.contracts` Python API | Implemented and experimental at `0.1.0` contract level |
 | Python package and locked contributor environment | Implemented as `sova-oss` / `uv.lock`; not published to PyPI |
 | Cross-platform CI and quality/security gates | Implemented |

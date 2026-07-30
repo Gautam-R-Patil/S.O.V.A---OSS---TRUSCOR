@@ -24,12 +24,31 @@ have independent version ledgers.
   rules and version-pinned OWASP, MITRE ATLAS, CWE, and CAPEC mappings.
 - Six-dimensional frozen-denominator observed coverage, exploration budgets,
   stopping rules, and source-example reconciliation.
+- Experimental `.sova` capsule/scenario schemas, deterministic packaging,
+  content-addressed attachments, authoring, inspection, validation, linting,
+  canonical hashing, and explicit chained migrations.
+- Streaming `.sova-trace` capture with four profiles, chunking, recovery,
+  indexed inspection, inert playback, capture-time redaction, optional
+  DSSE-compatible Ed25519 signatures, and offline verification.
+- Pinned OpenTelemetry/OpenInference import/export mappings with explicit
+  fidelity-loss reports.
+- Deterministic scripted-model and scripted-executor lanes plus a restricted
+  local host-process executor with exact capability negotiation.
+- Observable deterministic oracles, integrity-checked declared-outcome
+  comparison, and a complete safe no-Atlas vertical-slice fixture.
+- Strict opaque `sova-secret:` references, just-in-time child-environment
+  resolution, supervised process lifecycle, explicit unsupported resource
+  limits, and provider-crash normalization.
 
 ### Security
 
 - Full-SHA pinning for GitHub Actions.
 - Dedicated public-boundary, secret, dependency, and CodeQL checks.
 - Synthetic-fixture provenance and raw-trace location enforcement.
+- Malformed archive, parser differential, corruption, truncation, reordering,
+  substitution, signature-confusion, redaction, and hostile-extension tests.
+- Secret values and provider exception messages are excluded from durable
+  capsules and normal trace outcomes by tested boundaries.
 
 ## [0.1.0a0] - Unreleased
 

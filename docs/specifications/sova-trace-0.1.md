@@ -101,6 +101,12 @@ deterministic text timeline and never invokes recorded actions. Native JSONL,
 OTel-shaped JSONL, and explicit unsigned disclosure views are local machine
 exports.
 
+Scenario execution may emit `oracle.completed` after evaluating registered
+deterministic rules over recorded observable values. Oracle pass/fail/
+inconclusive is distinct from run completion. The reference rules and bounded
+cross-run comparison are specified in
+[observable oracles 0.1](./observable-oracles-0.1.md).
+
 ## Partial and distributed traces
 
 Local sequence remains authoritative inside one writer. Wall time is

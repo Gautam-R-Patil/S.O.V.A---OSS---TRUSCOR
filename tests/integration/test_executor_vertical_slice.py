@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,10 @@ import pytest
 
 from sova.capsule import build_capsule, capsule_manifest_template
 from sova.executors import (
+    ActionRequest,
+    CancellationToken,
+    Capability,
+    ExecutionContext,
     OutcomeStatus,
     RestrictedLocalExecutor,
     ScriptedAction,
@@ -85,6 +90,36 @@ def _outcome(trace_path: Path) -> dict[str, Any]:
     outcome = events[0]["payload"]["outcome"]
     assert isinstance(outcome, dict)
     return outcome
+
+
+class _CrashingExecutor:
+    name = "synthetic-crashing-executor"
+
+    def capabilities(self) -> tuple[Capability, ...]:
+        return (
+            Capability(
+                name="artifact.read",
+                version="0.1",
+                side_effect=SideEffect.READ,
+                idempotent=True,
+                evidence=("artifact-digest",),
+            ),
+        )
+
+    def execute(
+        self,
+        request: ActionRequest,
+        context: ExecutionContext,
+        cancellation: CancellationToken,
+    ) -> Any:
+        del request, context, cancellation
+        raise RuntimeError("synthetic-sensitive-provider-message")
+
+
+class _SecretProvider:
+    def resolve(self, reference: str) -> str:
+        assert reference == "sova-secret:integration-fixture"
+        return "integration-private-value"
 
 
 def test_same_capsule_reproduces_same_observation_on_two_backends(
@@ -279,3 +314,185 @@ def test_runner_rejects_invalid_step_budget_before_trace_creation(
             },
         )
     assert not destination.exists()
+
+
+def test_runner_records_provider_exception_as_crash_without_message(
+    tmp_path: Path,
+) -> None:
+    trace = tmp_path / "provider-crash.sova-trace"
+    result = run_capsule(
+        _capsule(tmp_path),
+        trace,
+        executor=_CrashingExecutor(),
+        workspace=tmp_path,
+        authorization={
+            "decision": "allowed",
+            "scopeDigest": "sha256:" + ("0" * 64),
+            "decidedBy": "test-fixture",
+        },
+    )
+
+    assert result.completion == "crashed"
+    report = TraceReader(trace).verify()
+    assert report.completion == "crashed"
+    failed = next(TraceReader(trace).query(kind_prefix="tool.failed"))
+    assert failed["payload"]["outcome"]["error_code"] == "SOVA-EXECUTOR-EXCEPTION"
+    assert failed["payload"]["outcome"]["output"]["exceptionType"] == "RuntimeError"
+    assert failed["payload"]["outcome"]["failure_cause"] == "executor"
+    assert b"synthetic-sensitive-provider-message" not in trace.read_bytes()
+
+
+def test_runner_never_persists_resolved_secret_value(tmp_path: Path) -> None:
+    scenario = _scenario()
+    scenario["procedure"]["steps"] = [
+        {
+            "id": "secret-length",
+            "action": "process.exec",
+            "inputs": {
+                "argv": [
+                    str(Path(sys.executable).resolve()),
+                    "-c",
+                    "import os; print(len(os.environ['SOVA_TEST_SECRET']))",
+                ],
+                "secretEnv": {"SOVA_TEST_SECRET": "sova-secret:integration-fixture"},
+            },
+            "onFailure": "stop",
+            "requires": ["process.exec/0.1"],
+        }
+    ]
+    scenario["oracles"] = [
+        {
+            "kind": "field-contains",
+            "path": "$.stdout",
+            "contains": str(len("integration-private-value")),
+        }
+    ]
+    manifest = capsule_manifest_template(
+        title="Opaque secret fixture",
+        summary="A secret-reference persistence boundary test.",
+        author="SOVA tests",
+    )
+    manifest["license"] = "Apache-2.0"
+    manifest["safety"]["impact"] = "none"
+    manifest["requiredFeatures"] = ["scenario.core/0.1"]
+    capsule = tmp_path / "secret.sova"
+    build_capsule(capsule, manifest, scenario=scenario)
+    trace = tmp_path / "secret.sova-trace"
+    executable = Path(sys.executable).resolve()
+    with RestrictedLocalExecutor(
+        executable_allowlist=(executable,),
+        environment_allowlist=frozenset({"SOVA_TEST_SECRET"}),
+    ) as executor:
+        result = run_capsule(
+            capsule,
+            trace,
+            executor=executor,
+            workspace=tmp_path,
+            authorization={
+                "decision": "allowed",
+                "scopeDigest": "sha256:" + ("0" * 64),
+                "decidedBy": "test-fixture",
+            },
+            secret_provider=_SecretProvider(),
+        )
+    assert result.completion == "completed"
+    assert b"integration-private-value" not in capsule.read_bytes()
+    assert b"integration-private-value" not in trace.read_bytes()
+    assert TraceReader(trace).verify().event_chain_integrity
+
+
+@pytest.mark.parametrize(
+    ("status", "completion"),
+    [
+        (OutcomeStatus.FAILED, "failed"),
+        (OutcomeStatus.TIMEOUT, "timeout"),
+        (OutcomeStatus.CANCELLED, "cancelled"),
+    ],
+)
+def test_runner_preserves_failure_state_when_later_step_continues(
+    tmp_path: Path,
+    status: OutcomeStatus,
+    completion: str,
+) -> None:
+    scenario = _scenario()
+    original = scenario["procedure"]["steps"][0]
+    first = {**original, "id": "first", "onFailure": "continue"}
+    second = {**original, "id": "second", "onFailure": "stop"}
+    scenario["procedure"]["steps"] = [first, second]
+    scenario["safety"]["budgets"]["maxSteps"] = 2
+    manifest = capsule_manifest_template(
+        title="Continuation fixture",
+        summary="Normalized terminal-state continuation test.",
+        author="SOVA tests",
+    )
+    manifest["license"] = "Apache-2.0"
+    manifest["safety"]["impact"] = "none"
+    manifest["requiredFeatures"] = ["scenario.core/0.1"]
+    capsule = tmp_path / f"{completion}.sova"
+    build_capsule(
+        capsule,
+        manifest,
+        scenario=scenario,
+        attachments={"portable.txt": _FIXTURE},
+    )
+    executor = ScriptedExecutor(
+        [
+            ScriptedAction(
+                action="artifact.read",
+                expected_inputs=first["inputs"],
+                status=status,
+                output={},
+                side_effect=SideEffect.READ,
+                error_code=f"SYNTHETIC-{status.value.upper()}",
+            ),
+            ScriptedAction(
+                action="artifact.read",
+                expected_inputs=second["inputs"],
+                status=OutcomeStatus.SUCCEEDED,
+                side_effect=SideEffect.READ,
+                output={
+                    "digest": _DIGEST,
+                    "size": len(_FIXTURE),
+                    "mediaType": "text/plain",
+                    "text": _FIXTURE.decode(),
+                },
+            ),
+        ]
+    )
+    trace = tmp_path / f"{completion}.sova-trace"
+    result = run_capsule(
+        capsule,
+        trace,
+        executor=executor,
+        workspace=tmp_path,
+        authorization={
+            "decision": "allowed",
+            "scopeDigest": "sha256:" + ("0" * 64),
+            "decidedBy": "test-fixture",
+        },
+    )
+    assert result.completion == completion
+    assert result.steps_attempted == 2
+    assert result.steps_succeeded == 1
+    assert TraceReader(trace).verify().completion == completion
+
+
+def test_runner_refuses_capsule_without_scenario(tmp_path: Path) -> None:
+    capsule = tmp_path / "no-scenario.sova"
+    build_capsule(
+        capsule,
+        capsule_manifest_template(
+            title="No scenario",
+            summary="No executable object.",
+            author="SOVA tests",
+        ),
+    )
+    with pytest.raises(FormatError) as error:
+        run_capsule(
+            capsule,
+            tmp_path / "must-not-exist.sova-trace",
+            executor=ScriptedExecutor([]),
+            workspace=tmp_path,
+            authorization={"decision": "allowed"},
+        )
+    assert error.value.issue.code == "SOVA-RUN-NO-SCENARIO"

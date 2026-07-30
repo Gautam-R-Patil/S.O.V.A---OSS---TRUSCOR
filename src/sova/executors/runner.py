@@ -7,15 +7,20 @@ from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
 
 from sova.executors.contract import (
+    ActionOutcome,
     ActionRequest,
     CancellationToken,
     ExecutionContext,
     Executor,
+    FailureCause,
     OutcomeStatus,
+    SecretProvider,
+    SideEffect,
     negotiate,
 )
 from sova.formats import PackageReader, strict_json_loads, validate_document
 from sova.formats.errors import FormatError
+from sova.oracles import ObservableRecord, evaluate_oracles
 from sova.trace import TraceWriter
 
 if TYPE_CHECKING:
@@ -82,7 +87,7 @@ def _expanded_steps(scenario: dict[str, Any]) -> list[dict[str, Any]]:
     return result
 
 
-def run_capsule(  # noqa: PLR0913
+def run_capsule(  # noqa: PLR0913, PLR0915
     capsule: Path,
     trace_path: Path,
     *,
@@ -90,6 +95,7 @@ def run_capsule(  # noqa: PLR0913
     workspace: Path,
     authorization: dict[str, Any],
     cancellation: CancellationToken | None = None,
+    secret_provider: SecretProvider | None = None,
 ) -> ScenarioRunResult:
     """Run abstract steps only after exact capability and authorization checks."""
     if authorization.get("decision") != "allowed":
@@ -149,11 +155,14 @@ def run_capsule(  # noqa: PLR0913
         workspace=workspace,
         authorization=authorization,
         artifacts=artifacts,
+        secret_provider=secret_provider,
     )
     token = cancellation or CancellationToken()
     succeeded = 0
     attempted = 0
     completion = "completed"
+    records: list[ObservableRecord] = []
+    evidence_parents: list[str] = []
     for step in steps:
         attempted += 1
         request = ActionRequest(
@@ -176,19 +185,52 @@ def run_capsule(  # noqa: PLR0913
             },
             phase=step["id"],
         )
-        outcome = executor.execute(request, context, token)
+        records.append(
+            ObservableRecord(
+                "tool.requested",
+                requested,
+                {"action": request.action, "inputs": request.inputs},
+            )
+        )
+        try:
+            outcome = executor.execute(request, context, token)
+        except Exception as error:  # noqa: BLE001 - provider boundary must fail visibly
+            outcome = ActionOutcome(
+                request.id,
+                OutcomeStatus.FAILED,
+                SideEffect.READ,
+                {"exceptionType": type(error).__name__},
+                error_code="SOVA-EXECUTOR-EXCEPTION",
+                limitations=(
+                    "The provider raised an exception; its message was omitted "
+                    "because it may contain sensitive data.",
+                ),
+                failure_cause=FailureCause.EXECUTOR,
+            )
+            completion = "crashed"
         event_kind = (
             "tool.completed" if outcome.status == OutcomeStatus.SUCCEEDED else "tool.failed"
         )
-        writer.append(
+        completed = writer.append(
             event_kind,
             {"outcome": asdict(outcome)},
             phase=step["id"],
             parents=[requested] if requested else [],
         )
+        records.append(
+            ObservableRecord(
+                event_kind,
+                completed,
+                {"status": outcome.status.value, **outcome.output},
+            )
+        )
+        if completed is not None:
+            evidence_parents.append(completed)
         if outcome.status == OutcomeStatus.SUCCEEDED:
             succeeded += 1
             continue
+        if completion == "crashed":
+            break
         completion = (
             "cancelled"
             if outcome.status == OutcomeStatus.CANCELLED
@@ -198,9 +240,20 @@ def run_capsule(  # noqa: PLR0913
         )
         if step["onFailure"] != "continue":
             break
+    oracle_report = evaluate_oracles(scenario["oracles"], records)
+    writer.append(
+        "oracle.completed",
+        oracle_report.to_mapping(),
+        parents=evidence_parents,
+    )
     writer.append(
         "run.completed" if completion == "completed" else "run.failed",
-        {"attempted": attempted, "succeeded": succeeded, "completion": completion},
+        {
+            "attempted": attempted,
+            "succeeded": succeeded,
+            "completion": completion,
+            "oracleStatus": oracle_report.status.value,
+        },
     )
     writer.finalize(completion=completion)
     return ScenarioRunResult(completion, attempted, succeeded, trace_path)
