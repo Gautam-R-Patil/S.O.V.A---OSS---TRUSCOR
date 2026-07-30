@@ -1,0 +1,44 @@
+{
+  "artifactType": "sova.scenario",
+  "schemaVersion": "0.1.0",
+  "id": "sova:scenario:019fae00-0000-7000-8000-000000000004",
+  "version": "0.1.0",
+  "title": "Observable context intervention",
+  "purpose": "Compare outputs before and after removing one declared context item.",
+  "parameters": {"contextItem": "The synthetic preference is concise answers."},
+  "preconditions": [{"kind": "model", "instrumentation": "observable-io-only"}],
+  "sequences": [],
+  "procedure": {
+    "steps": [
+      {
+        "id": "baseline",
+        "action": "model.prompt-with-context",
+        "inputs": {"prompt": "Describe the fixture.", "contextFromParameter": "contextItem"},
+        "onFailure": "inconclusive",
+        "requires": ["model.prompt/0.1"]
+      },
+      {
+        "id": "intervention",
+        "action": "model.prompt-with-context",
+        "inputs": {"prompt": "Describe the fixture.", "omitContext": true},
+        "onFailure": "inconclusive",
+        "requires": ["model.prompt/0.1"]
+      }
+    ]
+  },
+  "triggers": [],
+  "mutations": [{"factor": "contextItem", "operation": "omit"}],
+  "expectedEffects": [{"kind": "response-difference", "dimension": "length"}],
+  "oracles": [{"kind": "record-comparison", "deterministic": false}],
+  "evidenceRequirements": ["prompt.sent", "model.response", "evaluation.completed"],
+  "safety": {
+    "budgets": {"maxSteps": 2},
+    "forbiddenEffects": ["tool.call", "network.egress"],
+    "stopConditions": []
+  },
+  "cleanup": [],
+  "limitations": [
+    "This observes input/output behavior and does not claim access to hidden model reasoning."
+  ],
+  "extensions": {}
+}

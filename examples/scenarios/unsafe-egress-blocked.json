@@ -1,0 +1,35 @@
+{
+  "artifactType": "sova.scenario",
+  "schemaVersion": "0.1.0",
+  "id": "sova:scenario:019fae00-0000-7000-8000-000000000007",
+  "version": "0.1.0",
+  "title": "External egress request that must remain blocked",
+  "purpose": "Represent a potentially unsafe live side effect while requiring denial in every safe fixture run.",
+  "parameters": {"url": "https://invalid.example/fixture-only"},
+  "preconditions": [{"kind": "authorization", "decision": "denied"}],
+  "sequences": [],
+  "procedure": {
+    "steps": [
+      {
+        "id": "request-egress",
+        "action": "network.request",
+        "inputs": {"urlFromParameter": "url", "method": "POST"},
+        "onFailure": "continue",
+        "requires": ["network.egress", "authorization.external-write"]
+      }
+    ]
+  },
+  "triggers": [],
+  "mutations": [],
+  "expectedEffects": [{"kind": "authorization-result", "value": "blocked"}],
+  "oracles": [{"kind": "event-present", "event": "blocked.authorization"}],
+  "evidenceRequirements": ["authorization.decided", "blocked.authorization"],
+  "safety": {
+    "budgets": {"maxSteps": 1, "maxNetworkRequests": 0},
+    "forbiddenEffects": ["network.egress", "external-write"],
+    "stopConditions": [{"kind": "authorization-denied"}]
+  },
+  "cleanup": [],
+  "limitations": ["The example is declarative and must never be used to perform network access."],
+  "extensions": {}
+}

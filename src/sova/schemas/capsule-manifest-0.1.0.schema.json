@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schema/capsule-manifest/0.1.0",
+  "title": "SOVA behavior capsule manifest 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactType",
+    "schemaVersion",
+    "id",
+    "version",
+    "title",
+    "summary",
+    "domainProfile",
+    "captureProfile",
+    "lifecycle",
+    "createdAt",
+    "authors",
+    "citation",
+    "provenance",
+    "methodology",
+    "taxonomy",
+    "compatibility",
+    "authorization",
+    "safety",
+    "disclosure",
+    "license",
+    "limitations",
+    "relationships",
+    "objects",
+    "requiredFeatures",
+    "optionalFeatures",
+    "extensions"
+  ],
+  "properties": {
+    "artifactType": {"const": "sova.capsule"},
+    "schemaVersion": {"const": "0.1.0"},
+    "id": {"type": "string", "pattern": "^sova:capsule:[0-9a-f-]{36}$"},
+    "version": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 200},
+    "summary": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "domainProfile": {
+      "enum": ["security", "evaluation", "agent-trajectory", "behavioral-interpretability", "incident-forensics", "research-publication"]
+    },
+    "captureProfile": {"enum": ["lite", "standard", "forensic", "interpretability"]},
+    "lifecycle": {
+      "enum": ["draft", "embargoed", "disclosed", "verified", "corrected", "revoked", "withdrawn", "superseded"]
+    },
+    "createdAt": {"type": "string", "format": "date-time"},
+    "authors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/author"}
+    },
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preferred", "identifiers"],
+      "properties": {
+        "preferred": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "identifiers": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "provenance": {"$ref": "#/$defs/provenance"},
+    "methodology": {"$ref": "#/$defs/versionedContext"},
+    "taxonomy": {"$ref": "#/$defs/versionedContext"},
+    "compatibility": {"$ref": "#/$defs/compatibility"},
+    "authorization": {"$ref": "#/$defs/authorization"},
+    "safety": {"$ref": "#/$defs/safety"},
+    "disclosure": {"$ref": "#/$defs/disclosure"},
+    "license": {"type": "string", "minLength": 1, "maxLength": 128},
+    "limitations": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1, "maxLength": 2000}
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["relationship", "artifactType", "digest"],
+        "properties": {
+          "relationship": {"enum": ["corrects", "corrected-by", "revokes", "revoked-by", "supersedes", "superseded-by", "derived-from", "reproduces"]},
+          "artifactType": {"type": "string", "minLength": 1},
+          "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "objects": {
+      "type": "array",
+      "maxItems": 4095,
+      "items": {"$ref": "#/$defs/descriptor"}
+    },
+    "requiredFeatures": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{0,126}$"}
+    },
+    "optionalFeatures": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{0,126}$"}
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {"pattern": "^x-[a-z0-9][a-z0-9.-]{0,62}$"}
+    },
+    "migration": {"$ref": "#/$defs/migration"}
+  },
+  "$defs": {
+    "author": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "affiliation": {"type": "string", "maxLength": 300},
+        "email": {"type": "string", "format": "email"},
+        "orcid": {"type": "string", "pattern": "^https://orcid\\.org/[0-9X-]{19}$"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["createdBy", "createdWith", "sourceDigests", "transformations"],
+      "properties": {
+        "createdBy": {"type": "string", "minLength": 1},
+        "createdWith": {"type": "string", "minLength": 1},
+        "sourceDigests": {"type": "array", "items": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+        "transformations": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "versionedContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "digest"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runtime", "models", "tools", "platforms"],
+      "properties": {
+        "runtime": {"type": "string", "minLength": 1},
+        "models": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "tools": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "platforms": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reexecutionRequiresFreshAuthorization", "scopeStatement"],
+      "properties": {
+        "reexecutionRequiresFreshAuthorization": {"const": true},
+        "scopeStatement": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["impact", "forbiddenEffects", "cleanupRequired"],
+      "properties": {
+        "impact": {"enum": ["none", "low", "moderate", "high", "unknown"]},
+        "forbiddenEffects": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "cleanupRequired": {"type": "boolean"}
+      }
+    },
+    "disclosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "sharing"],
+      "properties": {
+        "classification": {"enum": ["public", "private", "confidential", "embargoed"]},
+        "sharing": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "embargoUntil": {"type": "string", "format": "date-time"}
+      }
+    },
+    "descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "path", "mediaType", "digest", "size"],
+      "properties": {
+        "role": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{0,126}$"},
+        "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$"},
+        "mediaType": {"type": "string", "minLength": 1, "maxLength": 200},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "size": {"type": "integer", "minimum": 0, "maximum": 268435456}
+      }
+    },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceDigest",
+        "sourceVersion",
+        "path",
+        "classification",
+        "preservedUnknown",
+        "assumptions"
+      ],
+      "properties": {
+        "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "sourcePackageDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "preservedSourcePath": {"type": "string", "pattern": "^migration/.+$"},
+        "sourceVersion": {"type": "string", "minLength": 1},
+        "path": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "classification": {"enum": ["lossless-forward", "lossless-bidirectional", "one-way"]},
+        "preservedUnknown": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  }
+}

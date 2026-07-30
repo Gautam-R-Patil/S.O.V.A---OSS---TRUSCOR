@@ -15,7 +15,8 @@ from sova.contracts.errors import ContractError
 
 _SOVA_ID = re.compile(
     r"^sova:(agent|component|mcp-server|skill|plugin|sub-agent|tool|model|target|"
-    r"scenario|trace|finding|campaign|run|artifact|registry-entry):"
+    r"capsule|scenario|trace|finding|campaign|run|actor|event|environment|"
+    r"attempt|procedure|evaluation|provenance|artifact|registry-entry):"
     r"([0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$"
 )
 _CVE_ID = re.compile(r"^CVE-[0-9]{4}-[0-9]{4,}$")
@@ -35,11 +36,19 @@ class IdentifierKind(StrEnum):
     TOOL = "tool"
     MODEL = "model"
     TARGET = "target"
+    CAPSULE = "capsule"
     SCENARIO = "scenario"
     TRACE = "trace"
     FINDING = "finding"
     CAMPAIGN = "campaign"
     RUN = "run"
+    ACTOR = "actor"
+    EVENT = "event"
+    ATTEMPT = "attempt"
+    ENVIRONMENT = "environment"
+    PROCEDURE = "procedure"
+    EVALUATION = "evaluation"
+    PROVENANCE = "provenance"
     ARTIFACT = "artifact"
     REGISTRY_ENTRY = "registry-entry"
 

@@ -1,0 +1,48 @@
+{
+  "artifactType": "sova.scenario",
+  "schemaVersion": "0.1.0",
+  "id": "sova:scenario:019fae00-0000-7000-8000-000000000005",
+  "version": "0.1.0",
+  "title": "Reusable observation sequence",
+  "purpose": "Demonstrate explicit composition without hiding the steps that a capable executor would run.",
+  "parameters": {"question": "Describe the synthetic fixture."},
+  "preconditions": [{"kind": "model", "instrumentation": "observable-io-only"}],
+  "sequences": [
+    {
+      "id": "observe",
+      "steps": [
+        {
+          "id": "ask",
+          "action": "model.prompt",
+          "inputs": {"textFromParameter": "question"},
+          "onFailure": "inconclusive",
+          "requires": ["model.prompt/0.1"]
+        }
+      ]
+    }
+  ],
+  "procedure": {
+    "steps": [
+      {
+        "id": "invoke-observe",
+        "action": "sequence.invoke",
+        "inputs": {"sequence": "observe"},
+        "onFailure": "stop",
+        "requires": ["scenario.sequence/0.1"]
+      }
+    ]
+  },
+  "triggers": [],
+  "mutations": [],
+  "expectedEffects": [{"kind": "response-recorded"}],
+  "oracles": [{"kind": "event-present", "event": "model.response"}],
+  "evidenceRequirements": ["prompt.sent", "model.response"],
+  "safety": {
+    "budgets": {"maxSteps": 1},
+    "forbiddenEffects": ["tool.call", "network.egress"],
+    "stopConditions": []
+  },
+  "cleanup": [],
+  "limitations": ["The 0.1 reference synthetic runner does not yet execute composed sequences."],
+  "extensions": {}
+}

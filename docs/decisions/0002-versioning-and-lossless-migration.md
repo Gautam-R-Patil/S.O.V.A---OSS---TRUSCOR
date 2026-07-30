@@ -5,6 +5,8 @@
 - **Roadmap scope:** Topic 00.3 — Version-freeze policy
 - **Applies first to:** `.sova`
 - **Applies by the same rules to:** Every stable SOVA machine-readable artifact family
+- **Amended by:** ADR-0009; references to a `.sova` scenario now mean the
+  `.sova` behavior capsule and its separately typed internal scenario object
 
 ## Decision
 
@@ -65,7 +67,9 @@ SOVA must not overload one number with several meanings.
 | `extensionVersion` | Contract version for one namespaced extension | `2.0.0` | Extension owner |
 | Taxonomy, methodology, oracle, adapter, model, and target versions | Scientific and execution context | Independent values | Their respective owners |
 
-Each artifact kind evolves independently. A `.sova` scenario at `2.0.0` does not force `.sova-trace`, `sova-target.json`, or `*.sova-finding.json` to use the same version.
+Each artifact kind evolves independently. A `.sova` capsule at `2.0.0` does
+not force its internal scenario object, `.sova-trace`, `sova-target.json`, or
+`*.sova-finding.json` to use the same version.
 
 Every canonical JSON artifact will eventually carry a common header equivalent to:
 

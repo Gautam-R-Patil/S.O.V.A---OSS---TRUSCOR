@@ -280,6 +280,7 @@ def check_dependency_notices(violations: list[str]) -> None:
     """Ensure direct build/development dependencies appear in the notice ledger."""
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     requirements = list(project["build-system"]["requires"])
+    requirements.extend(project["project"].get("dependencies", []))
     groups = cast("dict[str, list[str]]", project.get("dependency-groups", {}))
     for group in groups.values():
         requirements.extend(group)

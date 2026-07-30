@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schema/trace-manifest/0.1.0",
+  "title": "SOVA trace manifest 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactType",
+    "schemaVersion",
+    "id",
+    "runId",
+    "createdAt",
+    "completedAt",
+    "completion",
+    "captureProfile",
+    "contentCapture",
+    "durability",
+    "capturePolicy",
+    "eventCount",
+    "chainRoot",
+    "segments",
+    "objects",
+    "environment",
+    "fingerprints",
+    "eventRegistry",
+    "recorder",
+    "executor",
+    "redactionPolicy",
+    "retention",
+    "authorization",
+    "integrity",
+    "requiredFeatures",
+    "optionalFeatures",
+    "extensions"
+  ],
+  "properties": {
+    "artifactType": {"const": "sova.trace"},
+    "schemaVersion": {"const": "0.1.0"},
+    "id": {"type": "string", "pattern": "^sova:trace:[0-9a-f-]{36}$"},
+    "runId": {"type": "string", "pattern": "^sova:run:[0-9a-f-]{36}$"},
+    "createdAt": {"type": "string", "format": "date-time"},
+    "completedAt": {"type": ["string", "null"], "format": "date-time"},
+    "completion": {
+      "enum": ["completed", "failed", "cancelled", "timeout", "crashed", "partial", "recovered"]
+    },
+    "captureProfile": {"enum": ["lite", "standard", "forensic", "interpretability"]},
+    "contentCapture": {"enum": ["full", "metadata-only"]},
+    "durability": {"enum": ["lite", "standard", "forensic"]},
+    "capturePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "includedFamilies",
+        "omittedFamilies",
+        "sampling",
+        "truncation",
+        "droppedEventCount",
+        "dropReasons"
+      ],
+      "properties": {
+        "includedFamilies": {"type": "array", "items": {"type": "string"}},
+        "omittedFamilies": {"type": "array", "items": {"type": "string"}},
+        "sampling": {"type": "string", "minLength": 1},
+        "truncation": {"type": "string", "minLength": 1},
+        "droppedEventCount": {"type": "integer", "minimum": 0},
+        "dropReasons": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "eventCount": {"type": "integer", "minimum": 0},
+    "chainRoot": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+    "segments": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/descriptor"}
+    },
+    "objects": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/descriptor"}
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "python", "codeDigest", "model", "dependencies"],
+      "properties": {
+        "platform": {"type": "string", "minLength": 1},
+        "python": {"type": "string", "minLength": 1},
+        "codeDigest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "model": {"type": ["object", "null"]},
+        "dependencies": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "fingerprints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environment", "target", "code", "dependencies", "registry", "model"],
+      "properties": {
+        "environment": {"$ref": "#/$defs/fingerprint"},
+        "target": {"$ref": "#/$defs/fingerprint"},
+        "code": {"$ref": "#/$defs/fingerprint"},
+        "dependencies": {"$ref": "#/$defs/fingerprint"},
+        "registry": {"$ref": "#/$defs/fingerprint"},
+        "model": {"$ref": "#/$defs/fingerprint"}
+      }
+    },
+    "eventRegistry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "digest"],
+      "properties": {
+        "id": {"const": "sova.event-families"},
+        "version": {"const": "0.1.0"},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "recorder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1}
+      }
+    },
+    "executor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "version", "capabilityDigest"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "capabilityDigest": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "redactionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "rawEnvironmentCaptured", "reviewedForExport"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "rawEnvironmentCaptured": {"const": false},
+        "reviewedForExport": {"type": "boolean"}
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "expiresAt", "autoDelete"],
+      "properties": {
+        "policy": {"enum": ["operator-controlled", "expire-after"]},
+        "expiresAt": {"type": ["string", "null"], "format": "date-time"},
+        "autoDelete": {"const": false}
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "scopeDigest", "decidedBy"],
+      "properties": {
+        "decision": {"enum": ["allowed", "denied", "not-required", "unknown"]},
+        "scopeDigest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "decidedBy": {"type": "string", "minLength": 1}
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestDigest", "eventHashChain", "signature"],
+      "properties": {
+        "manifestDigest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "eventHashChain": {"const": "sha256-prev-v1"},
+        "signature": {"type": ["object", "null"]}
+      }
+    },
+    "requiredFeatures": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{0,126}$"}
+    },
+    "optionalFeatures": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{0,126}$"}
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {"pattern": "^x-[a-z0-9][a-z0-9.-]{0,62}$"}
+    }
+  },
+  "$defs": {
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "status", "method", "source", "version"],
+      "properties": {
+        "value": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "status": {"enum": ["recorded", "not-recorded", "not-applicable", "unknown"]},
+        "method": {"type": "string", "minLength": 1},
+        "source": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1}
+      }
+    },
+    "descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "path", "mediaType", "digest", "size"],
+      "properties": {
+        "role": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "minLength": 1},
+        "mediaType": {"type": "string", "minLength": 1},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "size": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

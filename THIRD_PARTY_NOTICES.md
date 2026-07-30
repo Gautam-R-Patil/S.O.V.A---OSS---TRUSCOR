@@ -1,18 +1,22 @@
 # Third-party dependency and tool notices
 
-SOVA OSS `0.1.0a0` has **no runtime Python dependencies**. The following
-third-party projects are used only to build, test, review, or automate the
-repository and are not bundled into the pure-Python wheel.
+SOVA OSS `0.1.0a0` uses one small pure-Python runtime validation dependency and
+an optional signing extra. The following projects support the runtime, build,
+test, review, or automation workflow and are not vendored into this repository.
 
 | Project | Role | Licence | Source |
 |---|---|---|---|
 | `hatchling` | PEP 517 build backend | MIT | [PyPA Hatch](https://github.com/pypa/hatch) |
+| `cryptography` | Optional Ed25519 signing and verification; development tests | Apache-2.0 or BSD-3-Clause | [pyca/cryptography](https://github.com/pyca/cryptography) |
+| `hypothesis` | Development-only property-based testing | MPL-2.0 | [HypothesisWorks/hypothesis](https://github.com/HypothesisWorks/hypothesis) |
+| `jsonschema` | JSON Schema 2020-12 runtime validation | MIT | [python-jsonschema/jsonschema](https://github.com/python-jsonschema/jsonschema) |
 | `mypy` | Static type checking | MIT | [python/mypy](https://github.com/python/mypy) |
 | `pip-audit` | Python dependency vulnerability audit | Apache-2.0 | [pypa/pip-audit](https://github.com/pypa/pip-audit) |
 | `pre-commit` | Local quality-hook runner | MIT | [pre-commit/pre-commit](https://github.com/pre-commit/pre-commit) |
 | `pytest` | Test runner | MIT | [pytest-dev/pytest](https://github.com/pytest-dev/pytest) |
 | `pytest-cov` | Coverage integration | MIT | [pytest-dev/pytest-cov](https://github.com/pytest-dev/pytest-cov) |
 | `ruff` | Formatting, linting, and Python security rules | MIT | [astral-sh/ruff](https://github.com/astral-sh/ruff) |
+| `types-jsonschema` | Development-only type information for jsonschema | Apache-2.0 | [python/typeshed](https://github.com/python/typeshed) |
 | `uv` | Contributor environment, lockfile, and build runner | Apache-2.0 or MIT | [astral-sh/uv](https://github.com/astral-sh/uv) |
 | `actions/checkout` | GitHub Actions checkout | MIT | [actions/checkout](https://github.com/actions/checkout) |
 | `actions/dependency-review-action` | Pull-request dependency review | MIT | [actions/dependency-review-action](https://github.com/actions/dependency-review-action) |

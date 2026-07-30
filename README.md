@@ -5,12 +5,12 @@
 <h1 align="center">S.O.V.A.</h1>
 
 <p align="center">
-  <strong>The open-source system of record for AI-agent security.</strong>
+  <strong>The open-source portable record for AI behavior.</strong>
 </p>
 
 <p align="center">
-  Map what an agent can reach. Test how it breaks. Capture what happened.<br/>
-  Reproduce the finding. Explain the cause. Share evidence others can verify.
+  Record what happened. Package the conditions. Replay the evidence.<br/>
+  Reproduce the behavior. Compare systems. Share research others can inspect.
 </p>
 
 <p align="center">
@@ -42,11 +42,16 @@
 ---
 
 > [!IMPORTANT]
-> **SOVA is pre-alpha.** The repository now contains a buildable engineering foundation, executable shared-domain contracts, and a placeholder `sova` CLI. The security commands and artifact schemas described below remain planned and must not be interpreted as released capabilities.
+> **SOVA is pre-alpha.** The repository now implements experimental `0.1`
+> `.sova` capsule and `.sova-trace` contracts, deterministic and restricted
+> local executors, safe local tooling, and shared domain primitives. Live
+> capture integrations, adaptive trigger search, causal forensics, and the
+> broader security commands remain under development.
 
-## Implemented foundation and contracts
+## Implemented foundation, capsules, and traces
 
-The implemented Topic 02–03 surface is intentionally small and honest:
+The implemented Topic 02–05 foundation is intentionally experimental and
+honest:
 
 ```bash
 git clone https://github.com/Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR.git
@@ -61,7 +66,8 @@ It provides:
 - the canonical `sova-oss` Python distribution, `sova` import namespace, and
   `sova` command;
 - CPython 3.11–3.14 support across Windows, macOS, and Linux CI;
-- a dependency-free runtime package with no SOVA-hosted service requirement;
+- a small schema-validation runtime dependency, optional Ed25519 signing extra,
+  and no SOVA-hosted service requirement;
 - locked development dependencies, formatting, linting, strict typing, branch
   coverage, dependency audit, CodeQL, secret scanning, and build checks;
 - deterministic seeds, compatibility directories, provenance-controlled
@@ -76,11 +82,22 @@ It provides:
   profile rules and pinned interoperability mappings;
 - a six-dimensional observed-coverage vector with frozen denominators,
   exploration budgets, stopping rules, and no universal “percent safe” score.
+- deterministic, hostile-input-aware `.sova` packages with content-addressed
+  objects, authoring templates, validation, linting, rendering, hashing, and
+  chained migrations;
+- streaming `.sova-trace` event segments, capture-time redaction, blob
+  deduplication, event hash chains, optional DSSE-compatible Ed25519 signatures,
+  offline verification, queries, and inert playback;
+- pinned OpenTelemetry `1.43.0` and OpenInference `0.1.30` mappings that report
+  fidelity loss instead of inventing missing evidence.
+- an exact versioned executor capability contract, deterministic
+  `ScriptedExecutor`, and an explicitly non-sandboxed `RestrictedLocalExecutor`
+  that can reproduce a safe content-addressed capsule fixture without Atlas.
 
 Read [ADR-0007](./docs/decisions/0007-topic-02-engineering-foundation.md),
 [ADR-0008](./docs/decisions/0008-topic-03-domain-contracts.md), the
 [shared contracts](./docs/contracts/README.md), and the
-[generated attack taxonomy](./docs/taxonomy/sova-attack-taxonomy.md).
+[experimental format specifications](./docs/specifications/README.md).
 
 ## Why SOVA
 
@@ -109,7 +126,10 @@ flowchart LR
     H -. "regression" .-> B
 ```
 
-SOVA is not intended to be another disconnected scanner. It is intended to become the shared evidence and experimentation layer underneath agent-security work.
+SOVA is not intended to be another disconnected scanner or observability
+dashboard. It is intended to become a shared evidence and experimentation layer
+for AI development, evaluation, interpretability, incident analysis, behavioral
+research, and security.
 
 ## The owl
 
@@ -173,27 +193,31 @@ SOVA plans to search this **conditional-trigger space** systematically rather th
 
 The public claim will be earned experimentally: SOVA must repeatedly find confirmed behavior that strong baselines miss before we say that it does.
 
-### `.sova` — a portable adversarial artifact
+### `.sova` — a portable AI-behavior capsule
 
-A `.sova` file is planned as an open, versioned way to encode a complete agent-security scenario:
+A `.sova` file is now implemented experimentally as an open, versioned,
+inert-by-default capsule that can organize:
 
-- target and compatibility requirements;
-- authorization and safety constraints;
-- preconditions and environment state;
-- multi-turn interactions;
-- mutation points;
-- expected tool calls or state changes;
-- deterministic and semantic success oracles;
-- cleanup requirements;
-- a declared reproduction procedure and known limitations.
+- a portable scenario or replay recipe;
+- triggers, parameters, preconditions, environment, and dependencies;
+- agents, models, tools, protocols, and runtime versions;
+- `.sova-trace` records and content-addressed artifacts;
+- assertions, evaluations, findings, and hypotheses;
+- safety, authorization, limitations, disclosure, and cleanup information;
+- authorship, provenance, integrity, licence, and citation information.
 
-The goal is simple: a vulnerability should become a file another person can inspect and run—not only a screenshot and a paragraph.
+It supports security cases, evaluations, agent trajectories, behavioral
+interpretability, incident forensics, and research publication. The minimum
+capsule remains small: a manifest and one typed object. Rich traces and large
+artifacts are optional.
 
-A `.sova` describes the experiment; it becomes the executable part of a confirmed vulnerability only when a separate finding cites supporting trace evidence.
+Opening, inspecting, verifying, rendering, or migrating a capsule never runs
+its scenario, installs tools, fetches URLs, or invokes a model. Controlled
+re-execution is a separate, explicitly authorized operation.
 
 ### `.sova-trace` — the evidence record
 
-A `.sova-trace` is planned to carry:
+A `.sova-trace` now experimentally carries:
 
 - ordered events and causal relationships;
 - model, tool, MCP, memory, retrieval, process, network, browser, and computer observations;
@@ -203,9 +227,13 @@ A `.sova-trace` is planned to carry:
 - artifact hashes;
 - a standard signed envelope and offline verification path.
 
-SOVA will build on open telemetry and signing conventions rather than inventing private cryptography. Its claims will remain bounded by a published threat model.
+SOVA builds on open telemetry and signing conventions rather than inventing
+private cryptography. Its claims are bounded by the published
+[threat model](./docs/specifications/threat-model.md).
 
-The accepted [artifact meanings decision](./docs/decisions/0001-canonical-artifact-meanings.md) separates scenarios, target manifests, traces, maps, findings, reports, and registry entries so execution, observation, and judgment cannot be confused.
+The accepted [capsule and trace decision](./docs/decisions/0009-sova-behavior-capsule-and-trace-model.md)
+keeps scenarios, traces, findings, evaluations, reports, and registry entries
+separately typed inside or alongside the outer capsule.
 
 ### Versioning without lock-in
 
@@ -220,11 +248,12 @@ The promise is deliberately precise:
 - unsupported required behavior fails closed;
 - the migrated artifact keeps provenance to the original digest but receives its own digest and signature.
 
-The planned local workflow is:
+The current experimental local workflow is:
 
 ```bash
-sova migrate scenario.sova --check
-sova migrate scenario.sova --to latest --require-lossless
+sova validate behavior.sova
+sova inspect behavior.sova
+sova migrate behavior-v001.sova behavior-v010.sova --to 0.1.0
 ```
 
 SOVA will use experimental `0.x` schemas until real scenarios, migration rehearsals, independent implementations, and hostile-input tests justify `1.0.0`.
@@ -517,8 +546,8 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 |---|---|
 | Vision and scope | Defined |
 | Public identity and README | Active |
-| Canonical artifact meanings | Accepted in [ADR-0001](./docs/decisions/0001-canonical-artifact-meanings.md) |
-| `.sova` meaning and migration invariants | Accepted in [ADR-0001](./docs/decisions/0001-canonical-artifact-meanings.md) and [ADR-0002](./docs/decisions/0002-versioning-and-lossless-migration.md) |
+| Canonical artifact meanings | ADR-0001 superseded by the expanded [ADR-0009](./docs/decisions/0009-sova-behavior-capsule-and-trace-model.md) |
+| `.sova` capsule meaning and migration invariants | Accepted in [ADR-0009](./docs/decisions/0009-sova-behavior-capsule-and-trace-model.md) and [ADR-0002](./docs/decisions/0002-versioning-and-lossless-migration.md) |
 | Open/private and SOVA Engine boundary | Accepted in [ADR-0003](./docs/decisions/0003-open-source-and-proprietary-boundary.md) |
 | Self-assessment and TRUSCOR authority boundary | Accepted in [ADR-0004](./docs/decisions/0004-self-assessment-and-truscor-boundary.md) |
 | Topic 00 project constitution | Accepted in [ADR-0005](./docs/decisions/0005-topic-00-project-constitution.md) |
@@ -526,7 +555,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Topic 02 repository, language, quality, documentation, and public-safety foundation | Implemented in [ADR-0007](./docs/decisions/0007-topic-02-engineering-foundation.md) |
 | Topic 03 shared vocabulary, lifecycle, taxonomy, coverage, and version contracts | Implemented in [ADR-0008](./docs/decisions/0008-topic-03-domain-contracts.md) |
 | Comparative evidence gates 01-A and 01-B | **Not run - unproven; comparative claims prohibited** |
-| Placeholder `sova` CLI | Implemented; `--help` and `--version` only |
+| Local `sova` format CLI | Implemented experimentally: template, pack, validate, lint, inspect, hash, migrate, verify, playback |
 | `sova.contracts` Python API | Implemented and experimental at `0.1.0` contract level |
 | Python package and locked contributor environment | Implemented as `sova-oss` / `uv.lock`; not published to PyPI |
 | Cross-platform CI and quality/security gates | Implemented |
@@ -534,9 +563,9 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Repository licence | [Apache License 2.0](./LICENSE) |
 | Trademark and fork naming | [SOVA-OSS policy active](./TRADEMARKS.md) |
 | Dual-use and coordinated disclosure | [Policies active](./DUAL_USE_POLICY.md) |
-| `.sova` field schema | Experimental work has not started |
-| `.sova-trace` experimental contract | Not yet implemented |
-| Scripted/local execution | Not yet implemented |
+| `.sova` capsule and scenario schemas | Experimental `0.1.0` implemented with safe package tooling |
+| `.sova-trace` experimental contract | Experimental `0.1.0` implemented with streaming writer and offline verifier |
+| Scripted/local execution | Experimental executor contract and no-Atlas vertical slice implemented; local host execution is explicitly not a security sandbox |
 | Atlas adapter | Awaiting validated integration |
 | Sleeper demonstration | Not yet implemented |
 | Security CLI commands / SDK / local MCP | Not yet implemented |

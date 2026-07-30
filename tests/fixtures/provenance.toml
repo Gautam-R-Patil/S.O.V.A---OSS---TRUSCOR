@@ -16,3 +16,43 @@ license = "Apache-2.0"
 expected = "reject"
 sha256 = "93935d63547be39d4416b38385d56bb48e7993d784456c0a3f45217cf67e4db8"
 purpose = "Reserve the trace golden-fixture workflow without defining a pre-Topic-05 schema."
+
+[[fixture]]
+path = "tests/fixtures/golden/trace/standard-event-0.1.0.jsonl"
+provenance_class = "synthetic"
+license = "Apache-2.0"
+expected = "accept"
+sha256 = "4a4e944d77390e3017b36081cda624499ecf5a4be2b66df9be2c2a9a1c007dc6"
+purpose = "Pin canonical bytes, schema validation, and event-hash behavior for one supported observable event."
+
+[[fixture]]
+path = "tests/fixtures/golden/trace/all-event-families-0.1.0.jsonl"
+provenance_class = "synthetic"
+license = "Apache-2.0"
+expected = "accept"
+sha256 = "f599ce1c882dd6ecc43d9812c6b387e5ee020fead70d8093e1196fa793010375"
+purpose = "Pin canonical schema-valid chained events for every registered SOVA trace event family."
+
+[[fixture]]
+path = "tests/fixtures/codex-safe/.sova-codex-fixture"
+provenance_class = "synthetic"
+license = "Apache-2.0"
+expected = "accept"
+sha256 = "347fb660abb587bd0e8a873e2bd0608e82d7f83a671fb8fdd1ecb830419daf11"
+purpose = "Mark the isolated public directory permitted for the optional Codex subscription lane."
+
+[[fixture]]
+path = "tests/fixtures/codex-safe/fixture.txt"
+provenance_class = "synthetic"
+license = "Apache-2.0"
+expected = "accept"
+sha256 = "db96c9ea07404b6d6995573a6e23719b4c631633c93b53eeaafdb567e049ebbd"
+purpose = "Exercise bounded observable baseline, conditional, refusal, and read-only tool behavior."
+
+[[fixture]]
+path = "tests/fixtures/codex-safe/output.schema.json"
+provenance_class = "synthetic"
+license = "Apache-2.0"
+expected = "accept"
+sha256 = "f37633f90f789fce07ef4fb9f974cd75868a549a9b7bcdfeeb764676e161c4c9"
+purpose = "Constrain the optional Codex lane to five non-sensitive observable result fields."

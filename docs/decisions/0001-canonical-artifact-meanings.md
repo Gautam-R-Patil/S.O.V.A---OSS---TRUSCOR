@@ -1,11 +1,17 @@
 # ADR-0001: Canonical SOVA artifact meanings
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0009](./0009-sova-behavior-capsule-and-trace-model.md)
 - **Decision date:** 2026-07-29
 - **Roadmap scope:** Topic 00.2 — Artifact meaning
 - **Supersedes:** Any use of `.sova` as a generic agent configuration, map output, trace, finding, or report
 
-## Decision
+> Historical note: this decision correctly separated scenarios, traces,
+> findings, reports, and registry metadata, but assigned the `.sova` filename
+> only to the scenario. ADR-0009 preserves those semantic boundaries while
+> making `.sova` the portable outer AI-behavior capsule that can contain or
+> reference those separately typed objects. Use ADR-0009 for all new work.
+
+## Superseded decision
 
 SOVA uses one artifact name for one semantic job.
 

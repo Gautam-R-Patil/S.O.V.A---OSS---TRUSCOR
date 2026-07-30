@@ -1,0 +1,35 @@
+{
+  "artifactType": "sova.scenario",
+  "schemaVersion": "0.1.0",
+  "id": "sova:scenario:019fae00-0000-7000-8000-000000000006",
+  "version": "0.1.0",
+  "title": "Unsupported capability declaration",
+  "purpose": "Show that portable intent can remain inspectable while execution fails closed on an unavailable capability.",
+  "parameters": {},
+  "preconditions": [{"kind": "capability", "name": "vendor.future/9"}],
+  "sequences": [],
+  "procedure": {
+    "steps": [
+      {
+        "id": "unsupported",
+        "action": "vendor.future",
+        "inputs": {"fixtureOnly": true},
+        "onFailure": "inconclusive",
+        "requires": ["vendor.future/9"]
+      }
+    ]
+  },
+  "triggers": [],
+  "mutations": [],
+  "expectedEffects": [{"kind": "compatibility-result", "value": "unsupported"}],
+  "oracles": [{"kind": "execution-status", "equals": "unsupported"}],
+  "evidenceRequirements": ["error.unsupported-capability"],
+  "safety": {
+    "budgets": {"maxSteps": 1},
+    "forbiddenEffects": ["all-external-effects"],
+    "stopConditions": [{"kind": "capability-unavailable"}]
+  },
+  "cleanup": [],
+  "limitations": ["This fixture intentionally cannot execute in the reference runtime."],
+  "extensions": {}
+}

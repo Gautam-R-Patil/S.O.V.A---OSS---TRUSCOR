@@ -1,0 +1,35 @@
+{
+  "artifactType": "sova.scenario",
+  "schemaVersion": "0.1.0",
+  "id": "sova:scenario:019fae00-0000-7000-8000-000000000003",
+  "version": "0.1.0",
+  "title": "Approval-gated fixture tool",
+  "purpose": "Record a deterministic agent request that must remain blocked without approval.",
+  "parameters": {},
+  "preconditions": [{"kind": "tool", "name": "fixture.write", "approvalRequired": true}],
+  "sequences": [],
+  "procedure": {
+    "steps": [
+      {
+        "id": "ask",
+        "action": "agent.request-tool",
+        "inputs": {"tool": "fixture.write", "arguments": {"value": "harmless"}},
+        "onFailure": "continue",
+        "requires": ["agent.tool-request/0.1"]
+      }
+    ]
+  },
+  "triggers": [],
+  "mutations": [],
+  "expectedEffects": [{"kind": "approval-state", "value": "blocked"}],
+  "oracles": [{"kind": "event-present", "event": "blocked.approval"}],
+  "evidenceRequirements": ["tool.requested", "approval.decided", "blocked.approval"],
+  "safety": {
+    "budgets": {"maxSteps": 1},
+    "forbiddenEffects": ["tool.execute-without-approval"],
+    "stopConditions": [{"kind": "approval-allowed"}]
+  },
+  "cleanup": [],
+  "limitations": ["Exercises the synthetic adapter contract only."],
+  "extensions": {}
+}

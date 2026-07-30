@@ -1,0 +1,38 @@
+{
+  "artifactType": "sova.scenario",
+  "schemaVersion": "0.1.0",
+  "id": "sova:scenario:019fae00-0000-7000-8000-000000000007",
+  "version": "0.1.0",
+  "title": "Portable capsule artifact read",
+  "purpose": "Exercise the same content-addressed read on scripted and restricted-local executors.",
+  "parameters": {},
+  "preconditions": [{"kind": "fixture", "owned": true, "digest": "sha256:3e08216fe20362572d2928df73734187f448ebc23dd2f181acb55fb82d1252ae"}],
+  "sequences": [],
+  "procedure": {
+    "steps": [
+      {
+        "id": "read-fixture",
+        "action": "artifact.read",
+        "inputs": {
+          "digest": "sha256:3e08216fe20362572d2928df73734187f448ebc23dd2f181acb55fb82d1252ae",
+          "mediaType": "text/plain"
+        },
+        "onFailure": "stop",
+        "requires": ["artifact.read/0.1"]
+      }
+    ]
+  },
+  "triggers": [],
+  "mutations": [],
+  "expectedEffects": [{"kind": "artifact-text", "value": "portable fixture"}],
+  "oracles": [{"kind": "exact-field", "path": "$.text", "equals": "portable fixture"}],
+  "evidenceRequirements": ["tool.requested", "tool.completed"],
+  "safety": {
+    "budgets": {"maxSteps": 1, "maxStepSeconds": 5},
+    "forbiddenEffects": ["network.egress", "host.read", "host.write"],
+    "stopConditions": []
+  },
+  "cleanup": [],
+  "limitations": ["Synthetic fixture only; no host filesystem object is opened."],
+  "extensions": {}
+}

@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schema/event/0.1.0",
+  "title": "SOVA event 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactType",
+    "schemaVersion",
+    "id",
+    "runId",
+    "sequence",
+    "kind",
+    "phase",
+    "actor",
+    "target",
+    "producer",
+    "wallTime",
+    "observedTime",
+    "monotonicNs",
+    "clock",
+    "clockDomain",
+    "parents",
+    "links",
+    "attempt",
+    "payload",
+    "redactions",
+    "previousHash",
+    "eventHash"
+  ],
+  "properties": {
+    "artifactType": {"const": "sova.event"},
+    "schemaVersion": {"const": "0.1.0"},
+    "id": {"type": "string", "pattern": "^sova:event:[0-9a-f-]{36}$"},
+    "runId": {"type": "string", "pattern": "^sova:run:[0-9a-f-]{36}$"},
+    "sequence": {"type": "integer", "minimum": 0},
+    "kind": {
+      "type": "string",
+      "pattern": "^(run|phase|attempt|actor|prompt|model|tool|approval|memory|retrieval|mcp|inter-agent|filesystem|process|environment|database|api|network|browser|computer|oracle|judge|finding|attribution|authorization|safety|blocked|stop|artifact|redaction|signature|verification|export|error|recovery|x\\.[a-z0-9._-]+)\\.[a-z0-9._-]+$"
+    },
+    "phase": {"type": "string", "minLength": 1, "maxLength": 128},
+    "actor": {"$ref": "#/$defs/entity"},
+    "target": {"$ref": "#/$defs/entity"},
+    "producer": {"$ref": "#/$defs/entity"},
+    "wallTime": {"type": "string", "format": "date-time"},
+    "observedTime": {"type": ["string", "null"], "format": "date-time"},
+    "monotonicNs": {"type": "integer", "minimum": 0},
+    "clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "precision", "skewEstimateNs", "trusted"],
+      "properties": {
+        "source": {"type": "string", "minLength": 1},
+        "precision": {"type": "string", "minLength": 1},
+        "skewEstimateNs": {"type": ["integer", "null"]},
+        "trusted": {"type": "boolean"}
+      }
+    },
+    "clockDomain": {"type": "string", "minLength": 1, "maxLength": 256},
+    "parents": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^sova:event:[0-9a-f-]{36}$"}
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "relationship",
+          "scheme",
+          "version",
+          "traceId",
+          "spanId",
+          "eventId",
+          "fidelity",
+          "trusted"
+        ],
+        "properties": {
+          "relationship": {
+            "enum": ["parent", "follows-from", "send", "receive", "correlates", "counterfactual-of"]
+          },
+          "scheme": {"type": "string", "minLength": 1, "maxLength": 128},
+          "version": {"type": "string", "minLength": 1, "maxLength": 128},
+          "traceId": {"type": ["string", "null"], "maxLength": 512},
+          "spanId": {"type": ["string", "null"], "maxLength": 512},
+          "eventId": {"type": ["string", "null"], "maxLength": 512},
+          "fidelity": {"enum": ["exact", "semantic", "degraded", "unavailable"]},
+          "trusted": {"type": "boolean"}
+        }
+      }
+    },
+    "attempt": {"type": ["string", "null"], "pattern": "^sova:attempt:[0-9a-f-]{36}$"},
+    "payload": {"type": "object"},
+    "redactions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "class", "method"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "class": {"type": "string", "minLength": 1},
+          "method": {"enum": ["omitted", "keyed-commitment", "encrypted", "masked"]}
+        }
+      }
+    },
+    "previousHash": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+    "eventHash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "extensions": {
+      "type": "object",
+      "propertyNames": {"pattern": "^x-[a-z0-9][a-z0-9.-]{0,62}$"}
+    }
+  },
+  "$defs": {
+    "entity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "name"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

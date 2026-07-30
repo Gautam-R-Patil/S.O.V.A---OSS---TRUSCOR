@@ -29,7 +29,7 @@ source = "decisions/0004-self-assessment-and-truscor-boundary.md"
 term = "controlled re-execution"
 definition = "A fresh run of the same scenario under pinned or explicitly equivalent conditions."
 status = "accepted"
-source = "decisions/0001-canonical-artifact-meanings.md"
+source = "decisions/0009-sova-behavior-capsule-and-trace-model.md"
 
 [[term]]
 term = "ExecutorAdapter"
@@ -57,9 +57,9 @@ source = "decisions/0001-canonical-artifact-meanings.md"
 
 [[term]]
 term = "portable vulnerability artifact"
-definition = "A scenario whose immutable digest is cited by a lifecycle-qualified finding supported by trace evidence; a scenario alone is not a confirmed vulnerability."
+definition = "A SOVA behavior capsule whose typed scenario is cited by a lifecycle-qualified finding supported by trace evidence; a capsule or scenario alone is not a confirmed vulnerability."
 status = "accepted"
-source = "decisions/0001-canonical-artifact-meanings.md"
+source = "decisions/0009-sova-behavior-capsule-and-trace-model.md"
 
 [[term]]
 term = "registry entry"
@@ -89,7 +89,7 @@ source = "decisions/0004-self-assessment-and-truscor-boundary.md"
 term = "semantic reproduction"
 definition = "Repeatedly testing whether the same material security outcome recurs when bit-for-bit replay is unavailable, with conditions, trials, and uncertainty reported."
 status = "planned"
-source = "decisions/0002-versioning-and-lossless-migration.md"
+source = "decisions/0009-sova-behavior-capsule-and-trace-model.md"
 
 [[term]]
 term = "SOVA Engine"
@@ -119,7 +119,25 @@ source = "decisions/0001-canonical-artifact-meanings.md"
 term = "trace playback"
 definition = "Deterministic inspection of the observations already recorded in a trace; it never operates the original target."
 status = "accepted"
-source = "decisions/0001-canonical-artifact-meanings.md"
+source = "decisions/0009-sova-behavior-capsule-and-trace-model.md"
+
+[[term]]
+term = "SOVA behavior capsule"
+definition = "A portable, versioned, inert-by-default `.sova` package containing or referencing separately typed scenario, environment, trace, artifact, evaluation, finding, hypothesis, provenance, integrity, citation, and disclosure objects."
+status = "accepted"
+source = "decisions/0009-sova-behavior-capsule-and-trace-model.md"
+
+[[term]]
+term = "capture profile"
+definition = "A declared lite, standard, forensic, or interpretability recording policy that controls volume and sensitivity without changing the capsule's core semantics."
+status = "accepted"
+source = "decisions/0009-sova-behavior-capsule-and-trace-model.md"
+
+[[term]]
+term = "fidelity report"
+definition = "A machine-readable account of which source semantics an importer preserved, approximated, omitted, or could not represent."
+status = "accepted"
+source = "decisions/0009-sova-behavior-capsule-and-trace-model.md"
 
 [[term]]
 term = "TRUSCOR"

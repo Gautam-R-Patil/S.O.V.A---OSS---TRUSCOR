@@ -89,7 +89,7 @@ environments into the repository without a recorded licence/provenance review.
 
 | Project or standard | What the primary source establishes | Decision |
 |---|---|---|
-| [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/registry/attributes/gen-ai/) | Common GenAI attributes and events; relevant areas remain under active development. | **Build on + pin.** SOVA adds security-evidence extensions instead of forking the vocabulary. |
+| [OpenTelemetry core semantic conventions](https://opentelemetry.io/docs/specs/semconv/) and the separate [experimental GenAI repository](https://github.com/open-telemetry/semantic-conventions-genai) | Common telemetry attributes; the GenAI repository has no release and currently requires an exact commit pin. | **Build on + pin.** Use core `1.43.0`, mark the GenAI mapping experimental, and add SOVA evidence extensions instead of forking the vocabulary. |
 | [OpenInference](https://github.com/Arize-ai/openinference) | Open instrumentation conventions and framework integrations for AI observability. | **Import + interoperate.** First passive-recorder baseline. |
 | [Phoenix](https://github.com/Arize-ai/phoenix) | Open-source AI observability and evaluation platform. | **Import + interoperate.** Do not rebuild a general trace UI. |
 | [Langfuse](https://github.com/langfuse/langfuse) | Open-source LLM observability, evaluation, prompt, and trace workflows. | **Import + interoperate.** Keep its licence/deployment boundary separate. |
@@ -218,6 +218,45 @@ SOVA may not:
 Every result must name the project, exact revision, licence/use boundary,
 configuration, model, provider, cost, duration, and any deviation from its
 documented standard run.
+
+## Topic 04-05 capsule and trace prior art
+
+Review snapshot: 2026-07-30.
+
+The `.sova`/`.sova-trace` implementation deliberately composes established
+mechanisms. It makes no broad novelty claim for packaging, recording,
+content-addressing, signing, replay, or reproducibility.
+
+| Primary source | Established capability | SOVA consequence |
+|---|---|---|
+| [Inspect AI eval logs](https://inspect.aisi.org.uk/eval-logs.html) | Incremental evaluation logs, binary/container storage, deduplication, compression, run configuration | Compare portability, size, random access, and replay semantics; do not claim rich agent eval logs are new |
+| [MLflow tracing](https://mlflow.org/docs/latest/genai/tracing/) | OTel-compatible model, agent, tool, retriever, and memory tracing | Import with a fidelity report rather than replace general observability |
+| [OpenTelemetry core semantic conventions 1.43.0](https://opentelemetry.io/docs/specs/semconv/) | Versioned cross-system telemetry conventions; GenAI moved to a separate unreleased repository | Pin core tag/commit, pin the experimental GenAI repository by commit, and preserve unknown source attributes |
+| [OpenInference 0.1.30](https://pypi.org/project/openinference-semantic-conventions/) | AI-specific span semantics and integrations | First passive interoperability target |
+| [RO-Crate 1.3](https://www.researchobject.org/ro-crate/specification/1.3/index.html) and [W3C PROV-O](https://www.w3.org/TR/prov-o/) | Research-object packaging and provenance | Export/reuse concepts; SOVA remains execution- and evidence-aware |
+| [OCI descriptors](https://github.com/opencontainers/image-spec/blob/main/descriptor.md) | Media type, digest, size, content addressing | Reuse descriptor pattern; OCI distribution remains optional |
+| [in-toto Statement v1](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md), [DSSE](https://github.com/secure-systems-lab/dsse), and [Sigstore bundles](https://docs.sigstore.dev/about/bundle/) | Typed attestations, type-bound signatures, portable verification material | No bespoke signature envelope; trust policy remains explicit |
+
+Patent records are prior-art signals, not a legal freedom-to-operate opinion:
+
+| Record | Theme |
+|---|---|
+| [US8032831B2](https://patents.google.com/patent/US8032831B2/en) | Historical workflow capture and visual replay |
+| [US9170915B1](https://patents.google.com/patent/US9170915B1/en) | Workflow-history replay to reconstruct application state |
+| [US8578340B1](https://patents.google.com/patent/US8578340B1/en) | Program execution recording and replay of nondeterministic events |
+| [US10802822B2](https://patents.google.com/patent/US10802822B2/en) | Reproducible ML using environment, data, code, configuration, and hashes |
+| [US11829853B2](https://patents.google.com/patent/US11829853B2/en) | Model-run provenance, dependencies, and reproducible execution |
+| [US10540624B2](https://patents.google.com/patent/US10540624B2/en) | Provenance-aware application execution and recorded subsequences |
+| [US20170032151A1](https://patents.google.com/patent/US20170032151A1/en) | Event-log tamper detection with hashes and signatures |
+| [US11295031B2](https://patents.google.com/patent/US11295031B2/en) | Chained tamper-resistant event records |
+| [US11368307B1](https://patents.google.com/patent/US11368307B1/en) | Multiparty log authenticity and ordering verification |
+
+The research gap is narrower and remains unproven: whether one small typed
+AI-behavior capsule can preserve enough procedure, environment, trace,
+evaluation, and provenance meaning for useful controlled re-execution and
+measured semantic reproduction across different agent runtimes. Any paper or
+patent claim waits for implementation evidence, strong baselines, quantitative
+experiments, limitations, private review, and qualified counsel.
 
 ## Unresolved names from the planning source
 

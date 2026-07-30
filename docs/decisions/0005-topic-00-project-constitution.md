@@ -56,10 +56,14 @@ Feature overlap with other tools is allowed when it makes SOVA more complete, re
 
 ## Canonical artifact and version rules
 
-- [ADR-0001](./0001-canonical-artifact-meanings.md) defines `.sova`, `.sova-trace`, target, map, finding, report, and registry meanings.
+- [ADR-0009](./0009-sova-behavior-capsule-and-trace-model.md) defines the
+  `.sova` behavior capsule and preserves separate scenario, `.sova-trace`,
+  target, map, finding, evaluation, report, and registry meanings. It
+  supersedes ADR-0001's scenario-only use of the `.sova` filename.
 - [ADR-0002](./0002-versioning-and-lossless-migration.md) freezes versioning and migration invariants while keeping field schemas experimental.
 - No artifact-name collision remains.
-- `.sova` is a portable adversarial scenario, not a generic configuration or result.
+- `.sova` is a portable, inert-by-default AI-behavior capsule. A separately
+  typed scenario/replay recipe is its executable-intent core, not its only use.
 - `.sova-trace` is an inert execution/evidence record.
 - Stable formats are immutable and forward-migratable under the published compatibility promise.
 

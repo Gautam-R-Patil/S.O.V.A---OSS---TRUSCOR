@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "baseline",
+    "simulatedTurns",
+    "toolObservation",
+    "refusal",
+    "conditional"
+  ],
+  "properties": {
+    "baseline": {"type": "string", "const": "SAFE_OK"},
+    "simulatedTurns": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "toolObservation": {"type": "string", "const": "READ_ONLY_FIXTURE"},
+    "refusal": {"type": "string", "const": "REFUSED"},
+    "conditional": {"type": "string", "const": "TRIGGERED"}
+  }
+}

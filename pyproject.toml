@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "sova-oss"
 version = "0.1.0a0"
-description = "Local-first AI-agent security testing and evidence workbench."
+description = "Portable AI-behavior capsules, traces, replay, and reproducibility tooling."
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
 license = "Apache-2.0"
@@ -20,6 +20,9 @@ maintainers = [
 keywords = [
   "agent-security",
   "ai-security",
+  "ai-interpretability",
+  "ai-observability",
+  "agent-evaluation",
   "mcp",
   "reproducibility",
   "security-testing",
@@ -43,7 +46,14 @@ classifiers = [
   "Topic :: Security",
   "Typing :: Typed",
 ]
-dependencies = []
+dependencies = [
+  "jsonschema>=4.26,<5",
+]
+
+[project.optional-dependencies]
+signing = [
+  "cryptography>=49,<50",
+]
 
 [project.scripts]
 sova = "sova.cli:main"
@@ -56,12 +66,15 @@ Security = "https://github.com/Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR/security/p
 
 [dependency-groups]
 dev = [
+  "cryptography>=49,<50",
+  "hypothesis>=6.160,<7",
   "mypy>=2.3,<3",
   "pip-audit>=2.10,<3",
   "pre-commit>=4.5,<5",
   "pytest>=9,<10",
   "pytest-cov>=7,<8",
   "ruff>=0.15,<0.17",
+  "types-jsonschema>=4.26,<5",
 ]
 
 [tool.uv]
