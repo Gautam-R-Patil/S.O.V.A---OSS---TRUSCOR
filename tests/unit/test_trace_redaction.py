@@ -18,7 +18,7 @@ from sova.trace.redaction import (
 def test_default_redaction_omits_secret_values_before_persistence() -> None:
     source = {
         "authorization": "Bearer top-secret-token-value",
-        "nested": {"api_key": "sk-supersecret123456789"},
+        "nested": {"api_key": "synthetic-secret-value"},
         "safe": "visible",
     }
     redacted, records = Redactor().redact(source)

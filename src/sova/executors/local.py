@@ -223,7 +223,9 @@ class RestrictedLocalExecutor:
                     error_code="SOVA-LOCAL-ARGUMENT-ESCAPE",
                 )
         environment = self._environment(request.inputs.get("env", {}), context)
-        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+        creationflags = (
+            int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)) if os.name == "nt" else 0
+        )
         with tempfile.TemporaryDirectory(prefix=".sova-process-", dir=workspace) as temporary:
             temporary_path = Path(temporary)
             stdout_path = temporary_path / "stdout"

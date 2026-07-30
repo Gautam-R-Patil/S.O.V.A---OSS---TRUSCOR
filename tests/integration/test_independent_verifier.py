@@ -48,7 +48,7 @@ def test_independent_process_validates_capsule_and_redacted_trace(tmp_path: Path
 
     trace = tmp_path / "fixture.sova-trace"
     writer = TraceWriter(trace)
-    writer.append("prompt.sent", {"api_key": "sk-synthetic-secret-value"})
+    writer.append("prompt.sent", {"api_key": "synthetic-secret-value"})
     writer.finalize()
     trace_result = _run(trace)
     assert trace_result.returncode == 0, trace_result.stderr

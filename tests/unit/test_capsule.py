@@ -142,7 +142,7 @@ def test_secret_shaped_scenario_content_is_rejected_before_packaging(tmp_path: P
         author="Test author",
     )
     scenario = scenario_template(title="Unsafe", purpose="Verify secret gate")
-    scenario["parameters"] = {"api_key": "sk-never-package-this-value"}
+    scenario["parameters"] = {"api_key": "synthetic-secret-must-not-be-packaged"}
     with pytest.raises(FormatError) as error:
         build_capsule(tmp_path / "unsafe.sova", manifest, scenario=scenario)
     assert error.value.issue.code == "SOVA-CAPSULE-SECRET-MATERIAL"
