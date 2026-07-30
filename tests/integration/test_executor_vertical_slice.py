@@ -92,6 +92,15 @@ def _outcome(trace_path: Path) -> dict[str, Any]:
     return outcome
 
 
+def _assert_oracle_is_identified_observer(trace_path: Path) -> None:
+    oracle = next(TraceReader(trace_path).query(kind_prefix="oracle.completed"))
+    assert oracle["producer"] == {
+        "id": "sova:actor:oracle",
+        "kind": "observer",
+        "name": "SOVA deterministic oracle",
+    }
+
+
 class _CrashingExecutor:
     name = "synthetic-crashing-executor"
 
@@ -164,6 +173,8 @@ def test_same_capsule_reproduces_same_observation_on_two_backends(
         == local_outcome["evidence"][0]["digest"]
         == _DIGEST
     )
+    _assert_oracle_is_identified_observer(scripted_path)
+    _assert_oracle_is_identified_observer(local_path)
     assert TraceReader(scripted_path).playback()
     assert TraceReader(local_path).playback()
 

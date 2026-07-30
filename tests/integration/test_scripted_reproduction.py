@@ -71,6 +71,11 @@ def test_no_network_reproduction_is_verifiable_and_repeatable(tmp_path: Path) ->
     assert comparison.equivalent
     oracle = next(TraceReader(first.trace_path).query(kind_prefix="oracle.completed"))
     assert oracle["payload"]["status"] == "pass"
+    assert oracle["producer"] == {
+        "id": "sova:actor:oracle",
+        "kind": "observer",
+        "name": "SOVA deterministic oracle",
+    }
     assert any(
         event["payload"].get("structured", {}).get("label") == "TRIGGERED"
         for event in TraceReader(first.trace_path).query(kind_prefix="model.")

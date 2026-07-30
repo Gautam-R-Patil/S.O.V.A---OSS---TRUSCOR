@@ -92,6 +92,19 @@ The reference verifier supports unsigned inspection, signature-required
 verification, and exact required-key verification. Unsupported or mismatched
 trust requirements fail visibly.
 
+The separately implemented offline verifier validates archives, descriptors,
+canonical manifests, event order/hash chains, and redaction structure without
+importing SOVA. Its standard-library core inspects unsigned evidence; when the
+optional signing dependency is available, `--require-signature` and
+`--required-key-id` independently verify the DSSE/Ed25519 statement. Carried
+timestamp/transparency material remains explicitly unverified.
+
+A second dependency-free Node.js verifier implements the same bounded archive,
+canonicalization, trace-chain, redaction, DSSE/Ed25519, and required-key checks
+without importing either Python verifier. Cross-language agreement is tested
+when Node.js is available. Neither implementation establishes observation
+truth, external signer identity, freshness, or transparency inclusion.
+
 ## Offline query and playback
 
 The reader verifies descriptors before parsing, validates every event, rebuilds
@@ -106,6 +119,9 @@ deterministic rules over recorded observable values. Oracle pass/fail/
 inconclusive is distinct from run completion. The reference rules and bounded
 cross-run comparison are specified in
 [observable oracles 0.1](./observable-oracles-0.1.md).
+Reference-generated oracle events identify their producer as the SOVA
+deterministic observer (`sova:actor:oracle`); this makes the source of the
+conclusion explicit but does not make the observation independent or true.
 
 ## Partial and distributed traces
 

@@ -245,6 +245,11 @@ def run_capsule(  # noqa: PLR0913, PLR0915
         "oracle.completed",
         oracle_report.to_mapping(),
         parents=evidence_parents,
+        producer={
+            "id": "sova:actor:oracle",
+            "kind": "observer",
+            "name": "SOVA deterministic oracle",
+        },
     )
     writer.append(
         "run.completed" if completion == "completed" else "run.failed",

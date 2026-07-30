@@ -171,6 +171,11 @@ def reproduce_with_scripted_model(
             "oracle.completed",
             report.to_mapping(),
             parents=evidence_parents,
+            producer={
+                "id": "sova:actor:oracle",
+                "kind": "observer",
+                "name": "SOVA deterministic oracle",
+            },
         )
         writer.append(
             "run.completed",

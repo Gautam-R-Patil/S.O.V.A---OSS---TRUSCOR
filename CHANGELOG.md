@@ -36,6 +36,12 @@ have independent version ledgers.
   local host-process executor with exact capability negotiation.
 - Observable deterministic oracles, integrity-checked declared-outcome
   comparison, and a complete safe no-Atlas vertical-slice fixture.
+- Explicit observer producer identity for reference oracle conclusions so
+  executor output and SOVA-owned judging remain distinguishable in evidence.
+- Optional DSSE/Ed25519 and required-key verification in the independently
+  implemented offline verifier, without importing the SOVA package.
+- A dependency-free Node.js verifier and cross-language agreement tests for
+  package, canonical manifest, event chain, redaction, and DSSE evidence.
 - Strict opaque `sova-secret:` references, just-in-time child-environment
   resolution, supervised process lifecycle, explicit unsupported resource
   limits, and provider-crash normalization.
