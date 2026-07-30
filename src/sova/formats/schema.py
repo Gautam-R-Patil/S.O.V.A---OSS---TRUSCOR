@@ -8,6 +8,7 @@ from functools import lru_cache
 from importlib.resources import files
 from typing import Any
 
+import jsonschema_rs
 from jsonschema import Draft202012Validator, FormatChecker
 
 from sova.formats.errors import FormatError, ValidationIssue
@@ -21,7 +22,7 @@ _SCHEMA_FILES = {
 
 
 @lru_cache(maxsize=len(_SCHEMA_FILES))
-def _validator(artifact_type: str) -> Draft202012Validator:
+def _schema(artifact_type: str) -> dict[str, Any]:
     try:
         filename = _SCHEMA_FILES[artifact_type]
     except KeyError as error:
@@ -31,8 +32,29 @@ def _validator(artifact_type: str) -> Draft202012Validator:
         ) from error
     resource = files("sova.schemas").joinpath(filename)
     schema = json.loads(resource.read_text(encoding="utf-8"))
+    if not isinstance(schema, dict):
+        raise FormatError(
+            "SOVA-SCHEMA-DEFINITION",
+            f"bundled schema root is not an object: {filename}",
+        )
     Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema, format_checker=FormatChecker())
+    return schema
+
+
+@lru_cache(maxsize=len(_SCHEMA_FILES))
+def _validator(artifact_type: str) -> jsonschema_rs.Draft202012Validator:
+    """Compile the high-throughput validator once per immutable schema."""
+    return jsonschema_rs.Draft202012Validator(
+        _schema(artifact_type),
+        validate_formats=True,
+        ignore_unknown_formats=False,
+    )
+
+
+@lru_cache(maxsize=len(_SCHEMA_FILES))
+def _reference_validator(artifact_type: str) -> Draft202012Validator:
+    """Retain the independent pure-Python correctness oracle for parity tests."""
+    return Draft202012Validator(_schema(artifact_type), format_checker=FormatChecker())
 
 
 def validation_issues(document: Any, artifact_type: str | None = None) -> list[ValidationIssue]:
@@ -56,13 +78,13 @@ def validation_issues(document: Any, artifact_type: str | None = None) -> list[V
         ]
     errors = sorted(
         _validator(selected_type).iter_errors(document),
-        key=lambda item: list(item.path),
+        key=lambda item: tuple(str(part) for part in item.instance_path),
     )
     return [
         ValidationIssue(
             "SOVA-SCHEMA-INVALID",
             error.message,
-            "$" + "".join(f"[{part!r}]" for part in error.absolute_path),
+            "$" + "".join(f"[{part!r}]" for part in error.instance_path),
         )
         for error in errors
     ]

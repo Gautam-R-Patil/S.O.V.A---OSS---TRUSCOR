@@ -8,7 +8,9 @@ Prefer the standard library and small, replaceable interfaces. A dependency is
 accepted only when its maintained implementation meaningfully reduces risk or
 work compared with owning the code.
 
-The Topic 02 CLI has zero runtime dependencies. Development and build
+The Topic 02 CLI began with zero runtime dependencies. The implemented capsule
+and trace formats now use the `jsonschema` reference validator and a
+parity-tested `jsonschema-rs` runtime validator. Development, build, and runtime
 dependencies are declared in `pyproject.toml`, resolved in `uv.lock`, and
 listed in `THIRD_PARTY_NOTICES.md`.
 

@@ -70,7 +70,9 @@ hook repositories.
 uv build
 ```
 
-The result is a pure-Python wheel and source distribution under `dist/`. Build
+The result is a platform-independent SOVA wheel and source distribution under
+`dist/`. Runtime installation also resolves the locked JSON Schema validators;
+`jsonschema-rs` is distributed as a platform wheel on supported targets. Build
 outputs are ignored. The pre-alpha package has not been published to PyPI.
 
 ## Platform notes

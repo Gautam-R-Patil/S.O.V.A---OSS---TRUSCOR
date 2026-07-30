@@ -1,8 +1,8 @@
 # Third-party dependency and tool notices
 
-SOVA OSS `0.1.0a0` uses one small pure-Python runtime validation dependency and
-an optional signing extra. The following projects support the runtime, build,
-test, review, or automation workflow and are not vendored into this repository.
+SOVA OSS `0.1.0a0` uses JSON Schema 2020-12 validators and an optional signing
+extra. The following projects support the runtime, build, test, review, or
+automation workflow and are not vendored into this repository.
 
 | Project | Role | Licence | Source |
 |---|---|---|---|
@@ -10,6 +10,7 @@ test, review, or automation workflow and are not vendored into this repository.
 | `cryptography` | Optional Ed25519 signing and verification; development tests | Apache-2.0 or BSD-3-Clause | [pyca/cryptography](https://github.com/pyca/cryptography) |
 | `hypothesis` | Development-only property-based testing | MPL-2.0 | [HypothesisWorks/hypothesis](https://github.com/HypothesisWorks/hypothesis) |
 | `jsonschema` | JSON Schema 2020-12 runtime validation | MIT | [python-jsonschema/jsonschema](https://github.com/python-jsonschema/jsonschema) |
+| `jsonschema-rs` | High-throughput JSON Schema 2020-12 runtime validation; parity-tested against `jsonschema` | MIT | [Stranger6667/jsonschema](https://github.com/Stranger6667/jsonschema) |
 | `mypy` | Static type checking | MIT | [python/mypy](https://github.com/python/mypy) |
 | `pip-audit` | Python dependency vulnerability audit | Apache-2.0 | [pypa/pip-audit](https://github.com/pypa/pip-audit) |
 | `pre-commit` | Local quality-hook runner | MIT | [pre-commit/pre-commit](https://github.com/pre-commit/pre-commit) |

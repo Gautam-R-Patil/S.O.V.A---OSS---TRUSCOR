@@ -66,8 +66,8 @@ It provides:
 - the canonical `sova-oss` Python distribution, `sova` import namespace, and
   `sova` command;
 - CPython 3.11–3.14 support across Windows, macOS, and Linux CI;
-- a small schema-validation runtime dependency, optional Ed25519 signing extra,
-  and no SOVA-hosted service requirement;
+- pinned JSON Schema 2020-12 validators, an optional Ed25519 signing extra, and
+  no SOVA-hosted service requirement;
 - locked development dependencies, formatting, linting, strict typing, branch
   coverage, dependency audit, CodeQL, secret scanning, and build checks;
 - deterministic seeds, compatibility directories, provenance-controlled

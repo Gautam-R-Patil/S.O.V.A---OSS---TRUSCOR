@@ -213,7 +213,8 @@ def test_reader_rejects_empty_duplicate_and_resource_hostile_archives(
     duplicate = tmp_path / "duplicate.sova"
     with zipfile.ZipFile(duplicate, "w") as archive:
         archive.writestr("manifest.json", b"{}")
-        archive.writestr("manifest.json", b"{}")
+        with pytest.warns(UserWarning, match="Duplicate name"):
+            archive.writestr("manifest.json", b"{}")
     with pytest.raises(FormatError) as duplicate_error:
         PackageReader(duplicate).raw_manifest()
     assert duplicate_error.value.issue.code == "SOVA-PACKAGE-DUPLICATE-PATH"
