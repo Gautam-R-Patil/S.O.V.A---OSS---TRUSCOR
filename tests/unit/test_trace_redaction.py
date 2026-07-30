@@ -31,7 +31,7 @@ def test_default_redaction_omits_secret_values_before_persistence() -> None:
 
 
 def test_keyed_commitments_are_explicit_and_not_plain_hashes() -> None:
-    policy = RedactionPolicy(method="keyed-commitment", commitment_key=b"local-review-key")
+    policy = RedactionPolicy(method="keyed-commitment", commitment_key=b"k" * 32)
     redacted, records = Redactor(policy).redact({"token": "same-secret"})
     assert records[0]["method"] == "keyed-commitment"
     assert "commitment" in redacted["token"]["$redacted"]
@@ -41,7 +41,7 @@ def test_keyed_commitments_are_explicit_and_not_plain_hashes() -> None:
 def test_keyed_commitments_are_canonical_path_and_context_bound() -> None:
     policy = RedactionPolicy(
         method="keyed-commitment",
-        commitment_key=b"local-review-key",
+        commitment_key=b"k" * 32,
         key_id="fixture-key",
     )
     first, first_records = Redactor(policy, context_id="trace-a").redact(
@@ -83,6 +83,7 @@ def test_raw_environment_is_never_snapshotted() -> None:
     [
         ({"method": "unknown"}, "SOVA-REDACTION-METHOD"),
         ({"method": "keyed-commitment"}, "SOVA-REDACTION-KEY"),
+        ({"method": "keyed-commitment", "commitment_key": b"low-entropy"}, "SOVA-REDACTION-KEY"),
         (
             {"method": "encrypted", "encryption_key": b"short"},
             "SOVA-REDACTION-ENCRYPTION-KEY",
@@ -109,7 +110,7 @@ def test_secret_shaped_values_and_list_members_are_redacted() -> None:
 
 
 def test_defensive_missing_key_checks_remain_active() -> None:
-    commitment = RedactionPolicy(method="keyed-commitment", commitment_key=b"key")
+    commitment = RedactionPolicy(method="keyed-commitment", commitment_key=b"k" * 32)
     object.__setattr__(commitment, "commitment_key", None)
     with pytest.raises(FormatError) as commitment_error:
         Redactor(commitment).redact({"token": "secret"})

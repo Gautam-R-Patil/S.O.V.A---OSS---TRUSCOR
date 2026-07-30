@@ -49,6 +49,11 @@ have independent version ledgers.
   substitution, signature-confusion, redaction, and hostile-extension tests.
 - Secret values and provider exception messages are excluded from durable
   capsules and normal trace outcomes by tested boundaries.
+- Keyed redaction commitments reject missing or sub-32-byte key material before
+  capture; operators must still supply genuinely high-entropy keys.
+- The threat model explicitly records that standalone offline verification
+  cannot detect byte-identical replay or valid-signer equivocation without
+  trusted external freshness or transparency state.
 
 ## [0.1.0a0] - Unreleased
 

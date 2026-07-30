@@ -22,6 +22,7 @@ _SECRET_VALUE = re.compile(
     r"(?i)(?:bearer\s+[a-z0-9._~+/=-]{12,}|sk-[a-z0-9_-]{12,}|gh[oprsu]_[a-z0-9]{20,})"
 )
 _AES256_KEY_BYTES = 32
+_COMMITMENT_KEY_MIN_BYTES = 32
 _SAFE_ENVIRONMENT_KEYS = frozenset(
     {
         "CI",
@@ -52,10 +53,13 @@ class RedactionPolicy:
                 "SOVA-REDACTION-METHOD",
                 "redaction method must be omitted, keyed-commitment, or encrypted",
             )
-        if self.method == "keyed-commitment" and not self.commitment_key:
+        if self.method == "keyed-commitment" and (
+            self.commitment_key is None or len(self.commitment_key) < _COMMITMENT_KEY_MIN_BYTES
+        ):
             raise FormatError(
                 "SOVA-REDACTION-KEY",
-                "keyed-commitment redaction requires an operator-supplied key",
+                "keyed-commitment redaction requires at least 32 bytes of "
+                "operator-supplied high-entropy key material",
             )
         if self.method == "encrypted" and (
             self.encryption_key is None or len(self.encryption_key) != _AES256_KEY_BYTES

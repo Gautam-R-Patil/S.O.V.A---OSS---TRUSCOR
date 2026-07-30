@@ -30,8 +30,11 @@ The corresponding event records the path, data class, and method.
 Unkeyed hashes of secrets are prohibited because low-entropy values are
 vulnerable to dictionary recovery. Keyed commitments are opt-in, domain
 separated, bound to canonical type/path/value bytes, and use a context-derived
-key. The key is never stored in the trace. They are private comparison tokens,
-not public selective-disclosure proofs.
+key. The reference implementation rejects keys shorter than 32 bytes; callers
+must generate high-entropy key material rather than deriving it from a
+password. Key length does not make a low-entropy source value undiscoverable
+if the key is compromised. The key is never stored in the trace. Commitments
+are private comparison tokens, not public selective-disclosure proofs.
 
 Encrypted placeholders use AES-256-GCM over canonical JSON with policy, class,
 encoding, and path as authenticated data. They are explicitly marked as

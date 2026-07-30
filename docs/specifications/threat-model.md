@@ -30,6 +30,7 @@
 - event modification/insertion/deletion/reordering detection for covered bytes;
 - manifest/signature binding;
 - capture-time structural secret omission;
+- rejection of unkeyed or short-key secret commitments;
 - unknown required feature rejection;
 - inert inspection and explicit re-execution boundary;
 - migration provenance and non-overwrite.
@@ -50,6 +51,9 @@
 - correctness of an oracle, judge, finding, hypothesis, or attribution;
 - signer identity from an included key;
 - trusted time without an external timestamp authority;
+- replay or freshness detection without trusted external state;
+- detection of a valid signer's conflicting traces without a trusted
+  transparency or consistency service;
 - confidentiality of unencrypted bytes;
 - recovery of a trace never flushed to durable storage;
 - power-loss durability on filesystems/platforms that do not honor the
@@ -83,6 +87,10 @@ path traversal, undeclared members, byte substitution, sequence reordering,
 event-chain mismatch, signature substitution, unknown required features,
 secret omission, environment allowlisting, partial/recovered states,
 redaction-record mismatch, and required-key verification.
+Short commitment keys fail before capture. Negative controls confirm that a
+byte-identical replay and two different traces signed by the same valid key
+remain individually valid offline; SOVA does not misrepresent those cases as
+detectable without an external freshness/transparency policy.
 
 Still required before `1.0`: fuzzing at scale, independent parser agreement,
 cross-language canonical digests, zip-bomb corpus review, encryption/selective
