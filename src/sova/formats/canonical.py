@@ -180,10 +180,13 @@ def _canonical_render(value: Any, path: str = "$") -> str:
         _validate_canonical_scalar(value, path)
         return json.dumps(value, ensure_ascii=False, allow_nan=False)
     if isinstance(value, (list, tuple)):
-        return "[" + ",".join(
-            _canonical_render(child, f"{path}[{index}]")
-            for index, child in enumerate(value)
-        ) + "]"
+        return (
+            "["
+            + ",".join(
+                _canonical_render(child, f"{path}[{index}]") for index, child in enumerate(value)
+            )
+            + "]"
+        )
     if isinstance(value, Mapping):
         if not all(isinstance(key, str) for key in value):
             raise FormatError(
@@ -192,10 +195,14 @@ def _canonical_render(value: Any, path: str = "$") -> str:
                 path=path,
             )
         ordered = sorted(value, key=_utf16_sort_key)
-        return "{" + ",".join(
-            f"{_canonical_render(key, path)}:{_canonical_render(value[key], f'{path}.{key}')}"
-            for key in ordered
-        ) + "}"
+        return (
+            "{"
+            + ",".join(
+                f"{_canonical_render(key, path)}:{_canonical_render(value[key], f'{path}.{key}')}"
+                for key in ordered
+            )
+            + "}"
+        )
     raise FormatError(
         "SOVA-FORMAT-NONCANONICAL-VALUE",
         "value cannot be represented as canonical SOVA JSON",

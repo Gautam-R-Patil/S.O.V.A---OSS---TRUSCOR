@@ -60,10 +60,7 @@ _FAMILY_ROWS = (
     ("recovery.", "integrity-metadata", "lifecycle", "event", False),
 )
 
-EVENT_FAMILIES = {
-    row[0]: EventFamily(*row)
-    for row in _FAMILY_ROWS
-}
+EVENT_FAMILIES = {row[0]: EventFamily(*row) for row in _FAMILY_ROWS}
 
 
 def event_registry_digest() -> str:

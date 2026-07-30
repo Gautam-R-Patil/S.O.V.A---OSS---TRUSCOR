@@ -28,10 +28,7 @@ _DIGEST = sha256_digest(_FIXTURE)
 def _scenario() -> dict[str, Any]:
     document = strict_json_loads(
         (
-            Path(__file__).parents[2]
-            / "examples"
-            / "scenarios"
-            / "portable-artifact-read.json"
+            Path(__file__).parents[2] / "examples" / "scenarios" / "portable-artifact-read.json"
         ).read_bytes()
     )
     assert isinstance(document, dict)
@@ -156,11 +153,7 @@ def test_runner_blocks_unsupported_capability_and_denied_authorization(
     assert result.completion == "failed"
     assert result.steps_attempted == 0
     assert TraceReader(unsupported_path).verify().completion == "failed"
-    assert list(
-        TraceReader(unsupported_path).query(
-            kind_prefix="blocked.unsupported-capability"
-        )
-    )
+    assert list(TraceReader(unsupported_path).query(kind_prefix="blocked.unsupported-capability"))
 
     with pytest.raises(FormatError, match="fresh allowed"):
         run_capsule(
@@ -252,9 +245,7 @@ def test_runner_enforces_expanded_step_budget_before_execution(
     assert result.completion == "failed"
     assert result.steps_attempted == 0
     assert not executor.complete
-    assert list(
-        TraceReader(trace_path).query(kind_prefix="blocked.execution-budget")
-    )
+    assert list(TraceReader(trace_path).query(kind_prefix="blocked.execution-budget"))
 
 
 def test_runner_rejects_invalid_step_budget_before_trace_creation(

@@ -33,9 +33,7 @@ class Ed25519Keypair:
 def _crypto() -> tuple[Any, Any, Any]:
     try:
         serialization = importlib.import_module("cryptography.hazmat.primitives.serialization")
-        ed25519 = importlib.import_module(
-            "cryptography.hazmat.primitives.asymmetric.ed25519"
-        )
+        ed25519 = importlib.import_module("cryptography.hazmat.primitives.asymmetric.ed25519")
     except ImportError as error:
         raise FormatError(
             "SOVA-INTEGRITY-SIGNING-UNAVAILABLE",

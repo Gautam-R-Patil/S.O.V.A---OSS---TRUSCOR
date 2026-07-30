@@ -77,9 +77,7 @@ def test_signed_trace_round_trip_and_offline_verification(tmp_path: Path) -> Non
     assert report.trust_policy == "required-key"
     assert "non-repudiable" in report.limitations[-1]
     assert [event["sequence"] for event in reader.events()] == [0, 1, 2, 3]
-    assert [event["kind"] for event in reader.query(kind_prefix="model.")] == [
-        "model.response"
-    ]
+    assert [event["kind"] for event in reader.query(kind_prefix="model.")] == ["model.response"]
     assert reader.playback()[0].startswith("000000 ")
     view = reader.disclosure_view(sequences={0, 2}, include_payload=False)
     assert view["selectedEventCount"] == 2
@@ -217,9 +215,7 @@ def test_signed_statement_shape_and_binding_are_verified(tmp_path: Path) -> None
             )
         )
         material["envelope"]["payload"] = base64.b64encode(payload).decode("ascii")
-        material["envelope"]["signatures"][0]["sig"] = base64.b64encode(signature).decode(
-            "ascii"
-        )
+        material["envelope"]["signatures"][0]["sig"] = base64.b64encode(signature).decode("ascii")
         return changed
 
     with pytest.raises(FormatError) as non_object:
@@ -498,9 +494,7 @@ def test_reordering_is_detected_even_if_package_descriptor_is_recomputed(tmp_pat
             path=descriptor.path,
             media_type=descriptor.mediaType,
             data=(
-                reversed_data
-                if descriptor.path == segment.path
-                else reader.read_object(descriptor)
+                reversed_data if descriptor.path == segment.path else reader.read_object(descriptor)
             ),
         )
     complete = writer.finalized_manifest()
@@ -513,9 +507,7 @@ def test_reordering_is_detected_even_if_package_descriptor_is_recomputed(tmp_pat
             path=descriptor.path,
             media_type=descriptor.mediaType,
             data=(
-                reversed_data
-                if descriptor.path == segment.path
-                else reader.read_object(descriptor)
+                reversed_data if descriptor.path == segment.path else reader.read_object(descriptor)
             ),
         )
     final.write(changed)
@@ -532,8 +524,8 @@ def test_signature_substitution_is_detected(tmp_path: Path) -> None:
     manifest = reader.manifest("sova.trace")
     signature = manifest["integrity"]["signature"]["envelope"]["signatures"][0]["sig"]
     manifest["integrity"]["signature"]["envelope"]["signatures"][0]["sig"] = (
-        ("A" if signature[0] != "A" else "B") + signature[1:]
-    )
+        "A" if signature[0] != "A" else "B"
+    ) + signature[1:]
     manifest.pop("objects")
     writer = PackageWriter(manifest)
     for descriptor in reader.verify():

@@ -281,9 +281,7 @@ class TraceWriter:
                     "encoding": "sova-canonical-json/0.1",
                 }
             }
-            redactions = [
-                {"path": "$", "class": "event-content", "method": "omitted"}
-            ]
+            redactions = [{"path": "$", "class": "event-content", "method": "omitted"}]
         else:
             redacted_payload, redactions = self.redactor.redact(payload)
         event: dict[str, Any] = {
@@ -425,9 +423,7 @@ class TraceWriter:
                 "truncation": "bounded-segments-and-package-limits",
                 "droppedEventCount": self._dropped_event_count,
                 "dropReasons": (
-                    []
-                    if self._dropped_event_count == 0
-                    else ["capture-profile-filter"]
+                    [] if self._dropped_event_count == 0 else ["capture-profile-filter"]
                 ),
             },
             "eventCount": self._sequence,
@@ -615,9 +611,7 @@ def recover_trace(  # noqa: PLR0912, PLR0915
             "sampling": "none",
             "truncation": "force-interruption-recovery",
             "droppedEventCount": 1 if discarded_tail_bytes else 0,
-            "dropReasons": (
-                [] if discarded_tail_bytes == 0 else ["incomplete-final-record"]
-            ),
+            "dropReasons": ([] if discarded_tail_bytes == 0 else ["incomplete-final-record"]),
         },
         "eventCount": event_count,
         "chainRoot": previous_hash,
@@ -661,9 +655,7 @@ def recover_trace(  # noqa: PLR0912, PLR0915
             data=data,
         )
     complete_manifest = initial_writer.finalized_manifest()
-    complete_manifest["integrity"]["manifestDigest"] = unsigned_manifest_digest(
-        complete_manifest
-    )
+    complete_manifest["integrity"]["manifestDigest"] = unsigned_manifest_digest(complete_manifest)
     if signing_key is not None:
         complete_manifest["integrity"]["signature"] = sign_trace_manifest(
             complete_manifest,

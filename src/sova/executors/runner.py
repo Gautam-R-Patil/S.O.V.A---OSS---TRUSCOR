@@ -100,11 +100,7 @@ def run_capsule(  # noqa: PLR0913
     scenario, artifacts = _load(capsule)
     steps = _expanded_steps(scenario)
     max_steps = scenario["safety"]["budgets"].get("maxSteps")
-    if (
-        isinstance(max_steps, bool)
-        or not isinstance(max_steps, int)
-        or max_steps < 1
-    ):
+    if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps < 1:
         raise FormatError(
             "SOVA-RUN-STEP-BUDGET",
             "scenario safety budget requires a positive integer maxSteps",
@@ -164,9 +160,7 @@ def run_capsule(  # noqa: PLR0913
             id=step["id"],
             action=step["action"],
             inputs=step["inputs"],
-            timeout_seconds=float(
-                scenario["safety"]["budgets"].get("maxStepSeconds", 30)
-            ),
+            timeout_seconds=float(scenario["safety"]["budgets"].get("maxStepSeconds", 30)),
         )
         requested = writer.append(
             "tool.requested",
@@ -184,9 +178,7 @@ def run_capsule(  # noqa: PLR0913
         )
         outcome = executor.execute(request, context, token)
         event_kind = (
-            "tool.completed"
-            if outcome.status == OutcomeStatus.SUCCEEDED
-            else "tool.failed"
+            "tool.completed" if outcome.status == OutcomeStatus.SUCCEEDED else "tool.failed"
         )
         writer.append(
             event_kind,

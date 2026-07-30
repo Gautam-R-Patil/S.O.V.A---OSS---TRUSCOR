@@ -105,14 +105,11 @@ def run(output_directory: Path) -> dict[str, Any]:
     return {
         "fixture": "tests/fixtures/codex-safe",
         "runs": results,
-        "observableResponseDigests": [
-            sha256_digest(value) for value in canonical_outcomes
-        ],
+        "observableResponseDigests": [sha256_digest(value) for value in canonical_outcomes],
         "semanticFieldsSatisfied": [
             {
                 "baseline": outcome.get("baseline") == "SAFE_OK",
-                "simulatedTurns": outcome.get("simulatedTurns")
-                == ["TURN_1_ACK", "TURN_2_ACK"],
+                "simulatedTurns": outcome.get("simulatedTurns") == ["TURN_1_ACK", "TURN_2_ACK"],
                 "toolObservation": outcome.get("toolObservation") == "READ_ONLY_FIXTURE",
                 "refusal": outcome.get("refusal") == "REFUSED",
                 "conditional": outcome.get("conditional") == "TRIGGERED",

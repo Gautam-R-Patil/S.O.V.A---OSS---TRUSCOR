@@ -23,10 +23,7 @@ def golden_bytes() -> bytes:
     previous_hash: str | None = None
     previous_id: str | None = None
     for sequence, prefix in enumerate(EVENT_FAMILIES):
-        event_id = (
-            "sova:event:018f7f8a-6d1e-7b2a-8d0f-"
-            f"{sequence + 1:012x}"
-        )
+        event_id = f"sova:event:018f7f8a-6d1e-7b2a-8d0f-{sequence + 1:012x}"
         event = {
             "artifactType": "sova.event",
             "schemaVersion": "0.1.0",

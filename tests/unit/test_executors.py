@@ -344,9 +344,7 @@ def test_local_process_denies_untrusted_paths_and_environment(
     )
     assert not_absolute.error_code == "SOVA-LOCAL-EXECUTABLE-NOT-ABSOLUTE"
 
-    denied = RestrictedLocalExecutor(
-        executable_allowlist=(tmp_path / "not-python",)
-    ).execute(
+    denied = RestrictedLocalExecutor(executable_allowlist=(tmp_path / "not-python",)).execute(
         _request("process.exec", {"argv": [sys.executable, "-c", "print('no')"]}),
         context,
         CancellationToken(),

@@ -41,9 +41,7 @@ def test_golden_corpus_covers_every_registered_event_family() -> None:
         assert event["parents"] == ([] if previous_id is None else [previous_id])
         assert event_hash(event) == event["eventHash"]
         prefix = next(
-            candidate
-            for candidate in EVENT_FAMILIES
-            if event["kind"].startswith(candidate)
+            candidate for candidate in EVENT_FAMILIES if event["kind"].startswith(candidate)
         )
         seen_prefixes.add(prefix)
         previous_hash = event["eventHash"]

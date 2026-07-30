@@ -17,9 +17,7 @@ if TYPE_CHECKING:
 
 CURRENT_VERSION = "0.1.0"
 Migration = Callable[[dict[str, Any]], dict[str, Any]]
-SUPPORTED_REQUIRED_FEATURES = frozenset(
-    {"capsule.core/0.1", "scenario.core/0.1", "trace.core/0.1"}
-)
+SUPPORTED_REQUIRED_FEATURES = frozenset({"capsule.core/0.1", "scenario.core/0.1", "trace.core/0.1"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,8 +66,7 @@ def _v001_to_v002(source: dict[str, Any]) -> dict[str, Any]:
         result["domainProfile"] = mapping[raw]
     authors = result.get("authors", [])
     result["authors"] = [
-        {"name": author} if isinstance(author, str) else author
-        for author in authors
+        {"name": author} if isinstance(author, str) else author for author in authors
     ]
     return result
 
@@ -117,9 +114,7 @@ def _v002_to_v010(source: dict[str, Any]) -> dict[str, Any]:
     result.setdefault(
         "citation",
         {
-            "preferred": (
-                f"{result.get('title', 'Untitled')}. Migrated SOVA behavior capsule."
-            ),
+            "preferred": (f"{result.get('title', 'Untitled')}. Migrated SOVA behavior capsule."),
             "identifiers": [],
         },
     )
@@ -272,9 +267,13 @@ def analyze_migration(
     }
     preserved_unknown = tuple(sorted(set(source) - known_v002))
     assumptions = (
-        "newly required historical context is recorded as unknown-after-migration",
-        "fresh authorization remains required for re-execution",
-    ) if edges else ()
+        (
+            "newly required historical context is recorded as unknown-after-migration",
+            "fresh authorization remains required for re-execution",
+        )
+        if edges
+        else ()
+    )
     return MigrationAnalysis(
         source_version=source_version,
         destination_version=destination_version,
@@ -294,9 +293,11 @@ def migrate_manifest(
     """Migrate a manifest while preserving source bytes and explicit lineage."""
     analysis = analyze_migration(source, destination_version=destination_version)
     if analysis.blockers:
-        unsupported = sorted(
-            set(source.get("requiredFeatures", [])) - SUPPORTED_REQUIRED_FEATURES
-        ) if isinstance(source.get("requiredFeatures", []), list) else []
+        unsupported = (
+            sorted(set(source.get("requiredFeatures", [])) - SUPPORTED_REQUIRED_FEATURES)
+            if isinstance(source.get("requiredFeatures", []), list)
+            else []
+        )
         if unsupported:
             raise FormatError(
                 "SOVA-MIGRATE-UNKNOWN-REQUIRED-FEATURE",

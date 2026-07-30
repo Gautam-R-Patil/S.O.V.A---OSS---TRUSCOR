@@ -19,9 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def _capsule(tmp_path: Path) -> Path:
     scenario = json.loads(
-        (ROOT / "examples" / "scenarios" / "conditional-trigger.json").read_text(
-            encoding="utf-8"
-        )
+        (ROOT / "examples" / "scenarios" / "conditional-trigger.json").read_text(encoding="utf-8")
     )
     manifest = capsule_manifest_template(
         title=scenario["title"],

@@ -229,9 +229,7 @@ class TraceReader:
         """
         manifest = self.manifest()
         selected = [
-            event
-            for event in self.events()
-            if sequences is None or event["sequence"] in sequences
+            event for event in self.events() if sequences is None or event["sequence"] in sequences
         ]
         rendered_events: list[dict[str, Any]] = []
         for event in selected:

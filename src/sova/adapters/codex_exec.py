@@ -223,12 +223,29 @@ class CodexExecAdapter:
                 "SOVA-CODEX-UNSAFE-FIXTURE",
                 "Codex runs require an isolated directory with a .sova-codex-fixture marker",
             )
-        forbidden = {"private", ".git", ".codex", "confidential"}
-        if any(part.casefold() in forbidden for part in resolved.parts):
+        forbidden_everywhere = {".git", ".codex", "confidential"}
+        if any(part.casefold() in forbidden_everywhere for part in resolved.parts):
             raise FormatError(
                 "SOVA-CODEX-UNSAFE-FIXTURE",
                 "fixture path crosses a forbidden project or confidential boundary",
             )
+        repository_root = next(
+            (
+                candidate
+                for candidate in (resolved, *resolved.parents)
+                if (candidate / ".git").exists()
+            ),
+            None,
+        )
+        if repository_root is not None:
+            relative_parts = {
+                part.casefold() for part in resolved.relative_to(repository_root).parts
+            }
+            if "private" in relative_parts:
+                raise FormatError(
+                    "SOVA-CODEX-UNSAFE-FIXTURE",
+                    "fixture path crosses a forbidden project or confidential boundary",
+                )
 
     @staticmethod
     def _validate_child(path: Path, parent: Path) -> None:

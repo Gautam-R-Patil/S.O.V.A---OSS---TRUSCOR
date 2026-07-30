@@ -89,10 +89,13 @@ def canonical(value: Any) -> bytes:
         if isinstance(item, Mapping):
             if not all(isinstance(name, str) for name in item):
                 raise VerificationError("non-string JSON member name")
-            return "{" + ",".join(
-                f"{render(name)}:{render(item[name])}"
-                for name in sorted(item, key=_key)
-            ) + "}"
+            return (
+                "{"
+                + ",".join(
+                    f"{render(name)}:{render(item[name])}" for name in sorted(item, key=_key)
+                )
+                + "}"
+            )
         raise VerificationError("non-JSON canonical value")
 
     return render(value).encode("utf-8")
@@ -135,12 +138,8 @@ def _archive(path: Path) -> tuple[dict[str, bytes], bytes]:
                 raise VerificationError("special archive member")
             if info.file_size > MAX_ENTRY_BYTES:
                 raise VerificationError("archive member too large")
-            if (
-                info.file_size > MIN_RATIO_CHECK_BYTES
-                and (
-                    info.compress_size == 0
-                    or info.file_size / info.compress_size > MAX_RATIO
-                )
+            if info.file_size > MIN_RATIO_CHECK_BYTES and (
+                info.compress_size == 0 or info.file_size / info.compress_size > MAX_RATIO
             ):
                 raise VerificationError("unsafe compression ratio")
             total += info.file_size
@@ -200,8 +199,7 @@ def _redactions(value: Any, path: str = "$") -> list[tuple[str, str, str]]:
                 not isinstance(marker, dict)
                 or marker.get("present") is not True
                 or not all(
-                    isinstance(marker.get(field), str)
-                    for field in ("class", "method", "encoding")
+                    isinstance(marker.get(field), str) for field in ("class", "method", "encoding")
                 )
             ):
                 raise VerificationError("malformed redaction placeholder")

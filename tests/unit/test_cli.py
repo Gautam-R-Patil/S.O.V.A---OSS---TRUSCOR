@@ -116,12 +116,16 @@ def test_lint_verify_format_and_json_validation_commands(
     assert main(["format", str(scenario)]) == 0
     formatted = capfd.readouterr().out
     assert json.loads(formatted)["artifactType"] == "sova.scenario"
-    assert formatted == json.dumps(
-        json.loads(formatted),
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ) + "\n"
+    assert (
+        formatted
+        == json.dumps(
+            json.loads(formatted),
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
+    )
 
 
 def test_trace_validate_verify_and_playback_commands(

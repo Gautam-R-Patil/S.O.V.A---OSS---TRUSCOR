@@ -42,9 +42,7 @@ def test_chained_migration_preserves_source_and_unknown_optional_data() -> None:
     assert migrated["summary"] == source["description"]
     assert migrated["domainProfile"] == "security"
     assert migrated["authors"] == [{"name": "Gautam R. Patil"}]
-    assert migrated["extensions"]["x-sova-legacy"] == {
-        "customMetadata": {"preserve": True}
-    }
+    assert migrated["extensions"]["x-sova-legacy"] == {"customMetadata": {"preserve": True}}
     assert migrated["migration"]["path"] == ["0.0.1->0.0.2", "0.0.2->0.1.0"]
     assert migrated["authorization"]["reexecutionRequiresFreshAuthorization"] is True
 

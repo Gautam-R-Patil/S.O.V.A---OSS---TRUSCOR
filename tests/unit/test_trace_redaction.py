@@ -47,18 +47,12 @@ def test_keyed_commitments_are_canonical_path_and_context_bound() -> None:
     first, first_records = Redactor(policy, context_id="trace-a").redact(
         {"token": {"b": 2, "a": 1}}
     )
-    same, _same_records = Redactor(policy, context_id="trace-a").redact(
-        {"token": {"a": 1, "b": 2}}
-    )
+    same, _same_records = Redactor(policy, context_id="trace-a").redact({"token": {"a": 1, "b": 2}})
     other, _other_records = Redactor(policy, context_id="trace-b").redact(
         {"token": {"a": 1, "b": 2}}
     )
-    assert first["token"]["$redacted"]["commitment"] == (
-        same["token"]["$redacted"]["commitment"]
-    )
-    assert first["token"]["$redacted"]["commitment"] != (
-        other["token"]["$redacted"]["commitment"]
-    )
+    assert first["token"]["$redacted"]["commitment"] == (same["token"]["$redacted"]["commitment"])
+    assert first["token"]["$redacted"]["commitment"] != (other["token"]["$redacted"]["commitment"])
     report = RedactionVerifier().verify(first, first_records)
     assert report.placeholders == report.records == 1
 
@@ -69,10 +63,7 @@ def test_encrypted_redaction_keeps_secret_out_of_plaintext() -> None:
     assert records[0]["method"] == "encrypted"
     assert redacted["password"]["$redacted"]["algorithm"] == "AES-256-GCM"
     assert "private-value" not in repr(redacted)
-    assert (
-        decrypt_placeholder(redacted["password"], encryption_key=b"e" * 32)
-        == "private-value"
-    )
+    assert decrypt_placeholder(redacted["password"], encryption_key=b"e" * 32) == "private-value"
 
 
 def test_raw_environment_is_never_snapshotted() -> None:

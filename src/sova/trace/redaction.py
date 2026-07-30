@@ -95,8 +95,7 @@ class Redactor:
             return result
         if isinstance(value, list):
             return [
-                self._walk(child, f"{path}[{index}]", records)
-                for index, child in enumerate(value)
+                self._walk(child, f"{path}[{index}]", records) for index, child in enumerate(value)
             ]
         if isinstance(value, str) and _SECRET_VALUE.search(value):
             return self._placeholder(value, path, records, "credential")
@@ -235,9 +234,7 @@ class RedactionVerifier:
             for item in records
             if {"path", "class", "method"} <= item.keys()
         )
-        actual = sorted(
-            (item["path"], item["class"], item["method"]) for item in found
-        )
+        actual = sorted((item["path"], item["class"], item["method"]) for item in found)
         if expected != actual:
             raise FormatError(
                 "SOVA-REDACTION-RECORD-MISMATCH",

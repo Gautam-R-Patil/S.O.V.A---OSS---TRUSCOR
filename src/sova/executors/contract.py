@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 _MAX_TIMEOUT_SECONDS = 3600
 
+
 class SideEffect(StrEnum):
     """Maximum declared side effect of an executor capability."""
 

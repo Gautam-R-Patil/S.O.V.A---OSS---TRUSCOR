@@ -151,6 +151,7 @@ def test_nonzero_codex_result_is_recorded_as_optional_failure(tmp_path: Path) ->
 
 
 def test_fixture_path_with_private_component_is_rejected(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
     fixture = tmp_path / "private" / "fixture"
     fixture.mkdir(parents=True)
     (fixture / ".sova-codex-fixture").write_text("synthetic\n", encoding="utf-8")

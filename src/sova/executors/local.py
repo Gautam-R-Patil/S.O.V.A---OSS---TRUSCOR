@@ -51,9 +51,7 @@ class RestrictedLocalExecutor:
                 "SOVA-LOCAL-OUTPUT-LIMIT",
                 "local output limit must be between 1 KiB and 64 MiB",
             )
-        self._executables = {
-            str(path.resolve()).casefold() for path in executable_allowlist
-        }
+        self._executables = {str(path.resolve()).casefold() for path in executable_allowlist}
         self._environment_allowlist = environment_allowlist
         self._max_output_bytes = max_output_bytes
 
@@ -225,9 +223,7 @@ class RestrictedLocalExecutor:
                     error_code="SOVA-LOCAL-ARGUMENT-ESCAPE",
                 )
         environment = self._environment(request.inputs.get("env", {}), context)
-        creationflags = (
-            subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
-        )
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
         with tempfile.TemporaryDirectory(prefix=".sova-process-", dir=workspace) as temporary:
             temporary_path = Path(temporary)
             stdout_path = temporary_path / "stdout"
@@ -308,8 +304,7 @@ class RestrictedLocalExecutor:
         context: ExecutionContext,
     ) -> dict[str, str]:
         if not isinstance(requested, dict) or not all(
-            isinstance(key, str) and isinstance(value, str)
-            for key, value in requested.items()
+            isinstance(key, str) and isinstance(value, str) for key, value in requested.items()
         ):
             raise FormatError(
                 "SOVA-LOCAL-ENVIRONMENT",
@@ -361,9 +356,7 @@ class RestrictedLocalExecutor:
             return
         if os.name == "nt":
             taskkill = (
-                Path(os.environ.get("SYSTEMROOT", r"C:\Windows"))
-                / "System32"
-                / "taskkill.exe"
+                Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "System32" / "taskkill.exe"
             )
             if taskkill.is_file():
                 subprocess.run(  # noqa: S603

@@ -129,9 +129,7 @@ def test_attachments_are_content_addressed_and_deduplicated(tmp_path: Path) -> N
         attachments={"first.txt": b"same", "renamed.txt": b"same"},
     )
     attachments = [
-        item
-        for item in PackageReader(path).verify("sova.capsule")
-        if item.role == "attachment"
+        item for item in PackageReader(path).verify("sova.capsule") if item.role == "attachment"
     ]
     assert len(attachments) == 1
     assert attachments[0].path == f"blobs/sha256/{attachments[0].digest[7:]}"

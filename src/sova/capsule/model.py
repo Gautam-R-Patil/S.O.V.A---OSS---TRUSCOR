@@ -269,11 +269,7 @@ def lint_scenario(document: dict[str, Any]) -> list[ValidationIssue]:
     known_sequences = set(sequence_ids)
     all_steps = [
         *document["procedure"]["steps"],
-        *(
-            step
-            for sequence in document["sequences"]
-            for step in sequence["steps"]
-        ),
+        *(step for sequence in document["sequences"] for step in sequence["steps"]),
     ]
     step_ids = [step["id"] for step in all_steps]
     if len(set(step_ids)) != len(step_ids):
