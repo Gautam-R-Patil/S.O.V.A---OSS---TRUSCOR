@@ -138,8 +138,13 @@ The local backend currently implements:
 Process execution uses an argv array with `shell=False`, an existing confined
 working directory, an environment allowlist that rejects secret-shaped keys,
 bounded stdout/stderr capture, timeout and cancellation polling, process-tree
-termination, and explicit cleanup of supervised children. Path-like arguments
-outside the workspace are denied.
+termination where the operating system permits it, and explicit cleanup of
+supervised children. On Windows, a failed or timed-out `taskkill /T` attempt
+falls back immediately to terminating and waiting for the owned root process;
+temporary I/O cleanup retries bounded transient handle-release failures.
+Path-like arguments outside the workspace are denied. This fallback does not
+guarantee termination of independently surviving descendants without a
+job-object or stronger containment backend.
 
 Per-action duration and output limits are enforced. Requested CPU, memory, or
 process-count limits are rejected as `unsupported` before process creation
@@ -169,8 +174,10 @@ The public conformance suite checks:
 - strict opaque `sova-secret:` reference validation and resolution without
   durable secret output;
 - pre-execution refusal of unenforceable CPU, memory, and process-count quotas;
-- supervised background status, timeout, stop, and close-time orphan cleanup;
-- cancellation and process-tree termination;
+- supervised background status, timeout, stop, owned-root cleanup, and bounded
+  temporary-handle cleanup;
+- cancellation and best-effort process-tree termination with a tested
+  Windows owned-root fallback;
 - unsupported browser/computer actions;
 - post-action verification fields;
 - the same `.sova` capsule producing the same material observation through

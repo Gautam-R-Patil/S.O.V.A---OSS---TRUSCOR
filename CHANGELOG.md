@@ -49,6 +49,13 @@ have independent version ledgers.
   resolution, supervised process lifecycle, explicit unsupported resource
   limits, and provider-crash normalization.
 
+### Fixed
+
+- Windows foreground/background cancellation now detects failed or timed-out
+  `taskkill /T` attempts, falls back immediately to the owned root process, and
+  retries transient temporary-I/O cleanup. Arbitrary descendant-tree
+  containment still requires a stronger operating-system backend.
+
 ### Security
 
 - Full-SHA pinning for GitHub Actions.

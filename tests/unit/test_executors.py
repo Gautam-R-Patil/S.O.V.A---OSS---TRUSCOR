@@ -25,6 +25,7 @@ from sova.executors import (
     SideEffect,
     negotiate,
 )
+from sova.executors.local import _cleanup_temporary
 from sova.executors.runner import _expanded_steps
 from sova.formats import sha256_digest
 from sova.formats.errors import FormatError
@@ -50,6 +51,30 @@ class _NonStringSecretProvider:
     def resolve(self, reference: str) -> str:
         del reference
         return cast("str", 42)
+
+
+class _FlakyCleanup:
+    def __init__(self, failures: int) -> None:
+        self.failures = failures
+        self.attempts = 0
+
+    def cleanup(self) -> None:
+        self.attempts += 1
+        if self.attempts <= self.failures:
+            raise PermissionError
+
+
+def test_background_cleanup_retries_transient_windows_handle_race() -> None:
+    resource = _FlakyCleanup(2)
+    _cleanup_temporary(resource, attempts=3, retry_seconds=0)
+    assert resource.attempts == 3
+
+
+def test_background_cleanup_preserves_persistent_failure() -> None:
+    resource = _FlakyCleanup(3)
+    with pytest.raises(PermissionError):
+        _cleanup_temporary(resource, attempts=3, retry_seconds=0)
+    assert resource.attempts == 3
 
 
 @pytest.fixture
@@ -771,7 +796,8 @@ def test_supervisor_enforces_background_cancellation(
         )
         handle = spawned.output["handle"]
         token.cancel()
-        deadline = time.monotonic() + 5
+        cancelled_at = time.monotonic()
+        deadline = cancelled_at + 5
         child_status = None
         while time.monotonic() < deadline:
             status = executor.execute(
@@ -784,6 +810,7 @@ def test_supervisor_enforces_background_cancellation(
                 break
             time.sleep(0.01)
         assert child_status == "cancelled"
+        assert time.monotonic() - cancelled_at < 5
         collected = executor.execute(
             _request("process.stop", {"handle": handle}),
             context,

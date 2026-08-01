@@ -13,7 +13,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import IO, Any, Self
+from typing import IO, Any, Protocol, Self
 
 from sova.executors.contract import (
     ActionOutcome,
@@ -40,6 +40,30 @@ _MIN_MEMORY_BYTES = 16 * 1024 * 1024
 _MAX_MEMORY_BYTES = 1024 * 1024 * 1024 * 1024
 _MAX_CPU_SECONDS = 86_400
 _MAX_PROCESSES = 1024
+_BACKGROUND_CLEANUP_ATTEMPTS = 100
+_BACKGROUND_CLEANUP_RETRY_SECONDS = 0.01
+
+
+class _CleanupResource(Protocol):
+    def cleanup(self) -> None: ...
+
+
+def _cleanup_temporary(
+    temporary: _CleanupResource,
+    *,
+    attempts: int = _BACKGROUND_CLEANUP_ATTEMPTS,
+    retry_seconds: float = _BACKGROUND_CLEANUP_RETRY_SECONDS,
+) -> None:
+    """Retry deletion while Windows releases inherited process I/O handles."""
+    for attempt in range(attempts):
+        try:
+            temporary.cleanup()
+        except PermissionError:
+            if attempt + 1 == attempts:
+                raise
+            time.sleep(retry_seconds)
+        else:
+            return
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,7 +144,7 @@ class RestrictedLocalExecutor:
                 self._close_background_handles(record)
             if record.monitor is not None and record.monitor is not threading.current_thread():
                 record.monitor.join(timeout=10)
-            record.temporary.cleanup()
+            _cleanup_temporary(record.temporary)
         self._closed = True
 
     def capabilities(self) -> tuple[Capability, ...]:
@@ -261,11 +285,12 @@ class RestrictedLocalExecutor:
         prepared = self._prepare_process(request, context)
         if isinstance(prepared, ActionOutcome):
             return prepared
-        with tempfile.TemporaryDirectory(
+        temporary = tempfile.TemporaryDirectory(
             prefix=".sova-process-",
             dir=context.workspace,
-        ) as temporary:
-            temporary_path = Path(temporary)
+        )
+        try:
+            temporary_path = Path(temporary.name)
             stdout_path = temporary_path / "stdout"
             stderr_path = temporary_path / "stderr"
             with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
@@ -305,6 +330,8 @@ class RestrictedLocalExecutor:
                 status = OutcomeStatus.PARTIAL
             stdout_data = stdout_path.read_bytes()[: prepared.limits.max_output_bytes]
             stderr_data = stderr_path.read_bytes()[: prepared.limits.max_output_bytes]
+        finally:
+            _cleanup_temporary(temporary)
         returncode = process.returncode
         outcome_status = (
             status
@@ -670,7 +697,7 @@ class RestrictedLocalExecutor:
             record.monitor.join(timeout=10)
         with self._background_lock:
             self._background.pop(record.handle, None)
-        record.temporary.cleanup()
+        _cleanup_temporary(record.temporary)
         return ActionOutcome(
             request.id,
             OutcomeStatus.SUCCEEDED,
@@ -860,12 +887,18 @@ class RestrictedLocalExecutor:
                 Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "System32" / "taskkill.exe"
             )
             if taskkill.is_file():
-                subprocess.run(  # noqa: S603
-                    [str(taskkill), "/PID", str(process.pid), "/T", "/F"],
-                    check=False,
-                    capture_output=True,
-                    timeout=10,
-                )
+                try:
+                    completed = subprocess.run(  # noqa: S603
+                        [str(taskkill), "/PID", str(process.pid), "/T", "/F"],
+                        check=False,
+                        capture_output=True,
+                        timeout=10,
+                    )
+                except (OSError, subprocess.TimeoutExpired):
+                    process.kill()
+                else:
+                    if completed.returncode != 0 and process.poll() is None:
+                        process.kill()
             else:
                 process.kill()
         else:
