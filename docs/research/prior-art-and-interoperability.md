@@ -181,7 +181,7 @@ record a content digest before installing anything.
 | garak | `0b51f87acda1c0ab22a88dff6fd304f3299c9ce4` | Recheck before installation | Red-team adapter candidate |
 | PyRIT | `0d239528377dc3216f27d074a730551ab037185c` | Recheck before installation | Red-team adapter candidate |
 | promptfoo | `ac8971fcfa961fa5fa96bcc4f527f5309b504997` | Recheck before installation | One-pass dynamic baseline |
-| OpenInference | `a1392c50d2d5b20fb805c195fb6006c80d5a6106` | Recheck before installation | Passive-recorder baseline |
+| OpenInference semantic conventions 0.1.30 | `789d41974c08a9a13147977f28ef4142a07e2106` | Apache-2.0; PyPI Trusted Publishing attestation and source commit verified 2026-08-01 | Passive-recorder and interoperability baseline |
 | Open Agent Security Benchmark | `5e4d4569573ddd8c1e4494ec23950a45cbdc9ca5` | Apache-2.0; verify nested corpus provenance | Security-product evaluation suite |
 | HackMyAgent | `4837510cb3afefea93920ed311a1749651a78188` | Apache-2.0 | Integrated scanner/red-team baseline |
 | AIR Blackbox | `e4184ab8c24f39c0027387704f2f8e27044c5f41` | Apache-2.0 | Integrated recorder/replay/evidence baseline |

@@ -32,6 +32,9 @@ have independent version ledgers.
   DSSE-compatible Ed25519 signatures, and offline verification.
 - Pinned OpenTelemetry/OpenInference import/export mappings with explicit
   fidelity-loss reports.
+- Privacy-minimizing OpenInference `0.1.30` import with explicit content
+  opt-in, sensitive-field accounting, bounded hostile-input handling, and a
+  corrected span-kind mapping that never emits the nonexistent `MEMORY` kind.
 - Deterministic scripted-model and scripted-executor lanes plus a restricted
   local host-process executor with exact capability negotiation.
 - Observable deterministic oracles, integrity-checked declared-outcome
