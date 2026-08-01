@@ -42,6 +42,13 @@ recoverable sensitive data. Encryption is not described as deletion,
 anonymization, or redaction, and public export should omit sealed blocks unless
 the recipient/key policy is explicit.
 
+Encrypted placeholders may opt into ISO/IEC 7816-4-style padding in a declared
+power-of-two bucket from 32 bytes through 1 MiB. The padding method and bucket
+size are authenticated as associated data. Padding prevents exact plaintext
+length recovery for values in the same bucket; it still reveals the bucket,
+placeholder presence, path records, and surrounding trace structure. It is not
+traffic-flow confidentiality or anonymity.
+
 ## Export review
 
 Before public export, the operator reviews prompts, responses, tool arguments,
@@ -64,7 +71,8 @@ Retention is operator-controlled and local. Withdrawal metadata cannot recall
 copies already shared. Redaction does not make a dataset anonymous, guarantee
 regulatory compliance, or establish consent.
 
-The current reference redactor supports AES-256-GCM placeholders through the
-optional signing/cryptography extra. The key is never stored in the trace.
-Cryptographic selective-disclosure proofs are not yet implemented; that remains
-an explicit extension gate rather than an implied capability.
+The current reference redactor supports AES-256-GCM placeholders and optional
+authenticated length buckets through the signing/cryptography extra. The key
+is never stored in the trace. Cryptographic selective-disclosure proofs are not
+yet implemented; that remains an explicit extension gate rather than an
+implied capability.

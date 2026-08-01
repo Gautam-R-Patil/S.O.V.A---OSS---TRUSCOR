@@ -57,6 +57,10 @@ have independent version ledgers.
   capsules and normal trace outcomes by tested boundaries.
 - Keyed redaction commitments reject missing or sub-32-byte key material before
   capture; operators must still supply genuinely high-entropy keys.
+- Encrypted redaction can use authenticated power-of-two length buckets;
+  decryption rejects padding metadata that disagrees with the authenticated
+  associated data. Bucket, presence, path, and surrounding-structure leakage
+  remain explicit limitations.
 - The threat model explicitly records that standalone offline verification
   cannot detect byte-identical replay or valid-signer equivocation without
   trusted external freshness or transparency state.

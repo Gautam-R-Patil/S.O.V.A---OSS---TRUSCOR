@@ -23,6 +23,8 @@ _SECRET_VALUE = re.compile(
 )
 _AES256_KEY_BYTES = 32
 _COMMITMENT_KEY_MIN_BYTES = 32
+_MIN_PADDING_BLOCK_BYTES = 32
+_MAX_PADDING_BLOCK_BYTES = 1024 * 1024
 _SAFE_ENVIRONMENT_KEYS = frozenset(
     {
         "CI",
@@ -36,6 +38,10 @@ _SAFE_ENVIRONMENT_KEYS = frozenset(
 )
 
 
+class _PaddingError(ValueError):
+    """Internal sentinel for malformed authenticated padding metadata."""
+
+
 @dataclass(frozen=True, slots=True)
 class RedactionPolicy:
     """A declared capture-time privacy policy."""
@@ -45,6 +51,7 @@ class RedactionPolicy:
     method: str = "omitted"
     commitment_key: bytes | None = None
     encryption_key: bytes | None = None
+    encryption_padding_bytes: int | None = None
     key_id: str | None = None
 
     def __post_init__(self) -> None:
@@ -67,6 +74,23 @@ class RedactionPolicy:
             raise FormatError(
                 "SOVA-REDACTION-ENCRYPTION-KEY",
                 "encrypted redaction requires a 32-byte operator-supplied key",
+            )
+        padding = self.encryption_padding_bytes
+        if padding is not None and self.method != "encrypted":
+            raise FormatError(
+                "SOVA-REDACTION-PADDING",
+                "encryption padding is only valid for encrypted redaction",
+            )
+        if padding is not None and (
+            not isinstance(padding, int)
+            or isinstance(padding, bool)
+            or padding < _MIN_PADDING_BLOCK_BYTES
+            or padding > _MAX_PADDING_BLOCK_BYTES
+            or padding & (padding - 1)
+        ):
+            raise FormatError(
+                "SOVA-REDACTION-PADDING",
+                "encryption padding must be a power of two from 32 bytes through 1 MiB",
             )
 
 
@@ -165,16 +189,20 @@ class Redactor:
                 ) from error
             nonce = secrets.token_bytes(12)
             plaintext = canonical_json_bytes(value)
+            padding = self.policy.encryption_padding_bytes
+            sealed_plaintext = _pad_plaintext(plaintext, padding) if padding else plaintext
             aad = canonical_json_bytes(
                 {
                     "class": secret_class,
                     "encoding": "sova-canonical-json/0.1",
+                    "padding": "iso7816-4" if padding else None,
+                    "paddingBlockBytes": padding,
                     "path": path,
                     "policy": self.policy.name,
                     "policyVersion": self.policy.version,
                 }
             )
-            ciphertext = AESGCM(encryption_key).encrypt(nonce, plaintext, aad)
+            ciphertext = AESGCM(encryption_key).encrypt(nonce, sealed_plaintext, aad)
             marker["$redacted"].update(
                 {
                     "algorithm": "AES-256-GCM",
@@ -185,6 +213,14 @@ class Redactor:
                     "recoverableSensitiveData": True,
                 }
             )
+            if padding:
+                marker["$redacted"].update(
+                    {
+                        "padding": "iso7816-4",
+                        "paddingBlockBytes": padding,
+                        "lengthLeakage": "bucketed",
+                    }
+                )
         return marker
 
 
@@ -212,6 +248,51 @@ def _redaction_material(value: Any, path: str) -> bytes:
             "value": value,
         }
     )
+
+
+def _pad_plaintext(plaintext: bytes, block_bytes: int) -> bytes:
+    required = block_bytes - (len(plaintext) % block_bytes)
+    return plaintext + b"\x80" + (b"\x00" * (required - 1))
+
+
+def _unpad_plaintext(plaintext: bytes, block_bytes: int) -> bytes:
+    if not plaintext or len(plaintext) % block_bytes:
+        raise _PaddingError
+    marker = plaintext.rfind(b"\x80")
+    if marker < 0 or any(plaintext[marker + 1 :]):
+        raise _PaddingError
+    if len(plaintext) - marker > block_bytes:
+        raise _PaddingError
+    return plaintext[:marker]
+
+
+def _authenticated_padding(marker: dict[str, Any], aad: bytes) -> int | None:
+    try:
+        metadata = strict_json_loads(aad)
+    except FormatError as error:
+        raise _PaddingError from error
+    if not isinstance(metadata, dict):
+        raise _PaddingError
+    if (
+        metadata.get("class") != marker.get("class")
+        or metadata.get("encoding") != marker.get("encoding")
+        or metadata.get("padding") != marker.get("padding")
+        or metadata.get("paddingBlockBytes") != marker.get("paddingBlockBytes")
+    ):
+        raise _PaddingError
+    padding = metadata.get("paddingBlockBytes")
+    if marker.get("padding") is None and padding is None:
+        return None
+    if (
+        marker.get("padding") != "iso7816-4"
+        or isinstance(padding, bool)
+        or not isinstance(padding, int)
+        or padding < _MIN_PADDING_BLOCK_BYTES
+        or padding > _MAX_PADDING_BLOCK_BYTES
+        or padding & (padding - 1)
+    ):
+        raise _PaddingError
+    return padding
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,6 +412,9 @@ def decrypt_placeholder(
         ciphertext = base64.urlsafe_b64decode(marker["ciphertext"])
         aad = base64.urlsafe_b64decode(marker["aad"])
         plaintext = AESGCM(encryption_key).decrypt(nonce, ciphertext, aad)
+        padding = _authenticated_padding(marker, aad)
+        if padding is not None:
+            plaintext = _unpad_plaintext(plaintext, padding)
     except (KeyError, TypeError, ValueError, InvalidTag) as error:
         raise FormatError(
             "SOVA-REDACTION-DECRYPT",

@@ -3,8 +3,12 @@
 
 from __future__ import annotations
 
-import pytest
+import base64
 
+import pytest
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+from sova.formats import canonical_json_bytes
 from sova.formats.errors import FormatError
 from sova.trace.redaction import (
     RedactionPolicy,
@@ -66,6 +70,56 @@ def test_encrypted_redaction_keeps_secret_out_of_plaintext() -> None:
     assert decrypt_placeholder(redacted["password"], encryption_key=b"e" * 32) == "private-value"
 
 
+def test_encrypted_redaction_can_bucket_length_with_authenticated_padding() -> None:
+    policy = RedactionPolicy(
+        method="encrypted",
+        encryption_key=b"e" * 32,
+        encryption_padding_bytes=64,
+    )
+    short, _short_records = Redactor(policy).redact({"password": "x"})
+    longer, _longer_records = Redactor(policy).redact({"password": "x" * 40})
+    short_marker = short["password"]["$redacted"]
+    longer_marker = longer["password"]["$redacted"]
+    assert short_marker["padding"] == "iso7816-4"
+    assert short_marker["paddingBlockBytes"] == 64
+    assert short_marker["lengthLeakage"] == "bucketed"
+    assert len(short_marker["ciphertext"]) == len(longer_marker["ciphertext"])
+    assert decrypt_placeholder(short["password"], encryption_key=b"e" * 32) == "x"
+    assert decrypt_placeholder(longer["password"], encryption_key=b"e" * 32) == "x" * 40
+
+
+def test_decrypt_placeholder_remains_compatible_with_unpadded_v01_aad() -> None:
+    key = b"e" * 32
+    nonce = b"n" * 12
+    plaintext = canonical_json_bytes("legacy-private-value")
+    aad = canonical_json_bytes(
+        {
+            "class": "credential",
+            "encoding": "sova-canonical-json/0.1",
+            "path": "$.password",
+            "policy": "sova.default",
+            "policyVersion": "0.1.0",
+        }
+    )
+    ciphertext = AESGCM(key).encrypt(nonce, plaintext, aad)
+    placeholder = {
+        "$redacted": {
+            "class": "credential",
+            "method": "encrypted",
+            "present": True,
+            "encoding": "sova-canonical-json/0.1",
+            "algorithm": "AES-256-GCM",
+            "keyId": None,
+            "nonce": base64.urlsafe_b64encode(nonce).decode("ascii"),
+            "ciphertext": base64.urlsafe_b64encode(ciphertext).decode("ascii"),
+            "aad": base64.urlsafe_b64encode(aad).decode("ascii"),
+            "recoverableSensitiveData": True,
+        }
+    }
+
+    assert decrypt_placeholder(placeholder, encryption_key=key) == "legacy-private-value"
+
+
 def test_raw_environment_is_never_snapshotted() -> None:
     captured = safe_environment(
         {
@@ -87,6 +141,34 @@ def test_raw_environment_is_never_snapshotted() -> None:
         (
             {"method": "encrypted", "encryption_key": b"short"},
             "SOVA-REDACTION-ENCRYPTION-KEY",
+        ),
+        (
+            {"method": "omitted", "encryption_padding_bytes": 64},
+            "SOVA-REDACTION-PADDING",
+        ),
+        (
+            {
+                "method": "encrypted",
+                "encryption_key": b"e" * 32,
+                "encryption_padding_bytes": "64",
+            },
+            "SOVA-REDACTION-PADDING",
+        ),
+        (
+            {
+                "method": "encrypted",
+                "encryption_key": b"e" * 32,
+                "encryption_padding_bytes": 64.0,
+            },
+            "SOVA-REDACTION-PADDING",
+        ),
+        (
+            {
+                "method": "encrypted",
+                "encryption_key": b"e" * 32,
+                "encryption_padding_bytes": 48,
+            },
+            "SOVA-REDACTION-PADDING",
         ),
     ],
 )
@@ -164,3 +246,27 @@ def test_decrypt_placeholder_rejects_wrong_shapes_keys_and_ciphertext() -> None:
     with pytest.raises(FormatError) as wrong_key:
         decrypt_placeholder(placeholder, encryption_key=b"x" * 32)
     assert wrong_key.value.issue.code == "SOVA-REDACTION-DECRYPT"
+
+    padded, _records = Redactor(
+        RedactionPolicy(
+            method="encrypted",
+            encryption_key=b"e" * 32,
+            encryption_padding_bytes=64,
+        )
+    ).redact({"token": "secret"})
+    padded["token"]["$redacted"]["paddingBlockBytes"] = 48
+    with pytest.raises(FormatError) as invalid_padding:
+        decrypt_placeholder(padded["token"], encryption_key=b"e" * 32)
+    assert invalid_padding.value.issue.code == "SOVA-REDACTION-DECRYPT"
+
+    authenticated, _records = Redactor(
+        RedactionPolicy(
+            method="encrypted",
+            encryption_key=b"e" * 32,
+            encryption_padding_bytes=64,
+        )
+    ).redact({"token": "secret"})
+    authenticated["token"]["$redacted"]["paddingBlockBytes"] = 32
+    with pytest.raises(FormatError) as metadata_tamper:
+        decrypt_placeholder(authenticated["token"], encryption_key=b"e" * 32)
+    assert metadata_tamper.value.issue.code == "SOVA-REDACTION-DECRYPT"
