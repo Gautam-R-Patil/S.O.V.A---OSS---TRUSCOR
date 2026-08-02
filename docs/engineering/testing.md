@@ -24,6 +24,13 @@ UUIDv7 identity, external-reference validation, lifecycle transitions,
 taxonomy integrity, explicit historical context, frozen coverage denominators,
 and budget/stopping semantics.
 
+Topics 09–11 add secret-value-blind map fixtures, cross-machine graph
+projections, observed-inventory authorization, tool-definition drift,
+role-isolation and model-fallback cases, evidence-firewall attacks, profile
+separation, session/reliability boundaries, local experience integrity, three
+clean demo repetitions, signed-trace verification by a separate process, and
+machine-readable `sova check` exit-state tests.
+
 ## Determinism
 
 - The default seed is `20260729`.

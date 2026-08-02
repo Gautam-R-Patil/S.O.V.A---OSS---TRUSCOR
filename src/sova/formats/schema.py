@@ -18,6 +18,7 @@ _SCHEMA_FILES = {
     "sova.scenario": "scenario-0.1.0.schema.json",
     "sova.trace": "trace-manifest-0.1.0.schema.json",
     "sova.event": "event-0.1.0.schema.json",
+    "sova.map": "map-report-0.1.0.schema.json",
 }
 
 

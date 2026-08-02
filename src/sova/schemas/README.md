@@ -3,6 +3,9 @@
 These JSON Schema 2020-12 documents are the normative structural contracts for
 the experimental SOVA `0.1.0` artifact family:
 
+The family also includes `map-report-0.1.0.schema.json`, the distinct
+evidence-aware capability-map report contract.
+
 - `capsule-manifest-0.1.0.schema.json` — `.sova` behavior-capsule manifest
 - `scenario-0.1.0.schema.json` — portable scenario/replay recipe
 - `trace-manifest-0.1.0.schema.json` — `.sova-trace` manifest

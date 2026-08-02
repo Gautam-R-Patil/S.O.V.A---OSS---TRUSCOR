@@ -20,7 +20,6 @@ from sova.capsule import (
     render_capsule,
     scenario_template,
 )
-from sova.detonation import run_sleeper_demo
 from sova.formats import (
     PackageReader,
     canonical_json_bytes,
@@ -29,10 +28,13 @@ from sova.formats import (
     validate_document,
 )
 from sova.formats.errors import FormatError
+from sova.mapping import build_capability_map, write_capability_map, write_tool_snapshot
 from sova.reproduction import compare_observable_outcomes
+from sova.runtime import ProfileKind, RunProfile, standard_profile
 from sova.safety import known_backend_descriptors
 from sova.trace import TraceReader, recover_trace
 from sova.trace.otel import export_event
+from sova.workflows import run_check, run_complete_demo
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -192,6 +194,36 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     demo_parser.add_argument("kind", choices=("sleeper",))
     demo_parser.add_argument("destination", type=_path)
     demo_parser.set_defaults(handler=_demo)
+
+    check_parser = commands.add_parser(
+        "check",
+        help="run a bounded local check and return an explicit assurance state",
+    )
+    check_parser.add_argument("target")
+    check_parser.add_argument("destination", type=_path)
+    check_parser.add_argument(
+        "--custom-profile",
+        type=_path,
+        help="canonical JSON customization; marks the run non-standard",
+    )
+    check_parser.set_defaults(handler=_check)
+
+    map_parser = commands.add_parser(
+        "map",
+        help="map local declared capability reach without executing target code",
+    )
+    map_parser.add_argument("root", nargs="?", type=_path, default=Path())
+    map_parser.add_argument("--output", "-o", type=_path)
+    map_parser.add_argument("--inventory", action="append", type=_path, default=[])
+    map_parser.add_argument("--observed-inventory", action="append", type=_path, default=[])
+    map_parser.add_argument(
+        "--authorize-runtime-inventory",
+        action="store_true",
+        help="confirm imported observed inventory was collected under authorization",
+    )
+    map_parser.add_argument("--baseline", type=_path)
+    map_parser.add_argument("--write-tool-snapshot", type=_path)
+    map_parser.set_defaults(handler=_map)
     return parser
 
 
@@ -371,12 +403,60 @@ def _safety_backends(_args: argparse.Namespace) -> int:
 def _demo(args: argparse.Namespace) -> int:
     if args.kind != "sleeper":  # pragma: no cover - argparse constrains this
         raise FormatError("SOVA-DEMO-KIND", "unsupported demo kind")
-    artifacts = run_sleeper_demo(args.destination)
-    rendered = asdict(artifacts)
-    rendered["capsule"] = str(artifacts.capsule)
-    rendered["trace"] = str(artifacts.trace)
-    rendered["summary"] = str(artifacts.summary)
+    artifacts = run_complete_demo(args.destination, profile=standard_profile())
+    rendered = {
+        "capsule": str(artifacts.capsule),
+        "trace": str(artifacts.trace),
+        "reproductionTrace": str(artifacts.reproduction_trace),
+        "orchestrationTrace": str(artifacts.orchestration_trace),
+        "mapReport": str(artifacts.map_report),
+        "report": str(artifacts.report),
+        "summary": str(artifacts.summary),
+        "oracleStatus": artifacts.oracle_status,
+        "evidenceClosure": artifacts.evidence_closure,
+        "cleanupVerified": artifacts.cleanup_verified,
+        "reproduced": artifacts.reproduced,
+    }
     sys.stdout.buffer.write(canonical_json_bytes(rendered) + b"\n")
+    return 0
+
+
+def _run_profile(custom_profile: Path | None) -> RunProfile:
+    if custom_profile is None:
+        return standard_profile()
+    configuration = _load_object(custom_profile)
+    return RunProfile(
+        ProfileKind.CUSTOM,
+        "0.1.0",
+        customization_digest=sha256_digest(canonical_json_bytes(configuration)),
+    )
+
+
+def _check(args: argparse.Namespace) -> int:
+    result = run_check(
+        args.target,
+        args.destination,
+        profile=_run_profile(args.custom_profile),
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(result.to_mapping()) + b"\n")
+    return result.exit_code
+
+
+def _map(args: argparse.Namespace) -> int:
+    report = build_capability_map(
+        args.root,
+        inventories=tuple(args.inventory),
+        observed_inventories=tuple(args.observed_inventory),
+        runtime_authorized=bool(args.authorize_runtime_inventory),
+        baseline=args.baseline,
+    )
+    if args.write_tool_snapshot is not None:
+        write_tool_snapshot(args.write_tool_snapshot, report.graph)
+    if args.output is None:
+        sys.stdout.buffer.write(canonical_json_bytes(report.to_mapping()) + b"\n")
+    else:
+        digest = write_capability_map(args.output, report)
+        sys.stdout.write(f"{digest}  {args.output}\n")
     return 0
 
 

@@ -161,6 +161,25 @@ Atlas, OSWorld, or BrowserGym the trust root.
 | [NIST AI RMF](https://www.nist.gov/itl/ai-risk-management-framework) | Voluntary AI risk-management framework. | **Export supporting evidence mappings.** Never call a mapping certification. |
 | [AIR Blackbox](https://github.com/airblackbox/airblackbox) | Compliance-oriented scanning, audit records, replay, and evidence export. | **Compare + import.** Do not assume SOVA is the first integrated compliance/evidence workflow. |
 
+## Focused Topics 09–11 prior-art screen
+
+The 2026-08-02 primary-source refresh materially limits broad novelty claims:
+
+| Area | Strong primary sources | SOVA decision |
+|---|---|---|
+| Capability and permission graphs | [BloodHound](https://github.com/SpecterOps/BloodHound), [AWS IAM Access Analyzer](https://docs.aws.amazon.com/IAM/latest/UserGuide/access-analyzer-concepts.html), [W3C PROV-O](https://www.w3.org/TR/prov-o/), and [Agent-BOM](https://arxiv.org/abs/2605.06812) | Graph construction, transitive reach, effective permissions, and provenance are established. SOVA's separated declared/observed/inferred/refuted closures are an experimental hypothesis requiring a named-baseline ground-truth study. |
+| Tool-definition drift | [MCP tools specification](https://modelcontextprotocol.io/specification/2025-06-18/server/tools) and [Microsoft MCP Security Gateway 1.0](https://microsoft.github.io/agent-governance-toolkit/specs/MCP-SECURITY-GATEWAY-1.0/) | Description/schema fingerprints and rug-pull alerts are ordinary engineering and `NO-GO` as standalone SOVA paper or patent claims. |
+| Multi-role red teaming | [Co-RedTeam](https://arxiv.org/abs/2602.02164), [AutoRedTeamer](https://arxiv.org/abs/2503.15754), and [Petri](https://www.anthropic.com/research/petri-open-source-auditing) | Recon/plan/execute/evaluate/mutate roles and experience-guided iteration are direct prior art. SOVA implements them without claiming architecture novelty. |
+| Adversarial judges | [JudgeDeceiver](https://arxiv.org/abs/2403.17710), [judge prompt-injection study](https://arxiv.org/abs/2505.13348), and [Instruction Hierarchy](https://arxiv.org/abs/2404.13208) | Raw transcript judging is an attack surface. SOVA's typed one-way evidence firewall is `GO-EXPERIMENT / HOLD-PAPER / HOLD-IP` pending attack, clean-utility, ablation, calibration, and independent-case results. |
+| Delegated sessions | [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693.html), [RFC 9700](https://www.rfc-editor.org/rfc/rfc9700.html), [SPIFFE Workload API](https://spiffe.io/docs/latest/spiffe-specs/spiffe_workload_api/), and [Playwright authentication](https://playwright.dev/docs/auth) | Scoped leases, delegated identity, token protection, and isolated browser state are established security practice, not a standalone invention. |
+
+The focused patent-publication screen also found extensive access-graph,
+multi-agent orchestration, retry/recovery, and delegated-credential claims.
+No broad Topics 09–11 patent draft is justified. Private records retain the
+publication numbers, preliminary overlap notes, prospectuses, kill criteria,
+and founder/counsel review gates; no novelty-bearing private record is published
+from this repository.
+
 ## Acquisition record for the first comparison
 
 The following revisions were resolved from each public repository’s `HEAD` on

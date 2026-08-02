@@ -20,6 +20,8 @@ class ScriptedTurn:
     structured: dict[str, Any] | None = None
     tool_calls: tuple[dict[str, Any], ...] = ()
     failure: str | None = None
+    token_count: int | None = None
+    monetary_cost: str | None = None
 
 
 class ScriptedModel:

@@ -18,6 +18,9 @@ claiming that the field set is ready for `1.0`.
 - [containment backend admission](./containment-backends-0.1.md)
 - [synthetic detonation world](./synthetic-detonation-0.1.md)
 - [MELRA executor adapter boundary](./melra-adapter-boundary-0.1.md)
+- [capability map and reach model](./capability-map-0.1.md)
+- [runtime orchestration and evidence firewall](./runtime-orchestration-0.1.md)
+- [`sova check` and `sova demo`](./check-and-demo-0.1.md)
 
 The normative JSON Schema 2020-12 files ship in
 [`src/sova/schemas`](../../src/sova/schemas/README.md). Python is the reference

@@ -9,7 +9,7 @@ from hypothesis import strategies as st
 
 from sova.formats import schema as schema_module
 
-ARTIFACT_TYPES = ("sova.capsule", "sova.scenario", "sova.trace", "sova.event")
+ARTIFACT_TYPES = ("sova.capsule", "sova.scenario", "sova.trace", "sova.event", "sova.map")
 JSON_VALUES = st.recursive(
     st.none()
     | st.booleans()

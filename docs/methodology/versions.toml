@@ -28,3 +28,24 @@ version = "0.1.0"
 status = "experimental"
 source = "docs/contracts/coverage-model.md"
 change = "Initial frozen-denominator coverage vector, exploration-budget, and stopping-rule contract."
+
+[[methodology]]
+id = "SOVA-CAPABILITY-REACH"
+version = "0.1.0"
+status = "experimental"
+source = "docs/specifications/capability-map-0.1.md"
+change = "Initial provenance-separated declared, witnessed, possible, and conflict closure method."
+
+[[methodology]]
+id = "SOVA-EVIDENCE-FIREWALL"
+version = "0.1.0"
+status = "experimental"
+source = "docs/specifications/runtime-orchestration-0.1.md"
+change = "Initial typed one-way evidence projection and layered adjudication method."
+
+[[methodology]]
+id = "SOVA-BOUNDED-CHECK"
+version = "0.1.0"
+status = "experimental"
+source = "docs/specifications/check-and-demo-0.1.md"
+change = "Initial no-MELRA map, bounded search, signed evidence, and fresh reproduction proof."

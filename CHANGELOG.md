@@ -67,6 +67,14 @@ have independent version ledgers.
   provider key, network, container runtime, or MELRA installation.
 - A public MELRA adapter boundary based on a pinned public release review;
   adapter implementation and conformance remain future work.
+- Air-gapped `sova map` collection, provenance-separated capability closures,
+  schema-validated map reports, and immutable tool-definition drift snapshots.
+- Provider-neutral role orchestration, standard/custom run profiles, an
+  evidence-firewalled judging path, model fallback budgets, local minimized
+  experience records, opaque session leases, and verified executor fallback.
+- A complete `sova check`/`sova demo` no-MELRA path with named bounded
+  baselines, two-dimensional trigger search, signed discovery and reproduction
+  traces, independent verification, honest exit states, and performance gates.
 
 ### Fixed
 

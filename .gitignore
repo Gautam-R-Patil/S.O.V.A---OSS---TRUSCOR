@@ -69,6 +69,7 @@ temp/
 .cache/
 
 # Editors and operating systems
+/.claude/
 .idea/
 .vscode/
 .DS_Store

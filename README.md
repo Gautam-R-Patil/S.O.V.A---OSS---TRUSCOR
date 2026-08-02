@@ -44,14 +44,15 @@
 > [!IMPORTANT]
 > **SOVA is pre-alpha.** The repository now implements experimental `0.1`
 > `.sova` capsule and `.sova-trace` contracts, deterministic and restricted
-> local executors, observable deterministic oracles, safe local tooling, and
+> local executors, observable deterministic oracles, capability mapping,
+> evidence-isolated orchestration, bounded checking, safe local tooling, and
 > shared domain primitives. Live
 > capture integrations, adaptive trigger search, causal forensics, and the
 > broader security commands remain under development.
 
-## Implemented foundation, capsules, and traces
+## Implemented foundation, mapping, runtime, capsules, and traces
 
-The implemented Topic 02–06 engineering foundation is intentionally
+The implemented Topic 02–11 engineering foundation is intentionally
 experimental and honest:
 
 ```bash
@@ -99,6 +100,15 @@ It provides:
   comparator that returns `inconclusive` when required evidence was lost;
 - a safe complete no-Atlas capsule → trace → playback → controlled execution →
   comparison → evidence-capsule → independent-offline-verification fixture.
+- air-gapped `sova map` discovery with a typed capability graph, redacted edge
+  provenance, declared/witness-linked/possible/conflict closures, and immutable
+  tool-definition drift snapshots;
+- provider-neutral runtime roles, standard/custom profiles, bounded mutation,
+  an evidence firewall that excludes attacker assertions from factual judge
+  input, deterministic oracle/policy precedence, and explicit inconclusive and
+  human-review states;
+- `sova check` and a complete repeated `sova demo sleeper` workflow producing
+  signed traces, a portable capsule, a fresh reproduction, and a concise report.
 
 Read [ADR-0007](./docs/decisions/0007-topic-02-engineering-foundation.md),
 [ADR-0008](./docs/decisions/0008-topic-03-domain-contracts.md), the
@@ -424,23 +434,28 @@ MELRA is a separate XAGI Labs project, not SOVA Engine and not a source of TRUSC
 - Local Arena and CTF modes.
 - Captioned replay clips linked to verifiable artifacts.
 
-## The planned developer experience
+## The developer experience
 
 The intended workflow is deliberately small:
 
 ```bash
-# Planned commands — not yet released
+# Implemented local commands
+
+# Discover local capability reach without executing target code
+sova map ./my-agent --output ./my-agent.sova-map.json
+
+# Exit 1 means the bundled planted behavior was confirmed
+sova check synthetic-sleeper ./sova-check
+
+# Run the complete zero-configuration proof
+sova demo sleeper ./sova-demo
+
+# Planned later commands
 
 # 1. Configure a model provider or a local model
 sova init
 
-# 2. Discover what an agent can actually reach
-sova map ./my-agent
-
-# 3. Run a bounded component check
-sova check ./some-component
-
-# 4. Hunt for conditional behavior on an authorized target
+# Hunt for conditional behavior on an authorized target
 sova detonate ./my-agent --hunt-triggers --authorize
 
 # 5. Verify and replay portable evidence
@@ -458,17 +473,22 @@ One safe implemented demonstration is available now:
 
 ```bash
 # No model, provider key, network, MELRA, container, or native target is required.
+# A minimal package install must include the signing extra: pip install ".[signing]"
+# The repository's locked `uv sync` development environment already includes it.
 sova demo sleeper ./sova-demo
-sova verify ./sova-demo/synthetic-sleeper.sova-trace
-sova playback ./sova-demo/synthetic-sleeper.sova-trace
-sova verify ./sova-demo/synthetic-sleeper.sova
+sova verify --require-signature ./sova-demo/discovery/synthetic-sleeper.sova-trace
+sova playback ./sova-demo/discovery/synthetic-sleeper.sova-trace
+sova verify ./sova-demo/discovery/synthetic-sleeper.sova
 ```
 
 It activates a deterministic planted sleeper, observes an inert run-unique
 canary and a sink-only egress attempt, records authorization and containment,
 evaluates deterministic oracles, resets the synthetic world, and produces an
-offline-verifiable `.sova-trace` and `.sova` capsule. It is a measurement-system
-fixture, not evidence that a real model or host sandbox is safe.
+offline-verifiable `.sova-trace` and `.sova` capsule, then performs a fresh
+reproduction and exact declared-outcome comparison. It is a measurement-system
+fixture, not evidence that a real model or host sandbox is safe. An arbitrary
+local directory is currently mapped and reported `inconclusive`; SOVA will not
+execute it without a selected authorized adapter.
 
 The target experience:
 
@@ -550,6 +570,8 @@ The principal research directions are:
 6. The limits of agent detonation.
 7. Redaction-preserving verifiable evidence.
 8. A unified sensor mesh for memory, retrieval, MCP, and inter-agent state.
+9. Provenance-separated capability closure against declared and runtime graph baselines.
+10. Evidence-firewalled adjudication against transcript-level judge injection.
 
 Research claims will require predeclared protocols, strong baselines, repeated trials, ground truth, uncertainty, ethics review, and reproducible artifacts. Paper and patent decisions will be made before irreversible public disclosure.
 
@@ -590,12 +612,16 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Scripted/local execution | Experimental executor contract and no-Atlas vertical slice implemented; local host execution is explicitly not a security sandbox |
 | Authorization and containment | Experimental per-action ACE kernel, single-use human approvals, effect budgets, proof-of-control validation, and backend admission implemented |
 | Synthetic detonation and sensors | Event-sourced fake world, inert canaries, sink-only collector, unified sensor coverage, deterministic oracles, and nine ground-truth target families implemented |
+| `sova map` | Air-gapped typed inventory, provenance-separated reach closures, map schema, and tool-definition drift implemented in [ADR-0013](./docs/decisions/0013-provenance-separated-capability-map.md) |
+| SOVA Runtime | Provider-neutral isolated roles, standard/custom profiles, evidence firewall, local minimized experience, opaque sessions, and verified executor fallback implemented in [ADR-0014](./docs/decisions/0014-evidence-firewalled-runtime.md) |
+| `sova check` | Bundled bounded synthetic target and honest confirmed/inconclusive exit states implemented in [ADR-0015](./docs/decisions/0015-bounded-check-and-no-melra-proof.md); arbitrary target execution awaits adapters |
 | MELRA adapter | Public `0.3.0-alpha.0` boundary reviewed; adapter and conformance remain Topic 13 |
-| Sleeper demonstration | Implemented with `.sova-trace`, `.sova`, offline verification, and reset evidence |
-| Security CLI commands / SDK / local MCP | Not yet implemented |
+| Sleeper demonstration | Implemented with named narrow baselines, two-dimensional search, signed discovery/reproduction traces, `.sova`, independent offline verification, and reset evidence |
+| Remaining security CLI commands / SDK / local MCP | Not yet implemented |
 | Registry and community surfaces | Not yet implemented |
 
-The first engineering objective is a no-Atlas vertical slice:
+The first engineering objective is now implemented as a bounded synthetic
+no-Atlas/no-MELRA vertical slice:
 
 ```text
 planted sleeper component

@@ -243,3 +243,53 @@ def test_clean_lint_branch(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -
     capsys.readouterr()
     assert main(["lint", str(capsule)]) == 0
     assert capsys.readouterr().out == "CLEAN\n"
+
+
+def test_map_command_emits_or_writes_a_distinct_local_report(
+    tmp_path: Path,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / ".mcp.json").write_text(
+        json.dumps({"mcpServers": {"fixture": {"command": "fixture-server"}}}),
+        encoding="utf-8",
+    )
+    assert main(["map", str(project)]) == 0
+    inline = json.loads(capfd.readouterr().out)
+    assert inline["artifactType"] == "sova.map"
+    assert inline["claims"]["executedVulnerability"] is False
+
+    output = tmp_path / "result.sova-map.json"
+    snapshot = tmp_path / "tools.json"
+    assert (
+        main(
+            [
+                "map",
+                str(project),
+                "--output",
+                str(output),
+                "--write-tool-snapshot",
+                str(snapshot),
+            ]
+        )
+        == 0
+    )
+    assert "sha256:" in capfd.readouterr().out
+    assert json.loads(output.read_text(encoding="utf-8"))["artifactType"] == "sova.map"
+    assert json.loads(snapshot.read_text(encoding="utf-8"))["artifactType"] == "sova.tool-snapshot"
+
+
+def test_map_command_refuses_unauthorized_observed_inventory(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    inventory = tmp_path / "observed.json"
+    inventory.write_text(
+        json.dumps({"mcpServers": {"fixture": {"command": "fixture-server"}}}),
+        encoding="utf-8",
+    )
+    assert main(["map", str(project), "--observed-inventory", str(inventory)]) == 2
+    assert "SOVA-MAP-RUNTIME-AUTHORIZATION" in capsys.readouterr().err

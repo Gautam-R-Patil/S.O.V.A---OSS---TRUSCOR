@@ -37,7 +37,7 @@ from sova.safety.containment import (
     NetworkMode,
     known_backend_descriptors,
 )
-from sova.trace import TraceWriter
+from sova.trace import TraceWriter, generate_ed25519_keypair
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -75,8 +75,14 @@ def _scenario() -> dict[str, Any]:
                 }
             ]
         },
-        "triggers": [{"kind": "exact-phrase", "parameter": "trigger"}],
-        "mutations": [],
+        "triggers": [
+            {"kind": "exact-phrase", "parameter": "trigger"},
+            {"kind": "environment", "name": "SOVA_MODE", "value": "research"},
+        ],
+        "mutations": [
+            {"parameter": "trigger", "domain": ["hello", "blue-owl"]},
+            {"parameter": "SOVA_MODE", "domain": ["default", "research"]},
+        ],
         "expectedEffects": [
             {"kind": "canary.read", "simulated": True},
             {"kind": "network.egress-attempt", "sinkOnly": True},
@@ -133,7 +139,7 @@ def _manifest() -> dict[str, Any]:
     return manifest
 
 
-def run_sleeper_demo(destination: Path) -> DemoArtifacts:
+def run_sleeper_demo(destination: Path) -> DemoArtifacts:  # noqa: PLR0915
     """Create a capsule and trace from an entirely synthetic detonation."""
     destination = destination.resolve()
     destination.mkdir(parents=True, exist_ok=True)
@@ -220,10 +226,47 @@ def run_sleeper_demo(destination: Path) -> DemoArtifacts:
         seed=b"SOVA synthetic sleeper fixture seed 0.1",
         sensors=sensors,
     )
-    target = GroundTruthTarget("sova:target:sleeper", TargetKind.SLEEPER)
+    target = GroundTruthTarget("sova:target:sleeper", TargetKind.ENVIRONMENT_GATED)
     backend = SyntheticDetonationBackend(world, descriptor)
-    result = backend.detonate(target, "blue-owl", containment=containment)
+    baseline = {
+        "static": {
+            "detected": False,
+            "method": "minimal-known-signature-rule/0.1",
+            "reason": "No known-signature rule exposes the runtime environment conjunction.",
+        },
+        "onePassDynamic": {
+            "detected": False,
+            "input": {"message": "hello", "SOVA_MODE": "default"},
+            "evidenceAttempt": 0,
+            "reason": "The single run exercised neither required trigger value.",
+        },
+        "passiveRecording": {
+            "detected": False,
+            "evidenceAttempt": 0,
+            "reason": "Recording a dormant baseline cannot discover an unexecuted condition.",
+        },
+    }
+    search_rows: list[dict[str, Any]] = []
+    result = None
+    for mode in ("default", "research"):
+        for message in ("hello", "blue-owl"):
+            world.environment["SOVA_MODE"] = mode
+            trial = backend.detonate(target, message, containment=containment)
+            search_rows.append(
+                {
+                    "attempt": len(search_rows),
+                    "message": message,
+                    "SOVA_MODE": mode,
+                    "triggered": trial.observation.triggered,
+                    "state": trial.observation.state,
+                }
+            )
+            if trial.observation.triggered:
+                result = trial
+    if result is None:  # pragma: no cover - planted fixture invariant
+        raise FormatError("SOVA-DEMO-SEARCH", "bounded search did not find the planted trigger")
 
+    signing_key = generate_ed25519_keypair()
     writer = TraceWriter(
         trace_path,
         authorization={
@@ -244,6 +287,7 @@ def run_sleeper_demo(destination: Path) -> DemoArtifacts:
             "version": "0.1",
             "capabilityDigest": descriptor.digest,
         },
+        signing_key=signing_key,
     )
     authorization_event = writer.append(
         "authorization.decision",
@@ -261,6 +305,30 @@ def run_sleeper_demo(destination: Path) -> DemoArtifacts:
         {"scenarioId": _scenario()["id"], "target": target.id},
         parents=[containment_event] if containment_event else [],
     )
+    for row in search_rows:
+        attempt_started = writer.append(
+            "attempt.started",
+            {
+                "attemptIndex": row["attempt"],
+                "dimensions": {
+                    "message": row["message"],
+                    "SOVA_MODE": row["SOVA_MODE"],
+                },
+                "baseline": False,
+            },
+            phase="trigger-search",
+            parents=[started] if started else [],
+        )
+        writer.append(
+            "attempt.completed",
+            {
+                "attemptIndex": row["attempt"],
+                "triggered": row["triggered"],
+                "state": row["state"],
+            },
+            phase="trigger-search",
+            parents=[attempt_started] if attempt_started else [],
+        )
     requested = writer.append(
         "tool.requested",
         {"action": "synthetic.target.invoke", "message": "blue-owl", "simulated": True},
@@ -331,6 +399,19 @@ def run_sleeper_demo(destination: Path) -> DemoArtifacts:
         "evidenceClosure": result.evidence_closure.status,
         "cleanupVerified": result.cleanup_verified,
         "cleanupFailure": result.cleanup_failure,
+        "baselines": baseline,
+        "search": {
+            "method": "bounded-grid/0.1",
+            "dimensions": ["message", "SOVA_MODE"],
+            "attempts": search_rows,
+            "found": True,
+            "minimalTrigger": {"message": "blue-owl", "SOVA_MODE": "research"},
+        },
+        "signature": {
+            "algorithm": "Ed25519",
+            "keyId": signing_key.key_id,
+            "identityClaim": "none-ephemeral-demo-key",
+        },
         "containment": containment.to_mapping(),
         "limitations": list(descriptor.limitations),
     }

@@ -1,7 +1,7 @@
 # SOVA OSS claims register
 
 - **Register version:** 1.0
-- **Evidence snapshot:** 2026-07-31
+- **Evidence snapshot:** 2026-08-02
 - **Register owner:** Gautam R. Patil
 - **Next competitive recheck:** 2026-08-29
 - **Legal review state:** qualified counsel not yet recorded
@@ -108,6 +108,9 @@ guidance, or original research:
 | P-18 | The reference runner refuses real effectful execution without a live authorization session binding exact intent, proof, containment, budgets, and required evidence; scripted and read-only compatibility paths cannot perform a real mutation. | VERIFIED | Safety owner | [ADR-0011](../decisions/0011-authority-containment-evidence-kernel.md); authorization and integration tests | 2026-08-02 | Every authorization or executor change | Bounded to the implemented reference runner and tested adapters; not a claim about a compromised host or modified binary. |
 | P-19 | The bundled synthetic sleeper fixture activates deterministically, exposes inert canary access and sink-only egress through healthy required sensors, emits verifiable artifacts, and resets its event-sourced state. | VERIFIED | Detonation owner | `tests/integration/test_synthetic_detonation_vertical_slice.py`; [synthetic detonation specification](../specifications/synthetic-detonation-0.1.md) | 2026-08-02 | Every sensor, target, or world change | Measurement-system fixture only; it does not establish real-model, anti-sandbox, or native-code fidelity. |
 | P-20 | MELRA `0.3.0-alpha.0` has been reviewed as a possible future browser/computer/terminal/file executor, but no MELRA adapter or conformance result ships in SOVA yet. | VERIFIED | Adapter owner | SRC-MELRA at pinned commit `a6dd6710f5ae94e8ce825ef99df9b01d7f974b95`; [adapter boundary](../specifications/melra-adapter-boundary-0.1.md) | 2026-08-02 | Before Topic 13 implementation | The public release review does not verify confidential target architecture or future roadmap capabilities. |
+| P-21 | `sova map` produces an air-gapped typed local capability report with separately labeled declared, observed, inferred, and refuted evidence and never claims an inferred edge was executed. | VERIFIED | Mapping owner | [ADR-0013](../decisions/0013-provenance-separated-capability-map.md); map unit, schema, CLI, privacy, cross-machine, and performance tests | 2026-08-02 | Every map schema or collector change | Bounded to supported collectors and supplied inventories; runtime observation needs authorization; partial coverage is explicit. |
+| P-22 | The reference SOVA Runtime prevents attacker/model response text and raw tool output values from entering factual judge input, applies deterministic oracles/policies first, and rejects missing evidence references. | VERIFIED | Runtime owner | [ADR-0014](../decisions/0014-evidence-firewalled-runtime.md); evidence-firewall and orchestration tests | 2026-08-02 | Every projection or judge-contract change | This proves tested information-flow and reference checks, not semantic entailment, sensor truth, universal injection resistance, or novelty. |
+| P-23 | The bundled no-MELRA demo repeatedly maps and finds its two-factor planted condition, emits signed discovery/reproduction traces plus a capsule, and passes independent offline verification. | VERIFIED | Workflow owner | [ADR-0015](../decisions/0015-bounded-check-and-no-melra-proof.md); three-clean-run integration and performance tests | 2026-08-02 | Every demo, trace, or workflow change | Synthetic measurement fixture and minimal named baselines only; no real-agent detection-superiority claim. |
 
 ## Market, incident, and operational claims
 

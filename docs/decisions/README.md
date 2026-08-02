@@ -20,6 +20,9 @@ silently rewrite it.
 | [0010](./0010-executor-contract-and-no-atlas-backends.md) | Executor contract and no-Atlas backends | Accepted |
 | [0011](./0011-authority-containment-evidence-kernel.md) | Authority-containment-evidence authorization | Accepted |
 | [0012](./0012-claim-conditioned-evidence-closure.md) | Claim-conditioned sensor evidence closure | Accepted |
+| [0013](./0013-provenance-separated-capability-map.md) | Provenance-separated capability mapping | Accepted |
+| [0014](./0014-evidence-firewalled-runtime.md) | Evidence-firewalled public runtime | Accepted |
+| [0015](./0015-bounded-check-and-no-melra-proof.md) | Bounded check and no-MELRA proof | Accepted |
 
 Use the next zero-padded number. Every ADR states its status, date, owner,
 scope, decision, alternatives, consequences, and superseded decisions.

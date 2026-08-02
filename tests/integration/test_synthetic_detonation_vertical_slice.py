@@ -12,7 +12,9 @@ from sova.capsule import lint_capsule, render_capsule
 from sova.cli import main
 from sova.detonation import run_sleeper_demo
 from sova.formats.errors import FormatError
+from sova.runtime import standard_profile
 from sova.trace import TraceReader
+from sova.workflows import run_complete_demo
 
 
 @pytest.mark.integration
@@ -32,10 +34,10 @@ def test_synthetic_sleeper_vertical_slice_is_inspectable_and_offline_verifiable(
     assert report.event_chain_integrity
     assert report.completion == "completed"
     kinds = [event["kind"] for event in reader.events()]
-    assert kinds == [
-        "authorization.decision",
-        "safety.containment",
-        "run.started",
+    assert kinds[:3] == ["authorization.decision", "safety.containment", "run.started"]
+    assert kinds.count("attempt.started") == 4
+    assert kinds.count("attempt.completed") == 4
+    assert kinds[-6:] == [
         "tool.requested",
         "filesystem.read",
         "network.egress-attempt",
@@ -68,6 +70,8 @@ def test_demo_cli_outputs_paths_and_refuses_overwrite(
     rendered = json.loads(capsys.readouterr().out)
     assert Path(rendered["capsule"]).is_file()
     assert Path(rendered["trace"]).is_file()
-    assert rendered["oracle_status"] == "pass"
-    with pytest.raises(FormatError, match="already exists"):
-        run_sleeper_demo(destination)
+    assert rendered["oracleStatus"] == "pass"
+    assert rendered["reproduced"] is True
+    assert Path(rendered["reproductionTrace"]).is_file()
+    with pytest.raises(FormatError, match="not empty"):
+        run_complete_demo(destination, profile=standard_profile())
