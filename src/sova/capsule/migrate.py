@@ -17,7 +17,14 @@ if TYPE_CHECKING:
 
 CURRENT_VERSION = "0.1.0"
 Migration = Callable[[dict[str, Any]], dict[str, Any]]
-SUPPORTED_REQUIRED_FEATURES = frozenset({"capsule.core/0.1", "scenario.core/0.1", "trace.core/0.1"})
+SUPPORTED_REQUIRED_FEATURES = frozenset(
+    {
+        "capsule.core/0.1",
+        "scenario.core/0.1",
+        "trace.core/0.1",
+        "detonation.synthetic/0.1",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)

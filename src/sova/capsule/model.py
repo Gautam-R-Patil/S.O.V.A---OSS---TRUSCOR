@@ -279,7 +279,12 @@ def lint_capsule(path: Path) -> list[ValidationIssue]:
             )
         issues.extend(lint_scenario(scenario))
     required = set(manifest["requiredFeatures"])
-    supported = {"capsule.core/0.1", "scenario.core/0.1", "trace.core/0.1"}
+    supported = {
+        "capsule.core/0.1",
+        "scenario.core/0.1",
+        "trace.core/0.1",
+        "detonation.synthetic/0.1",
+    }
     issues.extend(
         (
             ValidationIssue(

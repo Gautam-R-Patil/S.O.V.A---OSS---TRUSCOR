@@ -27,6 +27,7 @@ from sova.executors import (
 )
 from sova.reproduction import compare_observable_outcomes
 from sova.trace import TraceReader
+from tests.support.authorization import authorize_synthetic_steps
 
 ROOT = Path(__file__).resolve().parents[2]
 VERIFIER = ROOT / "scripts" / "sova_independent_verify.py"
@@ -148,12 +149,14 @@ def test_complete_no_atlas_vertical_slice(tmp_path: Path) -> None:
 
     local_trace = tmp_path / "local.sova-trace"
     with RestrictedLocalExecutor(executable_allowlist=(Path(executable),)) as local:
+        fresh = authorize_synthetic_steps(scenario, local.capabilities())
         local_result = run_capsule(
             source_capsule,
             local_trace,
             executor=local,
             workspace=tmp_path,
-            authorization=authorization,
+            authorization_session=fresh.session,
+            approvals=fresh.approvals,
         )
 
     assert scripted_result.completion == local_result.completion == "completed"

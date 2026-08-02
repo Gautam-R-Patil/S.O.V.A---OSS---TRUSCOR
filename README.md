@@ -330,8 +330,8 @@ flowchart TB
     SAFE["Authorization and safety gate<br/>self-owned scope • blast radius • non-destructive defaults"]
     EXEC["ExecutorAdapter"]
     SCRIPT["ScriptedExecutor<br/>deterministic tests"]
-    LOCAL["LocalSandboxExecutor<br/>restricted local execution"]
-    ATLAS["AtlasExecutorAdapter<br/>browser • computer • terminal"]
+    LOCAL["RestrictedLocalExecutor<br/>developer-only host execution"]
+    MELRA["Future MelraExecutorAdapter<br/>browser • computer • terminal"]
     SENSORS["SOVA sensor mesh and deterministic oracles"]
     TRACE[".sova-trace evidence substrate"]
     OUTPUT["verify • replay • forensics • evidence • registry"]
@@ -341,25 +341,25 @@ flowchart TB
     SAFE --> EXEC
     EXEC --> SCRIPT
     EXEC --> LOCAL
-    EXEC --> ATLAS
+    EXEC --> MELRA
     SCRIPT --> SENSORS
     LOCAL --> SENSORS
-    ATLAS --> SENSORS
+    MELRA --> SENSORS
     SENSORS --> TRACE
     TRACE --> OUTPUT
 ```
 
-### Atlas MCP
+### MELRA (formerly Atlas MCP / Atlas OS)
 
-[Atlas MCP](https://github.com/XAGI-Lab/atlas-mcp), created by [XAGI Labs](https://xagilabs.com), is planned as an optional execution adapter for:
+[MELRA](https://github.com/XAGI-Lab/melra), created by Dheeraj S at [XAGI Labs](https://xagilabs.com), is planned as an optional execution adapter for:
 
 - browser use;
 - computer use;
 - terminal use.
 
-SOVA does **not** outsource its sandboxing, authorization, trigger search, observations, judging, redaction, signing, replay, forensics, or reporting to Atlas. The SOVA core must work with scripted and local executors before Atlas is connected.
+SOVA does **not** outsource its containment admission, authorization, trigger search, observations, judging, redaction, signing, replay, forensics, or reporting to MELRA. The SOVA core works with scripted and synthetic executors before MELRA is connected.
 
-Atlas is a separate XAGI Labs project, not SOVA Engine and not a source of TRUSCOR authority. Public SOVA integration will rely only on Atlas's public interface and reproducible behavior of a public release; confidential Atlas material is outside this repository.
+MELRA is a separate XAGI Labs project, not SOVA Engine and not a source of TRUSCOR authority. Public SOVA integration will rely only on MELRA's public interface and reproducible behavior of a pinned public release; confidential Atlas/MELRA material is outside this repository.
 
 ## Planned features
 
@@ -453,6 +453,22 @@ sova forensics ./incident.sova-trace
 # 7. Rehearse a real task inside a safe clone
 sova rehearse ./my-agent --task "process refund #4471"
 ```
+
+One safe implemented demonstration is available now:
+
+```bash
+# No model, provider key, network, MELRA, container, or native target is required.
+sova demo sleeper ./sova-demo
+sova verify ./sova-demo/synthetic-sleeper.sova-trace
+sova playback ./sova-demo/synthetic-sleeper.sova-trace
+sova verify ./sova-demo/synthetic-sleeper.sova
+```
+
+It activates a deterministic planted sleeper, observes an inert run-unique
+canary and a sink-only egress attempt, records authorization and containment,
+evaluates deterministic oracles, resets the synthetic world, and produces an
+offline-verifiable `.sova-trace` and `.sova` capsule. It is a measurement-system
+fixture, not evidence that a real model or host sandbox is safe.
 
 The target experience:
 
@@ -572,8 +588,10 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `.sova` capsule and scenario schemas | Experimental `0.1.0` implemented with safe package tooling |
 | `.sova-trace` experimental contract | Experimental `0.1.0` implemented with streaming writer and offline verifier |
 | Scripted/local execution | Experimental executor contract and no-Atlas vertical slice implemented; local host execution is explicitly not a security sandbox |
-| Atlas adapter | Awaiting validated integration |
-| Sleeper demonstration | Not yet implemented |
+| Authorization and containment | Experimental per-action ACE kernel, single-use human approvals, effect budgets, proof-of-control validation, and backend admission implemented |
+| Synthetic detonation and sensors | Event-sourced fake world, inert canaries, sink-only collector, unified sensor coverage, deterministic oracles, and nine ground-truth target families implemented |
+| MELRA adapter | Public `0.3.0-alpha.0` boundary reviewed; adapter and conformance remain Topic 13 |
+| Sleeper demonstration | Implemented with `.sova-trace`, `.sova`, offline verification, and reset evidence |
 | Security CLI commands / SDK / local MCP | Not yet implemented |
 | Registry and community surfaces | Not yet implemented |
 

@@ -48,6 +48,25 @@ have independent version ledgers.
 - Strict opaque `sova-secret:` references, just-in-time child-environment
   resolution, supervised process lifecycle, explicit unsupported resource
   limits, and provider-crash normalization.
+- An experimental authority-containment-evidence kernel with exact per-action
+  scope, expiring single-use authority, proof-of-control checks, consequence
+  classes, monotone effect budgets, containment binding, and single-use
+  out-of-band human approvals.
+- Containment capability descriptors and admission decisions for the
+  no-native-code synthetic world, restricted local developer execution, OCI,
+  gVisor, Firecracker, and Kata candidates without mislabelling unvalidated
+  host or container execution as a security sandbox.
+- A seedable event-sourced synthetic detonation world with inert run-unique
+  canaries, sink-only egress, substitute services, explicit reset evidence, a
+  normalized sensor mesh, claim-conditioned evidence closure, and nine
+  deterministic ground-truth target families.
+- Deterministic file, process, network, canary, tool, authorization, browser,
+  database, inter-agent, state, trigger, and composite oracles.
+- A safe `sova demo sleeper` path that emits an offline-verifiable
+  `.sova-trace`, `.sova` capsule, and human-readable summary without a model,
+  provider key, network, container runtime, or MELRA installation.
+- A public MELRA adapter boundary based on a pinned public release review;
+  adapter implementation and conformance remain future work.
 
 ### Fixed
 

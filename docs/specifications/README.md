@@ -14,6 +14,10 @@ claiming that the field set is ready for `1.0`.
 - [format threat model](./threat-model.md)
 - [executor capability contract](./executor-contract-0.1.md)
 - [observable oracles and declared-outcome comparison](./observable-oracles-0.1.md)
+- [authorization and safety contract](./authorization-safety-0.1.md)
+- [containment backend admission](./containment-backends-0.1.md)
+- [synthetic detonation world](./synthetic-detonation-0.1.md)
+- [MELRA executor adapter boundary](./melra-adapter-boundary-0.1.md)
 
 The normative JSON Schema 2020-12 files ship in
 [`src/sova/schemas`](../../src/sova/schemas/README.md). Python is the reference

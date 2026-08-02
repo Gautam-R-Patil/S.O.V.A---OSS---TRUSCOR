@@ -18,13 +18,69 @@ from sova.executors.contract import (
     SideEffect,
     negotiate,
 )
-from sova.formats import PackageReader, strict_json_loads, validate_document
+from sova.executors.scripted import ScriptedExecutor
+from sova.formats import (
+    PackageReader,
+    canonical_json_bytes,
+    sha256_digest,
+    strict_json_loads,
+    validate_document,
+)
 from sova.formats.errors import FormatError
 from sova.oracles import ObservableRecord, evaluate_oracles
+from sova.safety.authorization import (
+    ActionIntent,
+    ApprovalToken,
+    AuthorizationSession,
+    BudgetCost,
+    EffectClass,
+)
 from sova.trace import TraceWriter
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
+
+
+def action_intent_for_step(
+    scenario: dict[str, Any],
+    step: dict[str, Any],
+    *,
+    side_effect: SideEffect,
+    evidence: tuple[str, ...],
+    target: str,
+) -> ActionIntent:
+    """Normalize one portable step into the authorization kernel's effect contract."""
+    effect = {
+        SideEffect.READ: EffectClass.READ,
+        SideEffect.MUTATE: EffectClass.MUTATE,
+        SideEffect.DESTRUCTIVE: EffectClass.DESTRUCTIVE,
+    }[side_effect]
+    if step["action"].startswith(("browser.", "computer.", "network.", "mcp.")):
+        effect = max(effect, EffectClass.EXTERNAL)
+    inputs = step["inputs"]
+    path = inputs.get("path") if isinstance(inputs.get("path"), str) else None
+    domain = inputs.get("domain") if isinstance(inputs.get("domain"), str) else None
+    return ActionIntent(
+        id=f"sova:intent:{scenario['id']}:{step['id']}",
+        target=target,
+        action=step["action"],
+        effect=effect,
+        required_evidence=frozenset(evidence or ("tool.completed",)),
+        cost=BudgetCost(
+            steps=1,
+            duration_ms=int(float(scenario["safety"]["budgets"].get("maxStepSeconds", 30)) * 1000),
+            mutations=int(side_effect != SideEffect.READ),
+            processes=int(step["action"].startswith("process.")),
+            files=int(step["action"].startswith(("filesystem.", "artifact."))),
+            network_requests=int(step["action"].startswith(("browser.", "network.", "mcp."))),
+        ),
+        path=path,
+        tool=step["action"],
+        domain=domain,
+        offensive=bool(inputs.get("offensive", False)),
+        irreversible=bool(inputs.get("irreversible", False)),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,22 +143,19 @@ def _expanded_steps(scenario: dict[str, Any]) -> list[dict[str, Any]]:
     return result
 
 
-def run_capsule(  # noqa: PLR0913, PLR0915
+def run_capsule(  # noqa: PLR0912, PLR0913, PLR0915
     capsule: Path,
     trace_path: Path,
     *,
     executor: Executor,
     workspace: Path,
-    authorization: dict[str, Any],
+    authorization: dict[str, Any] | None = None,
+    authorization_session: AuthorizationSession | None = None,
+    approvals: Mapping[str, ApprovalToken] | None = None,
     cancellation: CancellationToken | None = None,
     secret_provider: SecretProvider | None = None,
 ) -> ScenarioRunResult:
     """Run abstract steps only after exact capability and authorization checks."""
-    if authorization.get("decision") != "allowed":
-        raise FormatError(
-            "SOVA-RUN-AUTHORIZATION",
-            "scenario execution requires a fresh allowed authorization decision",
-        )
     scenario, artifacts = _load(capsule)
     steps = _expanded_steps(scenario)
     max_steps = scenario["safety"]["budgets"].get("maxSteps")
@@ -118,10 +171,38 @@ def run_capsule(  # noqa: PLR0913, PLR0915
             for capability in step.get("requires", [f"{step['action']}/0.1"])
         }
     )
-    report = negotiate(executor.capabilities(), required)
+    capabilities = executor.capabilities()
+    report = negotiate(capabilities, required)
+    by_action = {capability.name: capability for capability in capabilities}
+    effectful = not isinstance(executor, ScriptedExecutor) and any(
+        by_action.get(step["action"]) is not None
+        and by_action[step["action"]].side_effect != SideEffect.READ
+        for step in steps
+    )
+    if authorization_session is None:
+        if authorization is None or authorization.get("decision") != "allowed":
+            raise FormatError(
+                "SOVA-RUN-AUTHORIZATION",
+                "scenario execution requires a fresh allowed authorization decision",
+            )
+        if effectful:
+            raise FormatError(
+                "SOVA-RUN-AUTHORIZATION-KERNEL",
+                "effectful execution requires a live authorization session, not a caller assertion",
+            )
+        trace_authorization = authorization
+    else:
+        authorization_session.claim_invocation(str(trace_path.resolve()))
+        trace_authorization = {
+            "decision": "unknown",
+            "scopeDigest": sha256_digest(
+                canonical_json_bytes(authorization_session.authority.scope.to_mapping())
+            ),
+            "decidedBy": "sova.authorization-kernel/0.1",
+        }
     writer = TraceWriter(
         trace_path,
-        authorization=authorization,
+        authorization=trace_authorization,
         executor={
             "id": f"sova:executor:{executor.name}",
             "name": executor.name,
@@ -153,7 +234,7 @@ def run_capsule(  # noqa: PLR0913, PLR0915
         return ScenarioRunResult("failed", 0, 0, trace_path)
     context = ExecutionContext(
         workspace=workspace,
-        authorization=authorization,
+        authorization=trace_authorization,
         artifacts=artifacts,
         secret_provider=secret_provider,
     )
@@ -165,6 +246,34 @@ def run_capsule(  # noqa: PLR0913, PLR0915
     evidence_parents: list[str] = []
     for step in steps:
         attempted += 1
+        authorization_parent: str | None = None
+        if authorization_session is not None:
+            capability = by_action[step["action"]]
+            intent = action_intent_for_step(
+                scenario,
+                step,
+                side_effect=capability.side_effect,
+                evidence=capability.evidence,
+                target=authorization_session.proof.subject,
+            )
+            decision = authorization_session.authorize(
+                intent,
+                approval=(approvals or {}).get(step["id"]),
+            )
+            authorization_parent = writer.append(
+                "authorization.decision",
+                decision.to_mapping(),
+                phase=step["id"],
+            )
+            if not decision.allowed:
+                writer.append(
+                    "blocked.authorization",
+                    {"stepId": step["id"], "reasons": list(decision.reasons)},
+                    phase=step["id"],
+                    parents=[authorization_parent] if authorization_parent else [],
+                )
+                completion = "failed"
+                break
         request = ActionRequest(
             id=step["id"],
             action=step["action"],
@@ -184,6 +293,7 @@ def run_capsule(  # noqa: PLR0913, PLR0915
                 "executor": executor.name,
             },
             phase=step["id"],
+            parents=[authorization_parent] if authorization_parent else [],
         )
         records.append(
             ObservableRecord(
@@ -264,4 +374,4 @@ def run_capsule(  # noqa: PLR0913, PLR0915
     return ScenarioRunResult(completion, attempted, succeeded, trace_path)
 
 
-__all__ = ["ScenarioRunResult", "run_capsule"]
+__all__ = ["ScenarioRunResult", "action_intent_for_step", "run_capsule"]

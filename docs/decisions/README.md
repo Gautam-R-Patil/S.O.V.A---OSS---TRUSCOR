@@ -18,6 +18,8 @@ silently rewrite it.
 | [0008](./0008-topic-03-domain-contracts.md) | Topic 03 shared domain and version contracts | Accepted |
 | [0009](./0009-sova-behavior-capsule-and-trace-model.md) | `.sova` behavior capsule and `.sova-trace` event model | Accepted |
 | [0010](./0010-executor-contract-and-no-atlas-backends.md) | Executor contract and no-Atlas backends | Accepted |
+| [0011](./0011-authority-containment-evidence-kernel.md) | Authority-containment-evidence authorization | Accepted |
+| [0012](./0012-claim-conditioned-evidence-closure.md) | Claim-conditioned sensor evidence closure | Accepted |
 
 Use the next zero-padded number. Every ADR states its status, date, owner,
 scope, decision, alternatives, consequences, and superseded decisions.

@@ -71,6 +71,21 @@ Retention is operator-controlled and local. Withdrawal metadata cannot recall
 copies already shared. Redaction does not make a dataset anonymous, guarantee
 regulatory compliance, or establish consent.
 
+The Topic 07 reference layer additionally fixes all privacy switches off:
+telemetry, account requirement, raw-environment capture, and contribution.
+Provider values may be held in an ephemeral byte-buffer store behind opaque
+references and are zeroed on deletion as a best effort; Python and the operating
+system do not guarantee that no copy ever existed. Contribution consent binds
+specific item digests, reviewer identity, and review time. Local retention
+deletion accepts only ordinary files within one explicit root and refuses the
+root itself, directories, symlinks, and paths outside it.
+
+The disclosure gate is separate from cryptographic verification. It refuses
+organization/victim ranking, public working payloads for unpatched findings,
+missing coordination references, unreviewed authorization material, failed
+secret scans, absent human export review, and missing limitations. Passing this
+gate is not permission to publish and does not replace legal or vendor review.
+
 The current reference redactor supports AES-256-GCM placeholders and optional
 authenticated length buckets through the signing/cryptography extra. The key
 is never stored in the trace. Cryptographic selective-disclosure proofs are not

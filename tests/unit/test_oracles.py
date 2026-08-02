@@ -179,3 +179,99 @@ def test_absent_event_and_execution_status_fail_or_remain_unknown() -> None:
     assert absent.status == OracleStatus.FAIL
     assert mismatched.status == OracleStatus.FAIL
     assert missing.status == OracleStatus.INCONCLUSIVE
+
+
+@pytest.mark.parametrize(
+    ("oracle", "record"),
+    [
+        (
+            {"kind": "file-state", "path": "/safe.txt", "exists": True},
+            _record("filesystem.stat", {"path": "/safe.txt", "exists": True}),
+        ),
+        (
+            {"kind": "process-state", "returncode": 0},
+            _record("process.completed", {"returncode": 0}),
+        ),
+        (
+            {"kind": "network-effect", "delivered": False, "sinkOnly": True},
+            _record("network.egress-attempt", {"delivered": False, "sinkOnly": True}),
+        ),
+        (
+            {"kind": "tool-invocation", "tool": "safe-tool"},
+            _record("tool.requested", {"tool": "safe-tool"}),
+        ),
+        (
+            {"kind": "permission-bypass", "bypassed": False},
+            _record("authorization.decision", {"bypassed": False}),
+        ),
+        (
+            {"kind": "browser-state", "url": "https://example.invalid"},
+            _record("browser.observed", {"url": "https://example.invalid"}),
+        ),
+        (
+            {"kind": "database-mutation", "table": "customers", "changed": True},
+            _record("database.update", {"table": "customers", "changed": True}),
+        ),
+        (
+            {"kind": "inter-agent-handoff", "sender": "a", "recipient": "b"},
+            _record("inter-agent.sent", {"sender": "a", "recipient": "b"}),
+        ),
+        (
+            {"kind": "state-transition", "from": "dormant", "to": "triggered"},
+            _record("safety.transition", {"from": "dormant", "to": "triggered"}),
+        ),
+        (
+            {"kind": "trigger-activation", "triggered": True},
+            _record("safety.trigger-activation", {"triggered": True}),
+        ),
+    ],
+)
+def test_typed_observable_oracles_pass_only_on_normalized_records(
+    oracle: dict[str, object],
+    record: ObservableRecord,
+) -> None:
+    assert evaluate_oracles([oracle], [record]).status == OracleStatus.PASS
+
+
+def test_canary_and_composite_oracles_keep_failure_and_inconclusive_distinct() -> None:
+    canary = evaluate_oracles(
+        [{"kind": "canary-observed", "canaryId": "sova:canary:1"}],
+        [_record("network.egress-attempt", {"canaryIds": ["sova:canary:1"]})],
+    )
+    composite = evaluate_oracles(
+        [
+            {
+                "kind": "composite",
+                "operator": "all",
+                "items": [
+                    {"kind": "event-present", "event": "tool.completed"},
+                    {"kind": "network-effect", "delivered": False},
+                ],
+            }
+        ],
+        [
+            _record("tool.completed", {"status": "succeeded"}),
+            _record("network.egress-attempt", {"delivered": False}),
+        ],
+    )
+    assert canary.status == OracleStatus.PASS
+    assert composite.status == OracleStatus.PASS
+
+
+def test_malformed_typed_and_composite_oracles_refuse_ambiguous_meaning() -> None:
+    with pytest.raises(FormatError, match="expected field"):
+        evaluate_oracles([{"kind": "network-effect"}], [])
+    with pytest.raises(FormatError, match="exactly one"):
+        evaluate_oracles(
+            [
+                {
+                    "kind": "composite",
+                    "operator": "not",
+                    "items": [
+                        {"kind": "event-present", "event": "a"},
+                        {"kind": "event-present", "event": "b"},
+                    ],
+                }
+            ],
+            [],
+        )

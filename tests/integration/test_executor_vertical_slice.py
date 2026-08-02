@@ -25,6 +25,7 @@ from sova.executors import (
 from sova.formats import sha256_digest, strict_json_loads
 from sova.formats.errors import FormatError
 from sova.trace import TraceReader
+from tests.support.authorization import authorize_synthetic_steps
 
 _FIXTURE = b"portable fixture"
 _DIGEST = sha256_digest(_FIXTURE)
@@ -394,16 +395,14 @@ def test_runner_never_persists_resolved_secret_value(tmp_path: Path) -> None:
         executable_allowlist=(executable,),
         environment_allowlist=frozenset({"SOVA_TEST_SECRET"}),
     ) as executor:
+        fresh = authorize_synthetic_steps(scenario, executor.capabilities())
         result = run_capsule(
             capsule,
             trace,
             executor=executor,
             workspace=tmp_path,
-            authorization={
-                "decision": "allowed",
-                "scopeDigest": "sha256:" + ("0" * 64),
-                "decidedBy": "test-fixture",
-            },
+            authorization_session=fresh.session,
+            approvals=fresh.approvals,
             secret_provider=_SecretProvider(),
         )
     assert result.completion == "completed"

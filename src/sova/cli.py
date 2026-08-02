@@ -20,6 +20,7 @@ from sova.capsule import (
     render_capsule,
     scenario_template,
 )
+from sova.detonation import run_sleeper_demo
 from sova.formats import (
     PackageReader,
     canonical_json_bytes,
@@ -29,6 +30,7 @@ from sova.formats import (
 )
 from sova.formats.errors import FormatError
 from sova.reproduction import compare_observable_outcomes
+from sova.safety import known_backend_descriptors
 from sova.trace import TraceReader, recover_trace
 from sova.trace.otel import export_event
 
@@ -171,6 +173,25 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     )
     recover_parser.add_argument("destination", type=_path)
     recover_parser.set_defaults(handler=_recover_trace)
+
+    safety_parser = commands.add_parser(
+        "safety",
+        help="inspect local containment capability without starting a backend",
+    )
+    safety_commands = safety_parser.add_subparsers(dest="safety_command")
+    backends_parser = safety_commands.add_parser(
+        "backends",
+        help="report known containment backends and explicit limitations",
+    )
+    backends_parser.set_defaults(handler=_safety_backends)
+
+    demo_parser = commands.add_parser(
+        "demo",
+        help="run a safe no-native-code synthetic demonstration",
+    )
+    demo_parser.add_argument("kind", choices=("sleeper",))
+    demo_parser.add_argument("destination", type=_path)
+    demo_parser.set_defaults(handler=_demo)
     return parser
 
 
@@ -338,6 +359,24 @@ def _export(args: argparse.Namespace) -> int:
 def _recover_trace(args: argparse.Namespace) -> int:
     digest = recover_trace(args.destination)
     sys.stdout.write(f"{digest}  {args.destination}\n")
+    return 0
+
+
+def _safety_backends(_args: argparse.Namespace) -> int:
+    value = [backend.to_mapping() for backend in known_backend_descriptors()]
+    sys.stdout.buffer.write(canonical_json_bytes(value) + b"\n")
+    return 0
+
+
+def _demo(args: argparse.Namespace) -> int:
+    if args.kind != "sleeper":  # pragma: no cover - argparse constrains this
+        raise FormatError("SOVA-DEMO-KIND", "unsupported demo kind")
+    artifacts = run_sleeper_demo(args.destination)
+    rendered = asdict(artifacts)
+    rendered["capsule"] = str(artifacts.capsule)
+    rendered["trace"] = str(artifacts.trace)
+    rendered["summary"] = str(artifacts.summary)
+    sys.stdout.buffer.write(canonical_json_bytes(rendered) + b"\n")
     return 0
 
 

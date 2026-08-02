@@ -20,6 +20,14 @@
 5. A valid signer signs misleading or unauthorized evidence.
 6. A hostile extension attempts parser confusion, resource exhaustion, path
    traversal, active-content execution, or capability acquisition.
+7. An agent or malicious capsule attempts to forge, broaden, replay, or
+   self-approve authority.
+8. A target-control collector is confused by redirects, DNS changes, ambiguous
+   scope, or a public URL.
+9. A detonation target attempts real egress, child-process escape, persistent
+   state, cleanup failure, or anti-sandbox behavior.
+10. A missing, degraded, dishonest, or contradictory sensor creates false
+    confidence about an effect or attribution.
 
 ## Defended properties
 
@@ -42,6 +50,15 @@
   potentially sensitive exception message;
 - declared-outcome comparison becomes inconclusive on recorder-reported loss,
   non-full content capture, or absent selected evidence families.
+- exact per-action scope, consequence ceiling, monotone effect budget, bound
+  containment digest, expiring proof, and required-evidence checks;
+- agent self-approval refusal and fresh single-use human approval for effectful
+  and offensive actions;
+- caller assertions cannot authorize real effectful executor paths;
+- synthetic-world network attempts terminate in an in-memory sink that never
+  opens a socket;
+- claim-conditioned evidence closure reports missing, degraded, and
+  contradictory sensor coverage instead of silently inferring safety.
 
 ## Out of scope or not guaranteed
 
@@ -63,6 +80,15 @@
   process, operating system, debugger, or memory inspection;
 - deterministic behavior across stochastic or changed runtimes;
 - non-repudiation, unforgeability, causality proof, or hidden-thought capture.
+- truth of a claimed human identity, comprehension of an approval challenge,
+  or honesty of the trusted approval/control-proof collector;
+- containment against a compromised host, kernel, hypervisor, executor binary,
+  or malicious runtime administrator;
+- native-code isolation from the in-memory synthetic world, which executes no
+  target-native code and is not an OS sandbox;
+- complete observability, anti-sandbox fidelity, or real-world equivalence of
+  synthetic services;
+- prevention of deliberate code modification by a trusted local operator.
 
 ## Security language
 
@@ -91,6 +117,11 @@ Short commitment keys fail before capture. Negative controls confirm that a
 byte-identical replay and two different traces signed by the same valid key
 remain individually valid offline; SOVA does not misrepresent those cases as
 detectable without an external freshness/transparency policy.
+Authorization tests mutate every scope dimension, proof freshness, containment
+binding, effect ceiling, approval level/signature/use count, and budget. The
+detonation suite verifies run-unique canaries, declared transforms, sink-only
+egress, reset, nine labeled target families, missing sensors, degraded coverage,
+contradictory observations, and containment-descriptor binding.
 
 Still required before `1.0`: fuzzing at scale, independent parser agreement,
 cross-language canonical digests, zip-bomb corpus review, encryption/selective

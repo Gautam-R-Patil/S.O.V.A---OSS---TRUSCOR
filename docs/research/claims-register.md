@@ -82,6 +82,7 @@ guidance, or original research:
 - **SRC-OSI:** [Open Source Definition](https://opensource.org/osd)
 - **SRC-LOCAL-ADR:** [Accepted SOVA decisions](../decisions/0005-topic-00-project-constitution.md)
 - **SRC-PROTOCOL:** [Predeclared SOVA comparison protocol](./predeclared-comparison-protocol.md)
+- **SRC-MELRA:** [MELRA public repository](https://github.com/XAGI-Lab/melra)
 
 ## Product and implementation claims
 
@@ -104,6 +105,9 @@ guidance, or original research:
 | P-15 | One safe owned conditional-behavior capsule can be executed through scripted and restricted-local backends, inspected, played back inertly, compared on declared outcomes, repackaged with both traces, and verified offline without Atlas. | VERIFIED | Architecture owner | `tests/integration/test_no_atlas_complete_vertical_slice.py`; hosted CI for the cited commit | 2026-07-31 | Every executor-contract change | Bounded to the deterministic fixture; host execution is not a security sandbox. |
 | P-16 | The public exact declared-outcome comparator refuses equivalence when a source trace is invalid or reports dropped events, non-full capture, or an absent selected event family. | VERIFIED | Evidence owner | `sova.reproduction`; reproduction failure tests | 2026-07-31 | Before 0.2 | This is not the private experimental semantic-reproduction mechanism or a general semantic judge. |
 | P-17 | The restricted-local executor can resolve strict opaque `sova-secret:` references just in time without storing the resolved value in the capsule or normal trace outcome. | VERIFIED | Privacy owner | executor/capsule integration tests; [executor contract](../specifications/executor-contract-0.1.md) | 2026-07-31 | Every secret-boundary change | The allowlisted child and host may observe the in-memory value; this is not a hardware secret boundary. |
+| P-18 | The reference runner refuses real effectful execution without a live authorization session binding exact intent, proof, containment, budgets, and required evidence; scripted and read-only compatibility paths cannot perform a real mutation. | VERIFIED | Safety owner | [ADR-0011](../decisions/0011-authority-containment-evidence-kernel.md); authorization and integration tests | 2026-08-02 | Every authorization or executor change | Bounded to the implemented reference runner and tested adapters; not a claim about a compromised host or modified binary. |
+| P-19 | The bundled synthetic sleeper fixture activates deterministically, exposes inert canary access and sink-only egress through healthy required sensors, emits verifiable artifacts, and resets its event-sourced state. | VERIFIED | Detonation owner | `tests/integration/test_synthetic_detonation_vertical_slice.py`; [synthetic detonation specification](../specifications/synthetic-detonation-0.1.md) | 2026-08-02 | Every sensor, target, or world change | Measurement-system fixture only; it does not establish real-model, anti-sandbox, or native-code fidelity. |
+| P-20 | MELRA `0.3.0-alpha.0` has been reviewed as a possible future browser/computer/terminal/file executor, but no MELRA adapter or conformance result ships in SOVA yet. | VERIFIED | Adapter owner | SRC-MELRA at pinned commit `a6dd6710f5ae94e8ce825ef99df9b01d7f974b95`; [adapter boundary](../specifications/melra-adapter-boundary-0.1.md) | 2026-08-02 | Before Topic 13 implementation | The public release review does not verify confidential target architecture or future roadmap capabilities. |
 
 ## Market, incident, and operational claims
 

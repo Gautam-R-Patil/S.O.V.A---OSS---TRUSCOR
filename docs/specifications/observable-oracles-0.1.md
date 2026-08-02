@@ -30,6 +30,18 @@ The reference evaluator implements:
 | `fixture-label` | A deterministic synthetic fixture exposes the declared label or text |
 | `event-present` | At least one event of the declared kind was observed |
 | `execution-status` | At least one normalized executor status equals the declared status |
+| `file-state` | A recorded filesystem state/effect matches declared fields |
+| `process-state` | A recorded process state matches command, result, or operation |
+| `network-effect` | A destination, payload class, delivery, or sink-only effect matches |
+| `canary-observed` | A run-bound canary identifier appears in deterministic observations |
+| `tool-invocation` | A tool/MCP invocation matches the declared operation |
+| `permission-bypass` | Authorization observations match a declared bypass condition |
+| `browser-state` | Recorded URL, title, state, or browser operation matches |
+| `database-mutation` | A database/API mutation matches declared state fields |
+| `inter-agent-handoff` | A recorded sender/recipient/message handoff matches |
+| `state-transition` | A recorded state transition matches the declared state |
+| `trigger-activation` | An observable trigger state matches the declaration |
+| `composite` | Bounded `all`, `any`, or `not` logic over child oracles |
 
 Paths use a deliberately small object-only form: `$` or `$.member.child`.
 Unknown oracle kinds return `inconclusive`; they are never treated as passing.
