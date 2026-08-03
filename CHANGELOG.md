@@ -86,6 +86,17 @@ have independent version ledgers.
   minimization; digest-only local experience; and an owned-target Phantom
   Fuzzer contract with secret-free attempt and browser-confirmation trace
   events.
+- Evidence-linked forensic reconstruction with causal partial-ordering,
+  uncertain-order and missing-sensor markers, paired-intervention attribution,
+  explicit confounding/abstention, Wilson intervals, and a five-case
+  deterministic calibration fixture.
+- Watermarked self-assessment evidence bundles, SARIF 2.1.0 projection/import,
+  four-state execution-bounded scanner adjudication, local-only disclosure
+  preparation, and technical, executive, reproduction, and methodology views.
+- Typed metadata-only composition graphs, pairwise/t-wise/risk/trigger-aware
+  bounded search, fresh-observation minimization, element-removal attribution,
+  portable `.sova` composition fragments, and a ground-truth composition-only
+  failure fixture.
 
 ### Fixed
 

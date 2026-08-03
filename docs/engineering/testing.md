@@ -39,6 +39,14 @@ failures, MELRA internal-status normalization, cross-adapter conformance,
 owned-target admission, digest-only Phantom trace capture, and exception-path
 token cleanup. Optional live backend checks never replace the offline suite.
 
+Topics 15-17 add causal partial-order reconstruction, missing-sensor and clock
+uncertainty, paired-intervention support/confound/abstention cases, a five-case
+ground-truth calibration fixture, evidence and SARIF hostile inputs,
+execution-bounded four-state adjudication, disclosure redaction and no-send
+proofs, four composition-search strategies, fresh-observation minimization,
+credential-value rejection, and one capsule-to-trace-to-forensics-to-evidence
+composition-only vertical slice.
+
 ## Determinism
 
 - The default seed is `20260729`.

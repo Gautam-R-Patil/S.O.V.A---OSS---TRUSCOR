@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/forensic-reconstruction-0.1.0.schema.json",
+  "title": "SOVA forensic reconstruction 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactType", "schemaVersion", "source", "entries", "causalEdges", "uncertainOrderPairs", "missingSensorMarkers", "limitations"],
+  "properties": {
+    "artifactType": {"const": "sova.forensic-reconstruction"},
+    "schemaVersion": {"const": "0.1.0"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "digest", "integrityState"],
+      "properties": {
+        "type": {"type": "string", "minLength": 1, "maxLength": 128},
+        "id": {"type": "string", "minLength": 1, "maxLength": 512},
+        "digest": {"type": ["string", "null"], "maxLength": 256},
+        "integrityState": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    },
+    "entries": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["eventId", "sequence", "kind", "phase", "actor", "target", "wallTime", "clockDomain", "orderBasis", "decisionPoint", "missingOrRedacted", "parents", "evidenceDigest", "statement"],
+        "properties": {
+          "eventId": {"type": "string", "minLength": 1, "maxLength": 512},
+          "sequence": {"type": "integer", "minimum": 0},
+          "kind": {"type": "string", "minLength": 1, "maxLength": 256},
+          "phase": {"type": "string", "minLength": 1, "maxLength": 256},
+          "actor": {"type": "string", "minLength": 1, "maxLength": 512},
+          "target": {"type": "string", "minLength": 1, "maxLength": 512},
+          "wallTime": {"type": ["string", "null"], "maxLength": 128},
+          "clockDomain": {"type": "string", "minLength": 1, "maxLength": 256},
+          "orderBasis": {"enum": ["source-start", "declared-causal-link", "missing-causal-parent", "local-monotonic-clock", "uncertain-cross-clock"]},
+          "decisionPoint": {"type": "boolean"},
+          "missingOrRedacted": {"type": "boolean"},
+          "parents": {"type": "array", "maxItems": 10000, "items": {"type": "string", "minLength": 1, "maxLength": 512}, "uniqueItems": true},
+          "evidenceDigest": {"type": ["string", "null"], "maxLength": 256},
+          "statement": {"type": "string", "minLength": 1, "maxLength": 4096}
+        }
+      }
+    },
+    "causalEdges": {"type": "array", "maxItems": 500000, "items": {"type": "object", "required": ["parent", "child"], "additionalProperties": false, "properties": {"parent": {"type": "string"}, "child": {"type": "string"}}}},
+    "uncertainOrderPairs": {"type": "array", "maxItems": 100000, "items": {"type": "object", "required": ["left", "right"], "additionalProperties": false, "properties": {"left": {"type": "string"}, "right": {"type": "string"}}}},
+    "missingSensorMarkers": {"type": "array", "maxItems": 200000, "items": {"type": "string", "maxLength": 2048}},
+    "limitations": {"type": "array", "minItems": 1, "maxItems": 1000, "items": {"type": "string", "minLength": 1, "maxLength": 4096}}
+  }
+}

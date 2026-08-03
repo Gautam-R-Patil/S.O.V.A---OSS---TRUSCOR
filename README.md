@@ -495,6 +495,26 @@ sova replay study ./run.sova-trace ./trial-1.sova-trace ./trial-2.sova-trace
 sova executors receipts
 sova hunt-demo
 
+# Reconstruct observable evidence and assess reviewed paired interventions
+sova forensics reconstruct ./incident.sova-trace
+sova forensics attribute ./counterfactual-study.json
+sova forensics benchmark
+
+# Build watermarked self-assessment evidence and interoperable SARIF
+sova evidence ./evidence.json --format technical
+sova evidence ./evidence.json --format sarif
+
+# Prepare an inert scanner test plan, then evaluate reviewed observations
+sova adjudicate plan ./adjudication-study.json
+sova adjudicate evaluate ./adjudication-study.json
+
+# Prepare a local disclosure package; this never sends or publishes
+sova disclose ./disclosure-study.json
+
+# Plan component-chain candidates without execution, or evaluate supplied observations
+sova compose plan ./composition-graph.json --strategy trigger-aware-sequence
+sova compose evaluate ./composition-study.json --strategy trigger-aware-sequence
+
 # Planned later commands
 
 # 1. Configure a model provider or a local model
@@ -502,9 +522,6 @@ sova init
 
 # Hunt for conditional behavior on an authorized target
 sova detonate ./my-agent --hunt-triggers --authorize
-
-# 6. Reconstruct an incident
-sova forensics ./incident.sova-trace
 
 # 7. Rehearse a real task inside a safe clone
 sova rehearse ./my-agent --task "process refund #4471"
@@ -658,6 +675,9 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `sova check` | Bundled bounded synthetic target and honest confirmed/inconclusive exit states implemented in [ADR-0015](./docs/decisions/0015-bounded-check-and-no-melra-proof.md); arbitrary target execution awaits adapters |
 | MELRA adapter | Public `0.3.0-alpha.0` boundary reviewed; adapter and conformance remain Topic 13 |
 | Sleeper demonstration | Implemented with named narrow baselines, two-dimensional search, signed discovery/reproduction traces, `.sova`, independent offline verification, and reset evidence |
+| `sova forensics` | Evidence-linked partial-order reconstruction and paired-intervention attribution implemented in [ADR-0019](./docs/decisions/0019-evidence-linked-counterfactual-forensics.md); real-system accuracy remains unproven |
+| `sova evidence`, `adjudicate`, and `disclose` | Watermarked evidence, SARIF projection/import, bounded scanner labels, human-gated local disclosure preparation, and four report views implemented in [ADR-0020](./docs/decisions/0020-bounded-evidence-adjudication-disclosure.md) |
+| `sova compose` | Typed metadata-only graph, four bounded search strategies, fresh-evidence minimization, element-removal attribution, portable capsule fragment, and deterministic composition-only fixture implemented in [ADR-0021](./docs/decisions/0021-bounded-composition-only-search.md); comparative search superiority remains unproven |
 | Remaining security CLI commands / SDK / local MCP | Not yet implemented |
 | Registry and community surfaces | Not yet implemented |
 

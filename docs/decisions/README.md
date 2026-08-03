@@ -26,6 +26,9 @@ silently rewrite it.
 | [0016](./0016-three-mode-replay.md) | Three non-interchangeable replay modes | Accepted |
 | [0017](./0017-capability-routed-mcp-execution.md) | Capability-routed MCP execution without a MELRA dependency | Accepted |
 | [0018](./0018-bounded-trigger-search.md) | Bounded, measurable trigger search | Accepted |
+| [0019](./0019-evidence-linked-counterfactual-forensics.md) | Evidence-linked counterfactual forensics | Accepted |
+| [0020](./0020-bounded-evidence-adjudication-disclosure.md) | Bounded evidence, adjudication, and disclosure | Accepted |
+| [0021](./0021-bounded-composition-only-search.md) | Bounded composition-only search | Accepted |
 
 Use the next zero-padded number. Every ADR states its status, date, owner,
 scope, decision, alternatives, consequences, and superseded decisions.

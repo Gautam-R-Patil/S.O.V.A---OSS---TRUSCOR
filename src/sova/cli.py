@@ -20,6 +20,32 @@ from sova.capsule import (
     render_capsule,
     scenario_template,
 )
+from sova.composition import (
+    CompositionBudget,
+    CompositionObservation,
+    CompositionSearchEngine,
+    CompositionStrategy,
+    graph_from_mapping,
+)
+from sova.evidence import (
+    ExecutionObservation,
+    ObservationState,
+    ScannerFinding,
+    adjudicate_findings,
+    build_evidence_bundle,
+    construct_safe_test_plan,
+    evidence_to_sarif,
+    prepare_disclosure_package,
+    render_evidence_report,
+)
+from sova.forensics import (
+    CausalLayer,
+    CounterfactualTrial,
+    assess_counterfactuals,
+    reconstruct_events,
+    reconstruct_trace,
+    run_attribution_ground_truth_fixture,
+)
 from sova.formats import (
     PackageReader,
     canonical_json_bytes,
@@ -39,7 +65,11 @@ from sova.replay import (
 )
 from sova.reproduction import compare_observable_outcomes
 from sova.runtime import ProfileKind, RunProfile, standard_profile
-from sova.safety import known_backend_descriptors
+from sova.safety import (
+    DisclosureRequest,
+    VulnerabilityState,
+    known_backend_descriptors,
+)
 from sova.search import run_trigger_search_demo
 from sova.trace import TraceReader, recover_trace
 from sova.trace.otel import export_event
@@ -277,6 +307,78 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         help="run an owned inert trigger-search comparison without native code",
     )
     hunt_demo_parser.set_defaults(handler=_hunt_demo)
+
+    forensics_parser = commands.add_parser(
+        "forensics", help="reconstruct evidence or assess declared counterfactual trials"
+    )
+    forensics_commands = forensics_parser.add_subparsers(dest="forensics_command")
+    reconstruct_parser = forensics_commands.add_parser(
+        "reconstruct", help="build an uncertainty-preserving evidence timeline"
+    )
+    reconstruct_parser.add_argument("source", type=_path)
+    reconstruct_parser.set_defaults(handler=_forensics_reconstruct)
+    attribute_parser = forensics_commands.add_parser(
+        "attribute", help="assess paired intervention records without claiming causal proof"
+    )
+    attribute_parser.add_argument("study", type=_path)
+    attribute_parser.set_defaults(handler=_forensics_attribute)
+    benchmark_parser = forensics_commands.add_parser(
+        "benchmark", help="run the safe deterministic attribution acceptance fixture"
+    )
+    benchmark_parser.set_defaults(handler=_forensics_benchmark)
+
+    evidence_parser = commands.add_parser(
+        "evidence", help="build a bounded, watermarked self-assessment evidence bundle"
+    )
+    evidence_parser.add_argument("specification", type=_path)
+    evidence_parser.add_argument(
+        "--format",
+        choices=("json", "sarif", "technical", "executive", "reproduction", "methodology"),
+        default="json",
+    )
+    evidence_parser.set_defaults(handler=_evidence)
+
+    adjudicate_parser = commands.add_parser(
+        "adjudicate", help="bound scanner disagreement using reviewed execution observations"
+    )
+    adjudicate_commands = adjudicate_parser.add_subparsers(dest="adjudicate_command")
+    adjudicate_plan = adjudicate_commands.add_parser(
+        "plan", help="construct an inert authorized test plan"
+    )
+    adjudicate_plan.add_argument("study", type=_path)
+    adjudicate_plan.set_defaults(handler=_adjudicate_plan)
+    adjudicate_evaluate = adjudicate_commands.add_parser(
+        "evaluate", help="adjudicate already-recorded observations"
+    )
+    adjudicate_evaluate.add_argument("study", type=_path)
+    adjudicate_evaluate.set_defaults(handler=_adjudicate_evaluate)
+
+    disclose_parser = commands.add_parser(
+        "disclose", help="prepare a local disclosure package without sending or publishing"
+    )
+    disclose_parser.add_argument("specification", type=_path)
+    disclose_parser.set_defaults(handler=_disclose)
+
+    compose_parser = commands.add_parser(
+        "compose", help="plan or evaluate bounded multi-component interaction searches"
+    )
+    compose_commands = compose_parser.add_subparsers(dest="compose_command")
+    compose_plan = compose_commands.add_parser(
+        "plan", help="list deterministic candidates without executing them"
+    )
+    compose_plan.add_argument("graph", type=_path)
+    compose_plan.add_argument("--strategy", choices=tuple(CompositionStrategy), default="pairwise")
+    compose_plan.add_argument("--limit", type=int, default=100)
+    compose_plan.add_argument("--t", type=int, default=3)
+    compose_plan.set_defaults(handler=_compose_plan)
+    compose_evaluate = compose_commands.add_parser(
+        "evaluate", help="evaluate declared observations; never execute target actions"
+    )
+    compose_evaluate.add_argument("study", type=_path)
+    compose_evaluate.add_argument(
+        "--strategy", choices=tuple(CompositionStrategy), default="trigger-aware-sequence"
+    )
+    compose_evaluate.set_defaults(handler=_compose_evaluate)
     return parser
 
 
@@ -578,6 +680,341 @@ def _executor_receipts(_args: argparse.Namespace) -> int:
 def _hunt_demo(_args: argparse.Namespace) -> int:
     sys.stdout.buffer.write(canonical_json_bytes(run_trigger_search_demo()) + b"\n")
     return 0
+
+
+def _object_member(value: dict[str, Any], name: str) -> dict[str, Any]:
+    member = value.get(name)
+    if not isinstance(member, dict):
+        raise FormatError("SOVA-CLI-FIELD", f"{name} must be an object", path=f"$.{name}")
+    return member
+
+
+def _array_member(value: dict[str, Any], name: str) -> list[Any]:
+    member = value.get(name)
+    if not isinstance(member, list):
+        raise FormatError("SOVA-CLI-FIELD", f"{name} must be an array", path=f"$.{name}")
+    return member
+
+
+def _string_member(value: dict[str, Any], name: str) -> str:
+    member = value.get(name)
+    if not isinstance(member, str) or not member:
+        raise FormatError("SOVA-CLI-FIELD", f"{name} must be a string", path=f"$.{name}")
+    return member
+
+
+def _boolean_member(value: dict[str, Any], name: str) -> bool:
+    member = value.get(name)
+    if not isinstance(member, bool):
+        raise FormatError("SOVA-CLI-FIELD", f"{name} must be a boolean", path=f"$.{name}")
+    return member
+
+
+def _optional_boolean_member(value: dict[str, Any], name: str) -> bool | None:
+    member = value.get(name)
+    if member is not None and not isinstance(member, bool):
+        raise FormatError("SOVA-CLI-FIELD", f"{name} must be a boolean or null", path=f"$.{name}")
+    return member
+
+
+def _integer_value(value: Any, name: str, *, default: int) -> int:
+    selected = default if value is None else value
+    if not isinstance(selected, int) or isinstance(selected, bool):
+        raise FormatError("SOVA-CLI-FIELD", f"{name} must be an integer", path=f"$.{name}")
+    return selected
+
+
+def _scanner_finding(value: Any) -> ScannerFinding:
+    if not isinstance(value, dict):
+        raise FormatError("SOVA-CLI-SCANNER-FINDING", "scanner finding must be an object")
+    return ScannerFinding(
+        scanner=_string_member(value, "scanner"),
+        scanner_version=_string_member(value, "scannerVersion"),
+        rule_id=_string_member(value, "ruleId"),
+        target_id=_string_member(value, "targetId"),
+        location=_string_member(value, "location"),
+        message=_string_member(value, "message"),
+        evidence_reference=_string_member(value, "evidenceReference"),
+        mechanism=_string_member(value, "mechanism"),
+    )
+
+
+def _forensics_reconstruct(args: argparse.Namespace) -> int:
+    path: Path = args.source
+    if path.name.endswith(".sova-trace"):
+        report = reconstruct_trace(path)
+    else:
+        specification = _load_object(path)
+        raw_events = _array_member(specification, "events")
+        if any(not isinstance(event, dict) for event in raw_events):
+            raise FormatError("SOVA-FORENSICS-EVENT", "events must contain objects")
+        report = reconstruct_events(
+            raw_events,
+            source_type=str(specification.get("sourceType", "external.normalized-events")),
+            source_id=str(specification.get("sourceId", path.name)),
+            source_digest=(
+                str(specification["sourceDigest"])
+                if specification.get("sourceDigest") is not None
+                else None
+            ),
+            integrity_state=str(specification.get("integrityState", "not-independently-verified")),
+            dropped_event_count=_integer_value(
+                specification.get("droppedEventCount"), "droppedEventCount", default=0
+            ),
+        )
+    document = report.to_mapping()
+    validate_document(document, "sova.forensic-reconstruction")
+    sys.stdout.buffer.write(canonical_json_bytes(document) + b"\n")
+    return 0
+
+
+def _counterfactual_trial(value: Any) -> CounterfactualTrial:
+    if not isinstance(value, dict):
+        raise FormatError("SOVA-FORENSICS-TRIAL", "counterfactual trial must be an object")
+    try:
+        layer = CausalLayer(_string_member(value, "layer"))
+        changed = tuple(CausalLayer(str(item)) for item in _array_member(value, "changedLayers"))
+    except ValueError as error:
+        raise FormatError("SOVA-FORENSICS-LAYER", "unsupported causal layer") from error
+    return CounterfactualTrial(
+        trial_id=_string_member(value, "trialId"),
+        layer=layer,
+        changed_layers=changed,
+        baseline_outcome=_optional_boolean_member(value, "baselineOutcome"),
+        intervention_outcome=_optional_boolean_member(value, "interventionOutcome"),
+        context_equivalent=_boolean_member(value, "contextEquivalent"),
+        evidence_complete=_boolean_member(value, "evidenceComplete"),
+        original_trace=(
+            str(value["originalTrace"]) if value.get("originalTrace") is not None else None
+        ),
+        counterfactual_trace=(
+            str(value["counterfactualTrace"])
+            if value.get("counterfactualTrace") is not None
+            else None
+        ),
+        execution_status=str(value.get("executionStatus", "completed")),
+        limitation=str(value["limitation"]) if value.get("limitation") is not None else None,
+    )
+
+
+def _forensics_attribute(args: argparse.Namespace) -> int:
+    study = _load_object(args.study)
+    trials = tuple(_counterfactual_trial(item) for item in _array_member(study, "trials"))
+    report = assess_counterfactuals(_string_member(study, "originalTrace"), trials)
+    sys.stdout.buffer.write(canonical_json_bytes(report.to_mapping()) + b"\n")
+    return 0
+
+
+def _forensics_benchmark(_args: argparse.Namespace) -> int:
+    result = run_attribution_ground_truth_fixture()
+    sys.stdout.buffer.write(canonical_json_bytes(result.to_mapping()) + b"\n")
+    return 0
+
+
+def _evidence(args: argparse.Namespace) -> int:
+    bundle = build_evidence_bundle(_load_object(args.specification))
+    if args.format == "json":
+        document = bundle.to_mapping()
+        validate_document(document, "sova.evidence")
+        sys.stdout.buffer.write(canonical_json_bytes(document) + b"\n")
+    elif args.format == "sarif":
+        sys.stdout.buffer.write(canonical_json_bytes(evidence_to_sarif(bundle)) + b"\n")
+    else:
+        sys.stdout.write(render_evidence_report(bundle, audience=args.format))
+    return 0
+
+
+def _execution_observation(value: Any) -> ExecutionObservation:
+    if not isinstance(value, dict):
+        raise FormatError("SOVA-CLI-OBSERVATION", "execution observation must be an object")
+    try:
+        state = ObservationState(_string_member(value, "state"))
+    except ValueError as error:
+        raise FormatError("SOVA-CLI-OBSERVATION-STATE", "unsupported observation state") from error
+    raw_limitations = value.get("limitations", [])
+    if not isinstance(raw_limitations, list) or any(
+        not isinstance(item, str) for item in raw_limitations
+    ):
+        raise FormatError("SOVA-CLI-LIMITATIONS", "limitations must be a string array")
+    return ExecutionObservation(
+        claim_key=_string_member(value, "claimKey"),
+        state=state,
+        trace_reference=(
+            str(value["traceReference"]) if value.get("traceReference") is not None else None
+        ),
+        oracle_method=_string_member(value, "oracleMethod"),
+        evidence_complete=_boolean_member(value, "evidenceComplete"),
+        safe_and_authorized=_boolean_member(value, "safeAndAuthorized"),
+        limitations=tuple(raw_limitations),
+    )
+
+
+def _adjudicate_plan(args: argparse.Namespace) -> int:
+    study = _load_object(args.study)
+    findings = tuple(_scanner_finding(item) for item in _array_member(study, "findings"))
+    raw_actions = _array_member(study, "allowedActionFamilies")
+    if any(not isinstance(item, str) for item in raw_actions):
+        raise FormatError("SOVA-CLI-ACTIONS", "allowedActionFamilies must contain strings")
+    plan = construct_safe_test_plan(
+        findings,
+        target_owned_or_authorized=study.get("targetOwnedOrAuthorized") is True,
+        allowed_action_families=tuple(raw_actions),
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(plan) + b"\n")
+    return 0
+
+
+def _adjudicate_evaluate(args: argparse.Namespace) -> int:
+    study = _load_object(args.study)
+    findings = tuple(_scanner_finding(item) for item in _array_member(study, "findings"))
+    observations = tuple(
+        _execution_observation(item) for item in _array_member(study, "observations")
+    )
+    report = adjudicate_findings(findings, observations)
+    sys.stdout.buffer.write(canonical_json_bytes(report.to_mapping()) + b"\n")
+    return 0
+
+
+def _disclose(args: argparse.Namespace) -> int:
+    specification = _load_object(args.specification)
+    bundle = build_evidence_bundle(_object_member(specification, "evidence"))
+    raw_request = _object_member(specification, "request")
+    try:
+        vulnerability_state = VulnerabilityState(_string_member(raw_request, "vulnerabilityState"))
+    except ValueError as error:
+        raise FormatError("SOVA-DISCLOSE-STATE", "unsupported vulnerability state") from error
+    request = DisclosureRequest(
+        target_kind=_string_member(raw_request, "targetKind"),
+        vulnerability_state=vulnerability_state,
+        contains_working_payload=_boolean_member(raw_request, "containsWorkingPayload"),
+        authorization_redacted=_boolean_member(raw_request, "authorizationRedacted"),
+        secrets_scan_clean=_boolean_member(raw_request, "secretsScanClean"),
+        human_reviewed=_boolean_member(raw_request, "humanReviewed"),
+        limitations_present=_boolean_member(raw_request, "limitationsPresent"),
+        coordinated_disclosure_reference=(
+            str(raw_request["coordinatedDisclosureReference"])
+            if raw_request.get("coordinatedDisclosureReference") is not None
+            else None
+        ),
+    )
+    contacts = _array_member(specification, "contacts")
+    if any(not isinstance(item, dict) for item in contacts):
+        raise FormatError("SOVA-DISCLOSE-CONTACTS", "contacts must contain objects")
+    vendor_responses = specification.get("vendorResponses", [])
+    if not isinstance(vendor_responses, list) or any(
+        not isinstance(item, dict) for item in vendor_responses
+    ):
+        raise FormatError("SOVA-DISCLOSE-RESPONSES", "vendorResponses must contain objects")
+    package = prepare_disclosure_package(
+        bundle,
+        request,
+        contacts=contacts,
+        clock=_object_member(specification, "clock"),
+        vendor_responses=vendor_responses,
+        remediation=(
+            _object_member(specification, "remediation") if "remediation" in specification else None
+        ),
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(package.to_mapping()) + b"\n")
+    return 0 if package.release_allowed else 3
+
+
+def _composition_budget(
+    value: dict[str, Any], *, default_candidates: int = 100
+) -> CompositionBudget:
+    return CompositionBudget(
+        max_attempts=_integer_value(value.get("maxAttempts"), "maxAttempts", default=100),
+        max_duration_ms=_integer_value(value.get("maxDurationMs"), "maxDurationMs", default=30_000),
+        max_t=_integer_value(value.get("maxT"), "maxT", default=3),
+        max_path_nodes=_integer_value(value.get("maxPathNodes"), "maxPathNodes", default=5),
+        max_candidates=_integer_value(
+            value.get("maxCandidates"), "maxCandidates", default=default_candidates
+        ),
+    )
+
+
+def _compose_plan(args: argparse.Namespace) -> int:
+    graph = graph_from_mapping(_load_object(args.graph))
+    budget = CompositionBudget(max_attempts=args.limit, max_t=args.t, max_candidates=args.limit)
+    engine = CompositionSearchEngine(graph, budget)
+    candidates = engine.candidates(CompositionStrategy(args.strategy))
+    sys.stdout.buffer.write(
+        canonical_json_bytes(
+            {
+                "artifactType": "sova.composition-plan",
+                "schemaVersion": "0.1.0",
+                "strategy": args.strategy,
+                "candidateCount": len(candidates),
+                "candidates": [candidate.to_mapping() for candidate in candidates],
+                "executesActions": False,
+            }
+        )
+        + b"\n"
+    )
+    return 0
+
+
+def _composition_observation(value: Any) -> CompositionObservation:
+    if not isinstance(value, dict):
+        raise FormatError("SOVA-COMPOSE-OBSERVATION", "observation must be an object")
+    traces = value.get("traceReferences", [])
+    outcomes = value.get("individualOutcomes", {})
+    limitations = value.get("limitations", [])
+    if not isinstance(traces, list) or any(not isinstance(item, str) for item in traces):
+        raise FormatError("SOVA-COMPOSE-TRACES", "traceReferences must contain strings")
+    if not isinstance(outcomes, dict) or any(
+        not isinstance(key, str) or not (isinstance(result, bool) or result is None)
+        for key, result in outcomes.items()
+    ):
+        raise FormatError("SOVA-COMPOSE-OUTCOMES", "individualOutcomes is invalid")
+    if not isinstance(limitations, list) or any(not isinstance(item, str) for item in limitations):
+        raise FormatError("SOVA-COMPOSE-LIMITATIONS", "limitations must contain strings")
+    triggered = value.get("triggered")
+    if not (isinstance(triggered, bool) or triggered is None):
+        raise FormatError("SOVA-COMPOSE-TRIGGERED", "triggered must be boolean or null")
+    return CompositionObservation(
+        triggered=triggered,
+        evidence_complete=_boolean_member(value, "evidenceComplete"),
+        oracle_state=_string_member(value, "oracleState"),
+        trace_references=tuple(traces),
+        individual_outcomes=tuple(sorted(outcomes.items())),
+        limitations=tuple(limitations),
+    )
+
+
+def _compose_evaluate(args: argparse.Namespace) -> int:
+    study = _load_object(args.study)
+    graph = graph_from_mapping(_object_member(study, "graph"))
+    observation_rows = _array_member(study, "observations")
+    observations: dict[str, CompositionObservation] = {}
+    for row in observation_rows:
+        if not isinstance(row, dict):
+            raise FormatError("SOVA-COMPOSE-OBSERVATION", "observation row must be an object")
+        digest = _string_member(row, "candidateDigest")
+        if digest in observations:
+            raise FormatError("SOVA-COMPOSE-DUPLICATE", "candidate observation is duplicated")
+        observations[digest] = _composition_observation(row)
+
+    def evaluator(candidate: Any) -> CompositionObservation:
+        return observations.get(
+            candidate.digest,
+            CompositionObservation(
+                triggered=None,
+                evidence_complete=False,
+                oracle_state="not-observed",
+                trace_references=(),
+                individual_outcomes=(),
+                limitations=("No reviewed observation was supplied for this candidate digest.",),
+            ),
+        )
+
+    report = CompositionSearchEngine(
+        graph, _composition_budget(_object_member(study, "budget"))
+    ).search(CompositionStrategy(args.strategy), evaluator)
+    document = report.to_mapping()
+    validate_document(document, "sova.composition-report")
+    sys.stdout.buffer.write(canonical_json_bytes(document) + b"\n")
+    return 0 if report.successful is not None else 3
 
 
 def main(argv: Sequence[str] | None = None) -> int:

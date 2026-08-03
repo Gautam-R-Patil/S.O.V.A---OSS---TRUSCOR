@@ -24,6 +24,9 @@ claiming that the field set is ready for `1.0`.
 - [replay and semantic reproduction](./replay-and-reproduction-0.1.md)
 - [capability-routed external execution](./external-execution-broker-0.1.md)
 - [bounded trigger search](./trigger-search-0.1.md)
+- [forensics and counterfactual attribution](./forensics-0.1.md)
+- [evidence, adjudication, disclosure, and reports](./evidence-adjudication-disclosure-0.1.md)
+- [composition and emergent-chain testing](./composition-testing-0.1.md)
 
 The normative JSON Schema 2020-12 files ship in
 [`src/sova/schemas`](../../src/sova/schemas/README.md). Python is the reference

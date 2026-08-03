@@ -1,0 +1,9 @@
+{
+  "originalTrace": "fixture:original",
+  "trials": [
+    {"trialId": "tool-0", "layer": "tool-description-or-implementation", "changedLayers": ["tool-description-or-implementation"], "baselineOutcome": true, "interventionOutcome": false, "contextEquivalent": true, "evidenceComplete": true, "originalTrace": "fixture:original", "counterfactualTrace": "fixture:tool-0"},
+    {"trialId": "tool-1", "layer": "tool-description-or-implementation", "changedLayers": ["tool-description-or-implementation"], "baselineOutcome": true, "interventionOutcome": false, "contextEquivalent": true, "evidenceComplete": true, "originalTrace": "fixture:original", "counterfactualTrace": "fixture:tool-1"},
+    {"trialId": "tool-2", "layer": "tool-description-or-implementation", "changedLayers": ["tool-description-or-implementation"], "baselineOutcome": true, "interventionOutcome": false, "contextEquivalent": true, "evidenceComplete": true, "originalTrace": "fixture:original", "counterfactualTrace": "fixture:tool-2"},
+    {"trialId": "tool-3", "layer": "tool-description-or-implementation", "changedLayers": ["tool-description-or-implementation"], "baselineOutcome": true, "interventionOutcome": false, "contextEquivalent": true, "evidenceComplete": true, "originalTrace": "fixture:original", "counterfactualTrace": "fixture:tool-3"}
+  ]
+}

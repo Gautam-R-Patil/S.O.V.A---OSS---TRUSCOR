@@ -1,0 +1,31 @@
+{
+  "sourceType": "external.fixture",
+  "sourceId": "safe-forensics-example",
+  "integrityState": "not-independently-verified",
+  "events": [
+    {
+      "id": "fixture:event:0",
+      "sequence": 0,
+      "kind": "prompt.sent",
+      "phase": "exercise",
+      "actor": {"name": "fixture operator"},
+      "target": {"name": "fixture model"},
+      "parents": [],
+      "clockDomain": "fixture-process",
+      "monotonicNs": 0,
+      "clock": {"trusted": true, "skewEstimateNs": 0}
+    },
+    {
+      "id": "fixture:event:1",
+      "sequence": 1,
+      "kind": "model.response",
+      "phase": "exercise",
+      "actor": {"name": "fixture model"},
+      "target": {"name": "fixture operator"},
+      "parents": ["fixture:event:0"],
+      "clockDomain": "fixture-process",
+      "monotonicNs": 1,
+      "clock": {"trusted": true, "skewEstimateNs": 0}
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "targetOwnedOrAuthorized": true,
+  "allowedActionFamilies": ["fixture.read"],
+  "findings": [
+    {"scanner": "fixture-scanner", "scannerVersion": "1", "ruleId": "FIXTURE-1", "targetId": "safe-fixture", "location": "fixture:1", "message": "Possible planted behavior", "evidenceReference": "fixture:scanner:1", "mechanism": "fixture-static-rule"}
+  ],
+  "observations": [
+    {"claimKey": "safe-fixture\u001fFIXTURE-1\u001ffixture:1", "state": "confirmed", "traceReference": "fixture:trace:1", "oracleMethod": "fixture-effect/1", "evidenceComplete": true, "safeAndAuthorized": true, "limitations": ["Synthetic fixture only."]}
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "nodes": [
+    {"id": "agent", "kind": "agent", "name": "Fixture agent", "version": "1", "actorId": null},
+    {"id": "memory", "kind": "data-store", "name": "Fixture memory", "version": "1", "actorId": null},
+    {"id": "tool", "kind": "tool", "name": "Fixture sink tool", "version": "1", "actorId": null},
+    {"id": "observer", "kind": "agent", "name": "Benign observer", "version": "1", "actorId": null}
+  ],
+  "edges": [
+    {"id": "read-memory", "source": "memory", "target": "agent", "kind": "shared-memory", "provenance": "synthetic-ground-truth", "observed": true, "riskWeight": 80, "permission": null, "sharedResource": null, "order": 0, "stateCondition": "fixture-marker-present"},
+    {"id": "invoke-tool", "source": "agent", "target": "tool", "kind": "permission", "provenance": "synthetic-ground-truth", "observed": true, "riskWeight": 90, "permission": "fixture.sink.write", "sharedResource": null, "order": 1, "stateCondition": null},
+    {"id": "observe-agent", "source": "observer", "target": "agent", "kind": "cross-agent", "provenance": "synthetic-ground-truth", "observed": false, "riskWeight": 5, "permission": null, "sharedResource": null, "order": null, "stateCondition": null}
+  ]
+}
