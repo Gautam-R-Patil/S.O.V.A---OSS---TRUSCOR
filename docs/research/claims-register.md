@@ -239,7 +239,7 @@ was grouped into one controlled claim.
 | 10 TRUSCOR boundary | P-02; P-06; L-06 |
 | 11 architecture and evidence standards | P-03; P-10 to P-12; S-01 to S-06 |
 | 12 governance and ethics | P-06; P-12; L-04; L-06 |
-| 13 research agenda and revolutionary bets | C-01 to C-18; S-05 |
+| 13 research agenda and revolutionary bets | C-01 to C-19; S-05 |
 | 14-15 build order and launch narrative | P-07 to P-14; C-13; C-14; C-16; C-17 |
 | 16 legacy claims register | C-01 to C-15; L-01 to L-05; M-01 to M-09; S-01 |
 | Amendment A | P-02; P-12; M-12; L-06 |
