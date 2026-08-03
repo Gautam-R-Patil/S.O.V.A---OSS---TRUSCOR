@@ -277,6 +277,59 @@ measured semantic reproduction across different agent runtimes. Any paper or
 patent claim waits for implementation evidence, strong baselines, quantitative
 experiments, limitations, private review, and qualified counsel.
 
+## Topics 15-17 causal, adjudication, and composition prior art
+
+Review snapshot: 2026-08-03.
+
+This public record documents only established baselines and negative claim
+boundaries. It intentionally excludes private invention hypotheses, claim
+charts, unpublished experiment designs, and counsel material.
+
+### Causal forensics
+
+| Primary source | Established capability | SOVA consequence |
+|---|---|---|
+| [Causal Agent Replay](https://arxiv.org/abs/2606.08275) | Structural-causal agent replay, step interventions, stochastic outcome effects, confidence intervals, and interacting-step credit | Counterfactual agent replay and interaction attribution are direct prior art |
+| [DoVer](https://arxiv.org/abs/2512.06749) | Intervention-driven hypothesis validation and explicit treatment of multiple distinct repairs | SOVA cannot assume or claim one unique responsible agent/step |
+| [REFLECT](https://arxiv.org/abs/2606.09071) | Diagnosis-specific patching, controlled replay, and outcome-flip feedback into attribution | Patch-and-rerun causal validation is established |
+| [TraceElephant](https://aclanthology.org/2026.acl-long.912/) | Full execution traces, reproducible environments, and comparison with partial observation | Missing-input/context handling and full-trace baselines are required |
+| [Who&When Pro](https://arxiv.org/abs/2607.09996) | Large controlled fault-injection attribution corpus | Small same-team fixtures cannot support a state-of-the-art claim |
+
+The public Topic 15 implementation is an evidence-bounded engineering
+foundation. Its five deterministic cases validate supported and abstaining
+paths; they do not establish real-system causal accuracy, novelty, or
+superiority.
+
+### Scanner adjudication
+
+| Primary source | Established capability | SOVA consequence |
+|---|---|---|
+| [When Scanners Lie](https://arxiv.org/abs/2603.14633) | Measures evaluator instability and disagreement in LLM red-teaming | Scanner disagreement is already a direct empirical research topic |
+| [VIPER-MCP](https://arxiv.org/abs/2605.21392) | Code-guided MCP analysis plus end-to-end dynamic exploit confirmation | Dynamic confirmation for agent-tool findings is direct prior art |
+| [Trust but Verify](https://www.usenix.org/conference/usenixsecurity25/presentation/huang-szu-chun) | Compares vulnerability-tagging services against independent experiments | Execution-backed scanner assessment is established |
+| [SARIF 2.1.0 plus Errata 01](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) | Interoperable static-analysis results and result identity | Import/export and result normalization are standards-based engineering |
+| [US8935794B2](https://patents.google.com/patent/US8935794B2/en) | Dynamic unit-test validation of static-analysis findings | A broad dynamic-confirmation patent claim is not justified |
+
+Topic 16 can support a useful comparative paper only after a representative,
+licensed scanner-disagreement dataset and safe execution observations exist.
+No public resolution-rate or scanner-ranking claim is currently permitted.
+
+### Composition search
+
+| Primary source | Established capability | SOVA consequence |
+|---|---|---|
+| [SCR-Bench](https://arxiv.org/abs/2606.15242) | Agent skills that are benign in isolation but harmful along capability, trust, or authorization composition paths | Composition-only agent-skill risk is direct prior art |
+| [AgentThread](https://arxiv.org/abs/2606.28690) | Formal protocol checks, executable counterexamples, and failures emerging under protocol composition | Cross-protocol composition failure is direct prior art |
+| [NIST ACTS](https://csrc.nist.gov/projects/automated-combinatorial-testing-for-software/) and [NIST SP 800-142](https://doi.org/10.6028/NIST.SP.800-142) | Pairwise/t-wise and sequence combinatorial testing, coverage, and fault localization | Pairwise, t-wise, and ordered-interaction search are mature methods |
+| [Delta Debugging](https://www.st.cs.uni-saarland.de/papers/tse2002/) | Minimization of failure-inducing inputs/differences | Element removal and chain minimization are established |
+| [US11010282B2](https://patents.google.com/patent/US11010282B2/en) | Constraint-aware n-wise tests, failure-neighborhood expansion, and fault localization | Broad constrained composition-localization claims are heavily occupied |
+| [US11663113B2](https://patents.google.com/patent/US11663113B2/en) | Runtime reprioritization of tests after a failure | Adaptive/risk-like test ordering is occupied |
+
+The public Topic 17 fixture proves only that the reference implementation can
+find and minimize one planted composition-only effect. Risk-guided superiority,
+real-system yield, novelty, and patentability remain unverified. Public SOVA
+must compare with these sources rather than claim an empty category.
+
 ## Unresolved names from the planning source
 
 The source planning document also named `unworldly`, `halo-record`,
