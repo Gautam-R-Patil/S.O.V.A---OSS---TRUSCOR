@@ -31,6 +31,14 @@ separation, session/reliability boundaries, local experience integrity, three
 clean demo repetitions, signed-trace verification by a separate process, and
 machine-readable `sova check` exit-state tests.
 
+Topics 12-14 add four-state offline verification, immutable controlled
+re-execution, repeated semantic-outcome trials with Wilson intervals, inert
+side-by-side replay rendering, bounded MCP protocol and backend-fallback
+failures, MELRA internal-status normalization, cross-adapter conformance,
+13-dimension trigger search, adaptive/fixed baseline separation, minimization,
+owned-target admission, digest-only Phantom trace capture, and exception-path
+token cleanup. Optional live backend checks never replace the offline suite.
+
 ## Determinism
 
 - The default seed is `20260729`.

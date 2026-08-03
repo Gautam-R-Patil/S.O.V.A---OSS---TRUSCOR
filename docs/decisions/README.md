@@ -23,6 +23,9 @@ silently rewrite it.
 | [0013](./0013-provenance-separated-capability-map.md) | Provenance-separated capability mapping | Accepted |
 | [0014](./0014-evidence-firewalled-runtime.md) | Evidence-firewalled public runtime | Accepted |
 | [0015](./0015-bounded-check-and-no-melra-proof.md) | Bounded check and no-MELRA proof | Accepted |
+| [0016](./0016-three-mode-replay.md) | Three non-interchangeable replay modes | Accepted |
+| [0017](./0017-capability-routed-mcp-execution.md) | Capability-routed MCP execution without a MELRA dependency | Accepted |
+| [0018](./0018-bounded-trigger-search.md) | Bounded, measurable trigger search | Accepted |
 
 Use the next zero-padded number. Every ADR states its status, date, owner,
 scope, decision, alternatives, consequences, and superseded decisions.

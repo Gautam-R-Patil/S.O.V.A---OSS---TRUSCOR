@@ -341,7 +341,7 @@ flowchart TB
     EXEC["ExecutorAdapter"]
     SCRIPT["ScriptedExecutor<br/>deterministic tests"]
     LOCAL["RestrictedLocalExecutor<br/>developer-only host execution"]
-    MELRA["Future MelraExecutorAdapter<br/>browser • computer • terminal"]
+    MELRA["Optional MelraExecutorAdapter<br/>browser • computer • terminal"]
     SENSORS["SOVA sensor mesh and deterministic oracles"]
     TRACE[".sova-trace evidence substrate"]
     OUTPUT["verify • replay • forensics • evidence • registry"]
@@ -351,9 +351,13 @@ flowchart TB
     SAFE --> EXEC
     EXEC --> SCRIPT
     EXEC --> LOCAL
+    EXEC --> PLAYWRIGHT["Playwright MCP"]
+    EXEC --> WINDOWS["Windows-MCP"]
     EXEC --> MELRA
     SCRIPT --> SENSORS
     LOCAL --> SENSORS
+    PLAYWRIGHT --> SENSORS
+    WINDOWS --> SENSORS
     MELRA --> SENSORS
     SENSORS --> TRACE
     TRACE --> OUTPUT
@@ -361,17 +365,47 @@ flowchart TB
 
 ### MELRA (formerly Atlas MCP / Atlas OS)
 
-[MELRA](https://github.com/XAGI-Lab/melra), created by Dheeraj S at [XAGI Labs](https://xagilabs.com), is planned as an optional execution adapter for:
+[MELRA](https://github.com/XAGI-Lab/melra), created by Dheeraj S at [XAGI Labs](https://xagilabs.com), is implemented as an optional execution adapter for:
 
 - browser use;
 - computer use;
 - terminal use.
 
-SOVA does **not** outsource its containment admission, authorization, trigger search, observations, judging, redaction, signing, replay, forensics, or reporting to MELRA. The SOVA core works with scripted and synthetic executors before MELRA is connected.
+SOVA does **not** outsource its containment admission, authorization, trigger search, observations, judging, redaction, signing, replay, forensics, or reporting to MELRA. The public capability broker works without MELRA through scripted and restricted-local executors, Microsoft Playwright MCP for browser use, and an explicitly restricted Windows-MCP adapter for optional desktop use.
 
 MELRA is a separate XAGI Labs project, not SOVA Engine and not a source of TRUSCOR authority. Public SOVA integration will rely only on MELRA's public interface and reproducible behavior of a pinned public release; confidential Atlas/MELRA material is outside this repository.
 
-## Planned features
+The current MELRA audit is intentionally cautious: its Windows build and one
+Windows test case failed, and a live MCP transport success contained an internal
+`policy_blocked` task. SOVA therefore recognizes only MELRA's explicit
+`verified_success`, treats MELRA receipts as defense-in-depth input, and can
+remove MELRA without changing any artifact or evidence contract. See the
+[external execution specification](./docs/specifications/external-execution-broker-0.1.md).
+
+## Implemented replay and trigger-search core
+
+The pre-alpha now includes:
+
+- four-state offline verification (`verified`, `partial`, `invalid`, and
+  `unsupported`);
+- three separately named replay operations: inert playback, fresh controlled
+  re-execution, and repeated semantic reproduction;
+- side-by-side, scrubbable, XSS-safe trace visualization;
+- numerator/denominator, Wilson uncertainty, condition sensitivity, and
+  optional calibrated-judge reporting;
+- a bounded MCP stdio client, pinned open-source launch recipes, capability
+  routing, evidence normalization, and conservative fallback;
+- a 13-dimension trigger-space model with independently measurable signature,
+  random, grid, coverage, human, and adaptive baselines;
+- deterministic minimization into portable `.sova` intent; and
+- an owned-target-only Phantom Fuzzer contract with in-memory token zeroization.
+
+These are implemented engineering capabilities, not a claim that the current
+generic search algorithm is novel or superior on real systems.
+
+## Capability roadmap
+
+The implemented core above is the base. The remaining product expansion is:
 
 ### Discover
 
@@ -450,6 +484,17 @@ sova check synthetic-sleeper ./sova-check
 # Run the complete zero-configuration proof
 sova demo sleeper ./sova-demo
 
+# Verify, inspect, compare, and visualize evidence without executing it
+sova verify ./run.sova-trace
+sova playback ./run.sova-trace
+sova replay modes
+sova replay timeline ./run.sova-trace ./replay.html --comparison ./fresh-run.sova-trace
+sova replay study ./run.sova-trace ./trial-1.sova-trace ./trial-2.sova-trace
+
+# Inspect pinned external-backend receipts and run the owned trigger-search fixture
+sova executors receipts
+sova hunt-demo
+
 # Planned later commands
 
 # 1. Configure a model provider or a local model
@@ -457,10 +502,6 @@ sova init
 
 # Hunt for conditional behavior on an authorized target
 sova detonate ./my-agent --hunt-triggers --authorize
-
-# 5. Verify and replay portable evidence
-sova verify ./run.sova-trace
-sova replay ./scenario.sova --target ./my-agent
 
 # 6. Reconstruct an incident
 sova forensics ./incident.sova-trace

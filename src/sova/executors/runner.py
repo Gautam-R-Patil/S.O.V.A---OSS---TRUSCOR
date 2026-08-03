@@ -154,6 +154,8 @@ def run_capsule(  # noqa: PLR0912, PLR0913, PLR0915
     approvals: Mapping[str, ApprovalToken] | None = None,
     cancellation: CancellationToken | None = None,
     secret_provider: SecretProvider | None = None,
+    source_trace_digest: str | None = None,
+    condition_drift: tuple[dict[str, Any], ...] = (),
 ) -> ScenarioRunResult:
     """Run abstract steps only after exact capability and authorization checks."""
     scenario, artifacts = _load(capsule)
@@ -216,6 +218,9 @@ def run_capsule(  # noqa: PLR0912, PLR0913, PLR0915
             "scenarioId": scenario["id"],
             "scenarioVersion": scenario["version"],
             "executor": executor.name,
+            "replayMode": ("controlled-reexecution" if source_trace_digest is not None else None),
+            "sourceTraceDigest": source_trace_digest,
+            "conditionDrift": list(condition_drift),
         },
     )
     if len(steps) > max_steps:

@@ -21,6 +21,9 @@ claiming that the field set is ready for `1.0`.
 - [capability map and reach model](./capability-map-0.1.md)
 - [runtime orchestration and evidence firewall](./runtime-orchestration-0.1.md)
 - [`sova check` and `sova demo`](./check-and-demo-0.1.md)
+- [replay and semantic reproduction](./replay-and-reproduction-0.1.md)
+- [capability-routed external execution](./external-execution-broker-0.1.md)
+- [bounded trigger search](./trigger-search-0.1.md)
 
 The normative JSON Schema 2020-12 files ship in
 [`src/sova/schemas`](../../src/sova/schemas/README.md). Python is the reference

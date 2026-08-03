@@ -110,7 +110,10 @@ def test_lint_verify_format_and_json_validation_commands(
     assert main(["lint", str(capsule)]) == 1
     assert "SOVA-LINT-UNKNOWN-IMPACT" in capfd.readouterr().out
     assert main(["verify", str(capsule)]) == 0
-    assert "VERIFIED capsule objects=1" in capfd.readouterr().out
+    verification = json.loads(capfd.readouterr().out)
+    assert verification["state"] == "partial"
+    assert verification["objectCount"] == 1
+    assert verification["offline"] is True
     assert main(["validate", str(scenario)]) == 0
     assert capfd.readouterr().out == "VALID\n"
     assert main(["format", str(scenario)]) == 0

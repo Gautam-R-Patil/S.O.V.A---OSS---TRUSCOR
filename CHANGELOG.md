@@ -65,8 +65,8 @@ have independent version ledgers.
 - A safe `sova demo sleeper` path that emits an offline-verifiable
   `.sova-trace`, `.sova` capsule, and human-readable summary without a model,
   provider key, network, container runtime, or MELRA installation.
-- A public MELRA adapter boundary based on a pinned public release review;
-  adapter implementation and conformance remain future work.
+- A pinned MELRA adapter with strict internal task-state normalization,
+  status/cancel handling, and a permanent no-MELRA fallback path.
 - Air-gapped `sova map` collection, provenance-separated capability closures,
   schema-validated map reports, and immutable tool-definition drift snapshots.
 - Provider-neutral role orchestration, standard/custom run profiles, an
@@ -75,6 +75,17 @@ have independent version ledgers.
 - A complete `sova check`/`sova demo` no-MELRA path with named bounded
   baselines, two-dimensional trigger search, signed discovery and reproduction
   traces, independent verification, honest exit states, and performance gates.
+- Three non-interchangeable replay modes, four-state offline verification,
+  fresh linked re-execution, uncertainty-aware semantic studies, calibrated
+  optional judging, and an inert side-by-side timeline viewer.
+- A bounded MCP 2025-11-25 stdio client, Microsoft Playwright MCP and
+  restricted Windows-MCP mappings, pinned launch recipes, capability routing,
+  conservative verification/fallback, and cross-adapter conformance tests.
+- A typed 13-dimension trigger-search model with measurable signature, random,
+  grid, coverage, human, and adaptive evolutionary baselines; sequence
+  minimization; digest-only local experience; and an owned-target Phantom
+  Fuzzer contract with secret-free attempt and browser-confirmation trace
+  events.
 
 ### Fixed
 
@@ -101,6 +112,16 @@ have independent version ledgers.
 - The threat model explicitly records that standalone offline verification
   cannot detect byte-identical replay or valid-signer equivocation without
   trusted external freshness or transparency state.
+- External MCP transport success is never treated as action success when the
+  provider's embedded task is blocked, partial, waiting, cancelled, failed,
+  nonterminal, unknown, or substituted.
+- Windows-MCP telemetry is disabled by the pinned recipe and dangerous host
+  tools are excluded from the SOVA mapping by default.
+- MCP stdio reads, unrelated-response deferral, and request deadlines are
+  bounded before allocation or retry; backend environment additions fail
+  closed unless allowlisted.
+- Phantom payload/evidence sizes are bounded, and ephemeral token zeroization
+  runs on success, validation failure, or harness failure.
 
 ## [0.1.0a0] - Unreleased
 

@@ -29,9 +29,18 @@ from sova.formats import (
 )
 from sova.formats.errors import FormatError
 from sova.mapping import build_capability_map, write_capability_map, write_tool_snapshot
+from sova.mcp import MELRA_AUDIT_RECEIPT, PLAYWRIGHT_MCP_RECEIPT, WINDOWS_MCP_RECEIPT
+from sova.replay import (
+    ReplayMode,
+    VerificationState,
+    render_timeline_html,
+    semantic_reproduction_study,
+    verify_artifact,
+)
 from sova.reproduction import compare_observable_outcomes
 from sova.runtime import ProfileKind, RunProfile, standard_profile
 from sova.safety import known_backend_descriptors
+from sova.search import run_trigger_search_demo
 from sova.trace import TraceReader, recover_trace
 from sova.trace.otel import export_event
 from sova.workflows import run_check, run_complete_demo
@@ -134,6 +143,35 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     playback_parser.add_argument("path", type=_path)
     playback_parser.set_defaults(handler=_playback)
 
+    replay_parser = commands.add_parser(
+        "replay",
+        help="use one explicitly named playback or semantic-reproduction mode",
+    )
+    replay_commands = replay_parser.add_subparsers(dest="replay_command")
+    replay_modes = replay_commands.add_parser(
+        "modes", help="describe the three non-interchangeable replay operations"
+    )
+    replay_modes.set_defaults(handler=_replay_modes)
+    replay_timeline = replay_commands.add_parser(
+        "timeline", help="render a self-contained inert visual timeline"
+    )
+    replay_timeline.add_argument("source", type=_path)
+    replay_timeline.add_argument("destination", type=_path)
+    replay_timeline.add_argument("--comparison", type=_path)
+    replay_timeline.add_argument("--counterfactual")
+    replay_timeline.set_defaults(handler=_replay_timeline)
+    replay_study = replay_commands.add_parser(
+        "study", help="measure observable-outcome reproduction across fresh traces"
+    )
+    replay_study.add_argument("reference", type=_path)
+    replay_study.add_argument("trials", nargs="+", type=_path)
+    replay_study.add_argument(
+        "--condition",
+        action="append",
+        help="one condition label per trial; defaults to declared-baseline",
+    )
+    replay_study.set_defaults(handler=_replay_study)
+
     query_parser = commands.add_parser("query", help="query trace events offline")
     query_parser.add_argument("path", type=_path)
     query_parser.add_argument("--kind-prefix")
@@ -224,6 +262,21 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     map_parser.add_argument("--baseline", type=_path)
     map_parser.add_argument("--write-tool-snapshot", type=_path)
     map_parser.set_defaults(handler=_map)
+
+    executors_parser = commands.add_parser(
+        "executors", help="inspect external executor receipts and limitations"
+    )
+    executors_commands = executors_parser.add_subparsers(dest="executors_command")
+    executor_receipts = executors_commands.add_parser(
+        "receipts", help="print pinned MELRA and open-source fallback receipts"
+    )
+    executor_receipts.set_defaults(handler=_executor_receipts)
+
+    hunt_demo_parser = commands.add_parser(
+        "hunt-demo",
+        help="run an owned inert trigger-search comparison without native code",
+    )
+    hunt_demo_parser.set_defaults(handler=_hunt_demo)
     return parser
 
 
@@ -263,30 +316,31 @@ def _lint(args: argparse.Namespace) -> int:
 
 def _verify(args: argparse.Namespace) -> int:
     path: Path = args.path
-    if path.name.endswith(".sova-trace"):
-        report = TraceReader(path).verify(
-            require_signature=args.require_signature,
-            required_key_id=args.key_id,
+    report = verify_artifact(
+        path,
+        require_signature=args.require_signature,
+        required_key_id=args.key_id,
+    )
+    value = report.to_mapping()
+    if report.accepted and path.name.endswith(".sova-trace"):
+        trace = TraceReader(path).verify()
+        value.update(
+            {
+                "traceId": trace.trace_id,
+                "eventCount": trace.event_count,
+                "completion": trace.completion,
+                "signaturePresent": trace.signature_present,
+                "signatureValid": trace.signature_valid,
+                "trustPolicy": trace.trust_policy,
+            }
         )
-        value = {
-            "traceId": report.trace_id,
-            "eventCount": report.event_count,
-            "completion": report.completion,
-            "packageIntegrity": report.package_integrity,
-            "eventChainIntegrity": report.event_chain_integrity,
-            "manifestIntegrity": report.manifest_integrity,
-            "redactionIntegrity": report.redaction_integrity,
-            "signaturePresent": report.signature_present,
-            "signatureValid": report.signature_valid,
-            "verificationMaterialPresent": report.verification_material_present,
-            "verificationMaterialVerified": report.verification_material_verified,
-            "trustPolicy": report.trust_policy,
-            "limitations": list(report.limitations),
-        }
-        sys.stdout.write(json.dumps(value, sort_keys=True) + "\n")
-    else:
-        descriptors = PackageReader(path).verify("sova.capsule")
-        sys.stdout.write(f"VERIFIED capsule objects={len(descriptors)}\n")
+    elif report.accepted and path.suffix == ".sova":
+        value["objectCount"] = len(PackageReader(path).verify("sova.capsule"))
+    sys.stdout.buffer.write(canonical_json_bytes(value) + b"\n")
+    if report.state == VerificationState.INVALID:
+        return 2
+    if report.state == VerificationState.UNSUPPORTED:
+        return 4
     return 0
 
 
@@ -345,6 +399,51 @@ def _pack(args: argparse.Namespace) -> int:
 def _playback(args: argparse.Namespace) -> int:
     sys.stdout.write("\n".join(TraceReader(args.path).playback()) + "\n")
     return 0
+
+
+def _replay_modes(_args: argparse.Namespace) -> int:
+    value = {
+        "tracePlayback": {
+            "mode": ReplayMode.PLAYBACK.value,
+            "executesActions": False,
+            "claim": "deterministic inspection of recorded evidence",
+        },
+        "controlledReexecution": {
+            "mode": ReplayMode.CONTROLLED_REEXECUTION.value,
+            "executesActions": True,
+            "claim": "fresh authorized run with condition drift",
+        },
+        "semanticReproduction": {
+            "mode": ReplayMode.SEMANTIC_REPRODUCTION.value,
+            "executesActions": "outside-study",
+            "claim": "repeated observable-outcome measurement with uncertainty",
+        },
+        "bitForBitHostedInferenceClaim": False,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(value) + b"\n")
+    return 0
+
+
+def _replay_timeline(args: argparse.Namespace) -> int:
+    render_timeline_html(
+        args.source,
+        args.destination,
+        comparison=args.comparison,
+        counterfactual=args.counterfactual,
+    )
+    sys.stdout.write(f"{args.destination}\n")
+    return 0
+
+
+def _replay_study(args: argparse.Namespace) -> int:
+    conditions = tuple(args.condition) if args.condition else None
+    report = semantic_reproduction_study(
+        args.reference,
+        tuple(args.trials),
+        conditions=conditions,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(report.to_mapping()) + b"\n")
+    return 0 if report.eligible else 3
 
 
 def _query(args: argparse.Namespace) -> int:
@@ -457,6 +556,27 @@ def _map(args: argparse.Namespace) -> int:
     else:
         digest = write_capability_map(args.output, report)
         sys.stdout.write(f"{digest}  {args.output}\n")
+    return 0
+
+
+def _executor_receipts(_args: argparse.Namespace) -> int:
+    value = {
+        "artifactType": "sova.external-executor-receipts",
+        "schemaVersion": "0.1.0",
+        "receipts": [
+            MELRA_AUDIT_RECEIPT.to_mapping(),
+            PLAYWRIGHT_MCP_RECEIPT.to_mapping(),
+            WINDOWS_MCP_RECEIPT.to_mapping(),
+        ],
+        "sovaRemainsAuthority": True,
+        "noMelraOperationPreserved": True,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(value) + b"\n")
+    return 0
+
+
+def _hunt_demo(_args: argparse.Namespace) -> int:
+    sys.stdout.buffer.write(canonical_json_bytes(run_trigger_search_demo()) + b"\n")
     return 0
 
 
