@@ -92,7 +92,9 @@ have independent version ledgers.
   deterministic calibration fixture.
 - Watermarked self-assessment evidence bundles, SARIF 2.1.0 projection/import,
   four-state execution-bounded scanner adjudication, local-only disclosure
-  preparation, and technical, executive, reproduction, and methodology views.
+  preparation, bounded local maintainer-contact discovery, approved default
+  disclosure clocks, and technical, executive, reproduction, and methodology
+  views.
 - Typed metadata-only composition graphs, pairwise/t-wise/risk/trigger-aware
   bounded search, fresh-observation minimization, element-removal attribution,
   portable `.sova` composition fragments, and a ground-truth composition-only

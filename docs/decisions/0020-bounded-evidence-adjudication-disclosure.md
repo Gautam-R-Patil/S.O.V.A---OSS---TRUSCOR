@@ -23,6 +23,11 @@ positive under the declared test, not observed under the declared test, or
 inconclusive. Disclosure preparation is local-only, redacts reference locations
 from its preview, applies the existing payload and review gate, and never sends
 or publishes anything.
+Maintainer contacts may be discovered only from a bounded local project metadata
+set; discovery performs no network request. When the operator supplies a
+timezone-aware report timestamp instead of a custom clock, SOVA applies the
+approved 90-day policy plus the recorded 7-day active-exploitation and 14-day
+extension boundaries, without sending reminders automatically.
 
 ## Alternatives rejected
 

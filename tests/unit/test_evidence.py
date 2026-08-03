@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -14,6 +14,8 @@ from sova.evidence import (
     adjudicate_findings,
     build_evidence_bundle,
     construct_safe_test_plan,
+    default_disclosure_clock,
+    discover_maintainer_contacts,
     evidence_to_sarif,
     import_sarif,
     prepare_disclosure_package,
@@ -22,6 +24,9 @@ from sova.evidence import (
 from sova.formats import validate_document
 from sova.formats.errors import FormatError
 from sova.safety import DisclosureRequest, VulnerabilityState
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def evidence_specification() -> dict[str, Any]:
@@ -230,3 +235,27 @@ def test_disclosure_is_local_redacted_and_gate_bounded() -> None:
     assert output["externalMessageSent"] is False
     assert output["published"] is False
     assert all("uri" not in item for item in output["redactedPreview"]["evidenceReferences"])
+
+
+def test_local_contact_discovery_and_default_policy_clock(tmp_path: Path) -> None:
+    (tmp_path / "SECURITY.md").write_text(
+        "Security: Security@Example.invalid and security@example.invalid",
+        encoding="utf-8",
+    )
+    (tmp_path / "package.json").write_text('{"author":"maintainer@example.org"}', encoding="utf-8")
+    contacts = discover_maintainer_contacts(tmp_path)
+    assert [item["address"] for item in contacts] == [
+        "maintainer@example.org",
+        "security@example.invalid",
+    ]
+    assert all(item["discoveredBy"] == "local-static-metadata" for item in contacts)
+    clock = default_disclosure_clock("2026-08-03T00:00:00+00:00")
+    assert clock["defaultPeriodDays"] == 90
+    assert clock["embargoEndsAt"] == "2026-11-01T00:00:00+00:00"
+    assert clock["automaticReminderSent"] is False
+    with pytest.raises(FormatError, match="timezone"):
+        default_disclosure_clock("2026-08-03T00:00:00")
+    with pytest.raises(FormatError, match="ISO 8601"):
+        default_disclosure_clock("not-a-time")
+    with pytest.raises(FormatError, match="directory"):
+        discover_maintainer_contacts(tmp_path / "missing")

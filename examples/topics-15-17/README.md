@@ -12,6 +12,7 @@ sova forensics benchmark
 sova evidence examples/topics-15-17/evidence.json --format technical
 sova adjudicate plan examples/topics-15-17/adjudication-study.json
 sova adjudicate evaluate examples/topics-15-17/adjudication-study.json
+sova disclose examples/topics-15-17/disclosure-study.json
 sova compose plan examples/topics-15-17/composition-graph.json --strategy trigger-aware-sequence
 ```
 

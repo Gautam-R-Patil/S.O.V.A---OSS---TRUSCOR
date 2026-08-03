@@ -3,7 +3,12 @@
 
 from sova.evidence.adjudication import adjudicate_findings, construct_safe_test_plan
 from sova.evidence.bundle import build_evidence_bundle, evidence_to_sarif, import_sarif
-from sova.evidence.disclosure import DisclosurePackage, prepare_disclosure_package
+from sova.evidence.disclosure import (
+    DisclosurePackage,
+    default_disclosure_clock,
+    discover_maintainer_contacts,
+    prepare_disclosure_package,
+)
 from sova.evidence.model import (
     AdjudicatedClaim,
     AdjudicationReport,
@@ -31,6 +36,8 @@ __all__ = [
     "adjudicate_findings",
     "build_evidence_bundle",
     "construct_safe_test_plan",
+    "default_disclosure_clock",
+    "discover_maintainer_contacts",
     "evidence_to_sarif",
     "import_sarif",
     "prepare_disclosure_package",

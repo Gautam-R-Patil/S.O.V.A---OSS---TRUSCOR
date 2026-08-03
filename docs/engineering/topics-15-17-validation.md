@@ -18,7 +18,7 @@ review, or real-system research gates.
 | 16.1 evidence | `evidence-adjudication-disclosure-0.1.md` | `sova.evidence` bundle and renderers | schema, malformed input, watermark and report-view tests |
 | 16.2 interoperability | ADR-0020 | SARIF 2.1 projection/import, component identifiers, trace references | scanner provenance/location and malformed SARIF tests |
 | 16.3 adjudication | ADR-0020 | inert plan and four bounded terminal states | confirmed, false-positive-under-test, not-observed and inconclusive tests |
-| 16.4 disclosure | ADR-0020 | gate-bound local package and redacted preview | no-send/no-publish, unsafe-state and preview tests |
+| 16.4 disclosure | ADR-0020 | bounded local contact discovery, approved default clock, gate-bound package and redacted preview | metadata, clock, no-send/no-publish, unsafe-state and preview tests |
 | 16.5 reports/disputes | evidence specification | four report views and lifecycle extension data | renderer and schema tests |
 | 17.1 graph | `composition-testing-0.1.md` | typed nodes/edges and recursive secret rejection | round-trip and hostile graph tests |
 | 17.2 search | ADR-0021 | pairwise, bounded t-wise, risk-path and trigger-order strategies | deterministic strategy, budget and stopping tests |
@@ -27,9 +27,9 @@ review, or real-system research gates.
 
 ## Deterministic results
 
-- Complete final repository suite: 619 passed and one optional Codex lane
+- Complete final repository suite: 621 passed and one optional Codex lane
   transparently skipped because this machine was not logged in.
-- Required branch coverage gate: 95% minimum; final measurement was 95.22%.
+- Required branch coverage gate: 95% minimum; final measurement was 95.18%.
 - Attribution fixture: five labeled cases, two correctly supported clean
   single-layer cases, and three correct abstentions for confounded, stochastic,
   or missing-sensor cases. Raw top-one accuracy is 0.4; selective accuracy and

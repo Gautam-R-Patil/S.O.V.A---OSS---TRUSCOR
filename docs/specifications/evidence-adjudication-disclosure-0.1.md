@@ -49,5 +49,14 @@ unsafe working payloads, unreviewed exports, secret-scan failures, missing
 limitations, or incomplete coordinated-disclosure state. The command never
 sends a message or publishes an artifact.
 
+Contacts can be supplied directly or discovered from bounded local
+`SECURITY.md`, `.github/SECURITY.md`, `pyproject.toml`, and `package.json`
+metadata. The scanner reads at most 1 MiB per named file, skips paths escaping
+the selected root, deduplicates case-insensitively, and makes no network
+request. A supplied `reportedAt` timestamp creates the approved `SECURITY.md`
+1.0 clock: 90-day default, 7-day active-exploitation minimum, one 14-day
+extension boundary, and local reminder timestamps. It records reminders but
+does not send them.
+
 The system supports evidence and dispute workflows; it does not issue a
 certificate, compliance conclusion, TRUSCOR attestation, or legal blame.

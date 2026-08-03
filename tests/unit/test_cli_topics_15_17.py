@@ -262,3 +262,35 @@ def test_topics_cli_rejects_truthy_strings_and_coerced_budgets(
     )
     assert main(["compose", "evaluate", str(composition)]) == 2
     assert "must be an integer" in capfd.readouterr().err
+
+
+def test_disclose_cli_discovers_local_contact_and_defaults_clock(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "SECURITY.md").write_text(
+        "Report privately to security@example.invalid.", encoding="utf-8"
+    )
+    study = tmp_path / "discovery-disclosure.json"
+    _write(
+        study,
+        {
+            "evidence": _evidence_specification(),
+            "request": {
+                "targetKind": "synthetic",
+                "vulnerabilityState": "patched",
+                "containsWorkingPayload": False,
+                "authorizationRedacted": True,
+                "secretsScanClean": True,
+                "humanReviewed": True,
+                "limitationsPresent": True,
+            },
+            "contactRoot": str(project),
+            "reportedAt": "2026-08-03T00:00:00+00:00",
+        },
+    )
+    assert main(["disclose", str(study)]) == 0
+    output = json.loads(capfd.readouterr().out)
+    assert output["contacts"][0]["address"] == "security@example.invalid"
+    assert output["clock"]["defaultPeriodDays"] == 90

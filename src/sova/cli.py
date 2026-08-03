@@ -34,6 +34,8 @@ from sova.evidence import (
     adjudicate_findings,
     build_evidence_bundle,
     construct_safe_test_plan,
+    default_disclosure_clock,
+    discover_maintainer_contacts,
     evidence_to_sarif,
     prepare_disclosure_package,
     render_evidence_report,
@@ -897,19 +899,36 @@ def _disclose(args: argparse.Namespace) -> int:
             else None
         ),
     )
-    contacts = _array_member(specification, "contacts")
+    contacts = specification.get("contacts", [])
+    if not isinstance(contacts, list):
+        raise FormatError("SOVA-DISCLOSE-CONTACTS", "contacts must be an array")
     if any(not isinstance(item, dict) for item in contacts):
         raise FormatError("SOVA-DISCLOSE-CONTACTS", "contacts must contain objects")
+    contact_root = specification.get("contactRoot")
+    if contact_root is not None:
+        if not isinstance(contact_root, str) or not contact_root:
+            raise FormatError("SOVA-DISCLOSE-CONTACTS", "contactRoot must be a path string")
+        discovered = discover_maintainer_contacts(Path(contact_root))
+        contacts = [*contacts, *discovered]
+    if not contacts:
+        raise FormatError(
+            "SOVA-DISCLOSE-CONTACTS",
+            "at least one reviewed or locally discovered contact is required",
+        )
     vendor_responses = specification.get("vendorResponses", [])
     if not isinstance(vendor_responses, list) or any(
         not isinstance(item, dict) for item in vendor_responses
     ):
         raise FormatError("SOVA-DISCLOSE-RESPONSES", "vendorResponses must contain objects")
+    if "clock" in specification:
+        clock = _object_member(specification, "clock")
+    else:
+        clock = default_disclosure_clock(_string_member(specification, "reportedAt"))
     package = prepare_disclosure_package(
         bundle,
         request,
         contacts=contacts,
-        clock=_object_member(specification, "clock"),
+        clock=clock,
         vendor_responses=vendor_responses,
         remediation=(
             _object_member(specification, "remediation") if "remediation" in specification else None

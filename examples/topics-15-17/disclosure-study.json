@@ -1,0 +1,39 @@
+{
+  "evidence": {
+    "finding": {
+      "id": "SOVA-SAFE-FIXTURE-001",
+      "title": "Synthetic composition-only fixture behavior",
+      "summary": "The safe deterministic fixture emitted its planted sink-only effect.",
+      "affected": {"component": "sova-safe-fixture", "version": "0.1.0", "identifiers": []},
+      "technicalSeverity": "informational",
+      "harmCategory": "synthetic-ground-truth"
+    },
+    "evidence": [
+      {"role": "capsule", "uri": "fixture.sova", "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "mediaType": "application/vnd.sova.capsule+zip", "verified": false},
+      {"role": "trace", "uri": "fixture.sova-trace", "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "mediaType": "application/vnd.sova.trace+zip", "verified": false}
+    ],
+    "conditionsTested": ["safe deterministic fixture"],
+    "coverage": {"testedCount": 1, "denominator": 1, "detectionFloor": "one planted condition"},
+    "reproduction": {"successful": 1, "eligible": 1, "rate": "1"},
+    "taxonomyMappings": [],
+    "methodology": {"profile": "safe-fixture/0.1.0", "oracle": "fixture-effect/1"},
+    "suggestedMitigations": ["Remove the synthetic fixture permission."],
+    "regressionEvidence": [],
+    "attachments": [],
+    "limitations": ["Illustrative synthetic input; referenced artifacts are placeholders."],
+    "lifecycle": {"state": "draft", "supersedes": null, "disputes": []}
+  },
+  "request": {
+    "targetKind": "synthetic",
+    "vulnerabilityState": "patched",
+    "containsWorkingPayload": false,
+    "authorizationRedacted": true,
+    "secretsScanClean": true,
+    "humanReviewed": true,
+    "limitationsPresent": true
+  },
+  "contactRoot": ".",
+  "reportedAt": "2026-08-03T00:00:00+00:00",
+  "vendorResponses": [],
+  "remediation": {"state": "synthetic-no-action-required", "regressionEvidence": []}
+}
