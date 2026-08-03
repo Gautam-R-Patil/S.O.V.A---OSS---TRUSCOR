@@ -382,7 +382,7 @@ Windows test case failed, and a live MCP transport success contained an internal
 remove MELRA without changing any artifact or evidence contract. See the
 [external execution specification](./docs/specifications/external-execution-broker-0.1.md).
 
-## Implemented replay and trigger-search core
+## Implemented evidence, replay, rehearsal, and regression core
 
 The pre-alpha now includes:
 
@@ -399,6 +399,12 @@ The pre-alpha now includes:
   random, grid, coverage, human, and adaptive baselines;
 - deterministic minimization into portable `.sova` intent; and
 - an owned-target-only Phantom Fuzzer contract with in-memory token zeroization.
+- credential-stripped, substitute-only rehearsal with signed failure/success
+  traces and digest-bound selective export;
+- shell-free local process tracing, environment/behavior/methodology drift,
+  local sentinel history, CI/SARIF output, and file-integrity self-checks; and
+- a signed, content-addressed, offline registry with pull-only mirror caching
+  and human-confirmed local contribution staging.
 
 These are implemented engineering capabilities, not a claim that the current
 generic search algorithm is novel or superior on real systems.
@@ -515,6 +521,27 @@ sova disclose ./disclosure-study.json
 sova compose plan ./composition-graph.json --strategy trigger-aware-sequence
 sova compose evaluate ./composition-study.json --strategy trigger-aware-sequence
 
+# Prepare, run, review, and selectively stage a credential-free rehearsal
+sova rehearse prepare ./my-agent ./rehearsal
+sova rehearse run ./rehearsal-task.json ./rehearsal ./task.sova-trace ./report.json
+sova rehearse export ./report.json ./rehearsal ./accepted --approve sha256:CHANGE_ID
+
+# Freeze and compare behavior, then run local/CI gates
+sova trace snapshot ./baseline.json --output ./baseline.snapshot.json
+sova trace snapshot ./current.json --output ./current.snapshot.json
+sova diff ./baseline.snapshot.json ./current.snapshot.json
+sova sentinel ./baseline.snapshot.json ./current.snapshot.json ./history.jsonl
+sova ci ./baseline.snapshot.json ./current.snapshot.json --sarif ./sova.sarif
+
+# Verify a protected local file baseline
+sova self-check create . ./integrity.json --include pyproject.toml
+sova self-check verify . ./integrity.json
+
+# Verify/cache an offline registry mirror and stage a reviewed contribution
+sova registry verify ./registry --trusted-key-id sha256:EXPECTED_KEY
+sova sync ./registry --cache ./.sova-registry-cache
+sova contribute ./contribution.json ./contribution-staging --confirm
+
 # Planned later commands
 
 # 1. Configure a model provider or a local model
@@ -523,8 +550,8 @@ sova init
 # Hunt for conditional behavior on an authorized target
 sova detonate ./my-agent --hunt-triggers --authorize
 
-# 7. Rehearse a real task inside a safe clone
-sova rehearse ./my-agent --task "process refund #4471"
+# Launch broader live-target rehearsal only after a stronger admitted backend
+sova rehearse prepare ./authorized-target ./isolated-workspace
 ```
 
 One safe implemented demonstration is available now:
@@ -678,8 +705,10 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `sova forensics` | Evidence-linked partial-order reconstruction and paired-intervention attribution implemented in [ADR-0019](./docs/decisions/0019-evidence-linked-counterfactual-forensics.md); real-system accuracy remains unproven |
 | `sova evidence`, `adjudicate`, and `disclose` | Watermarked evidence, SARIF projection/import, bounded scanner labels, human-gated local disclosure preparation, and four report views implemented in [ADR-0020](./docs/decisions/0020-bounded-evidence-adjudication-disclosure.md) |
 | `sova compose` | Typed metadata-only graph, four bounded search strategies, fresh-evidence minimization, element-removal attribution, portable capsule fragment, and deterministic composition-only fixture implemented in [ADR-0021](./docs/decisions/0021-bounded-composition-only-search.md); comparative search superiority remains unproven |
-| Remaining security CLI commands / SDK / local MCP | Not yet implemented |
-| Registry and community surfaces | Not yet implemented |
+| `sova rehearse` | Credential-stripped substitute workspace, distinct user/attacker evidence, signed traces, review, and selective export implemented in [ADR-0022](./docs/decisions/0022-substitute-only-rehearsal-and-selective-promotion.md); the built-in backend is not a security sandbox |
+| `sova trace`, `diff`, `sentinel`, `ci`, and `self-check` | Deterministic local recorder, three-axis drift, local monitoring, reusable CI, SARIF/annotations, and protected-baseline integrity checks implemented in [ADR-0023](./docs/decisions/0023-multi-axis-behavior-drift-and-local-regression.md) |
+| Registry, `sync`, adapters, and `contribute` | Offline content-addressed registry, signed index, trust pinning, pull-only mirror cache, adapters, and local contribution staging implemented in [ADR-0024](./docs/decisions/0024-offline-content-addressed-community-registry.md) |
+| Remaining security CLI commands / SDK / local MCP | Topics 21 and later are not yet implemented |
 
 The first engineering objective is now implemented as a bounded synthetic
 no-Atlas/no-MELRA vertical slice:

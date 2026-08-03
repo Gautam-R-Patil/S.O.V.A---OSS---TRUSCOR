@@ -27,6 +27,9 @@ claiming that the field set is ready for `1.0`.
 - [forensics and counterfactual attribution](./forensics-0.1.md)
 - [evidence, adjudication, disclosure, and reports](./evidence-adjudication-disclosure-0.1.md)
 - [composition and emergent-chain testing](./composition-testing-0.1.md)
+- [safe real-task rehearsal](./rehearsal-0.1.md)
+- [behavioral monitoring, CI, and self-check](./behavioral-monitoring-and-ci-0.1.md)
+- [registry, synchronization, adapters, and contributions](./registry-and-contributions-0.1.md)
 
 The normative JSON Schema 2020-12 files ship in
 [`src/sova/schemas`](../../src/sova/schemas/README.md). Python is the reference

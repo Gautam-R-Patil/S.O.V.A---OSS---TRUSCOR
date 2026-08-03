@@ -1,0 +1,86 @@
+name: Reusable SOVA behavioral CI
+
+on:
+  workflow_call:
+    inputs:
+      baseline:
+        description: Repository-relative baseline snapshot path
+        required: true
+        type: string
+      current:
+        description: Repository-relative current snapshot path
+        required: true
+        type: string
+      retention-days:
+        description: Explicit retention for redacted CI reports
+        required: false
+        default: 1
+        type: number
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: Repository-relative baseline snapshot path
+        required: true
+        type: string
+      current:
+        description: Repository-relative current snapshot path
+        required: true
+        type: string
+      retention-days:
+        description: Explicit retention for redacted CI reports
+        required: false
+        default: 1
+        type: number
+
+permissions:
+  contents: read
+
+jobs:
+  behavioral-regression:
+    runs-on: ubuntu-latest
+    env:
+      SOVA_BASELINE: ${{ inputs.baseline }}
+      SOVA_CURRENT: ${{ inputs.current }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install locked SOVA environment
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.3"
+          python-version: "3.11"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize dependencies
+        run: uv sync --locked
+
+      - name: Evaluate deterministic SOVA policy
+        id: sova-gate
+        continue-on-error: true
+        shell: bash
+        run: >-
+          uv run --locked sova ci "$SOVA_BASELINE" "$SOVA_CURRENT"
+          --sarif sova-results.sarif > sova-ci-report.json
+
+      - name: Emit bounded pull-request annotations
+        if: always() && hashFiles('sova-ci-report.json') != ''
+        run: uv run --locked python scripts/emit_ci_annotations.py sova-ci-report.json
+
+      - name: Retain explicitly generated redacted reports
+        if: always() && hashFiles('sova-ci-report.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sova-behavioral-ci
+          path: |
+            sova-ci-report.json
+            sova-results.sarif
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+      - name: Enforce SOVA gate result
+        if: steps.sova-gate.outcome != 'success'
+        run: exit 1

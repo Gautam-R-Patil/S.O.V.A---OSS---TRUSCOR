@@ -49,3 +49,24 @@ version = "0.1.0"
 status = "experimental"
 source = "docs/specifications/check-and-demo-0.1.md"
 change = "Initial no-MELRA map, bounded search, signed evidence, and fresh reproduction proof."
+
+[[methodology]]
+id = "SOVA-SUBSTITUTE-REHEARSAL"
+version = "0.1.0"
+status = "experimental"
+source = "docs/specifications/rehearsal-0.1.md"
+change = "Initial credential-stripped user-agent rehearsal and digest-bound selective-export method."
+
+[[methodology]]
+id = "SOVA-MULTI-AXIS-DRIFT"
+version = "0.1.0"
+status = "experimental"
+source = "docs/specifications/behavioral-monitoring-and-ci-0.1.md"
+change = "Initial environment, behavior, and methodology drift separation and local CI policy."
+
+[[methodology]]
+id = "SOVA-OFFLINE-REGISTRY"
+version = "0.1.0"
+status = "experimental"
+source = "docs/specifications/registry-and-contributions-0.1.md"
+change = "Initial signed repository-of-files registry, mirror cache, and contribution firewall."

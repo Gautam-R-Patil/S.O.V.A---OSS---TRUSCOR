@@ -58,6 +58,22 @@ from sova.formats import (
 from sova.formats.errors import FormatError
 from sova.mapping import build_capability_map, write_capability_map, write_tool_snapshot
 from sova.mcp import MELRA_AUDIT_RECEIPT, PLAYWRIGHT_MCP_RECEIPT, WINDOWS_MCP_RECEIPT
+from sova.monitoring import (
+    build_behavior_snapshot,
+    build_integrity_manifest,
+    compare_behavior_snapshots,
+    evaluate_ci,
+    record_local_process,
+    run_sentinel,
+    verify_integrity_manifest,
+)
+from sova.registry import prepare_contribution, sync_registry, verify_registry
+from sova.rehearsal import (
+    export_approved_changes,
+    prepare_rehearsal_environment,
+    run_rehearsal,
+    specification_from_mapping,
+)
 from sova.replay import (
     ReplayMode,
     VerificationState,
@@ -381,6 +397,116 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         "--strategy", choices=tuple(CompositionStrategy), default="trigger-aware-sequence"
     )
     compose_evaluate.set_defaults(handler=_compose_evaluate)
+
+    rehearse_parser = commands.add_parser(
+        "rehearse", help="run a user-agent task only in a prepared substitute workspace"
+    )
+    rehearse_commands = rehearse_parser.add_subparsers(dest="rehearse_command")
+    rehearse_prepare = rehearse_commands.add_parser(
+        "prepare", help="create a credential-stripped disposable workspace"
+    )
+    rehearse_prepare.add_argument("source", type=_path)
+    rehearse_prepare.add_argument("workspace", type=_path)
+    rehearse_prepare.add_argument("--substitute", action="append")
+    rehearse_prepare.set_defaults(handler=_rehearse_prepare)
+    rehearse_run = rehearse_commands.add_parser(
+        "run", help="execute a reviewed user-agent plan against substitutes"
+    )
+    rehearse_run.add_argument("specification", type=_path)
+    rehearse_run.add_argument("workspace", type=_path)
+    rehearse_run.add_argument("trace", type=_path)
+    rehearse_run.add_argument("report", type=_path)
+    rehearse_run.set_defaults(handler=_rehearse_run)
+    rehearse_export = rehearse_commands.add_parser(
+        "export", help="stage only explicitly approved file changes"
+    )
+    rehearse_export.add_argument("report", type=_path)
+    rehearse_export.add_argument("workspace", type=_path)
+    rehearse_export.add_argument("destination", type=_path)
+    rehearse_export.add_argument("--approve", action="append", required=True)
+    rehearse_export.set_defaults(handler=_rehearse_export)
+
+    trace_parser = commands.add_parser(
+        "trace", help="record an allowlisted local agent process or freeze a behavior snapshot"
+    )
+    trace_commands = trace_parser.add_subparsers(dest="trace_command")
+    trace_run = trace_commands.add_parser(
+        "run", help="record one shell-free allowlisted process into a signed trace"
+    )
+    trace_run.add_argument("specification", type=_path)
+    trace_run.add_argument("destination", type=_path)
+    trace_run.set_defaults(handler=_trace_run)
+    trace_snapshot = trace_commands.add_parser(
+        "snapshot", help="canonicalize declared behavior, environment, and methodology axes"
+    )
+    trace_snapshot.add_argument("specification", type=_path)
+    trace_snapshot.add_argument("--output", type=_path)
+    trace_snapshot.set_defaults(handler=_trace_snapshot)
+
+    diff_parser = commands.add_parser(
+        "diff", help="separate behavior drift from environment and methodology drift"
+    )
+    diff_parser.add_argument("left", type=_path)
+    diff_parser.add_argument("right", type=_path)
+    diff_parser.set_defaults(handler=_behavior_diff)
+
+    sentinel_parser = commands.add_parser(
+        "sentinel", help="run one local regression check and append local history"
+    )
+    sentinel_parser.add_argument("baseline", type=_path)
+    sentinel_parser.add_argument("current", type=_path)
+    sentinel_parser.add_argument("history", type=_path)
+    sentinel_parser.add_argument("--policy", type=_path)
+    sentinel_parser.set_defaults(handler=_sentinel)
+
+    ci_parser = commands.add_parser("ci", help="apply a deterministic behavioral regression gate")
+    ci_parser.add_argument("baseline", type=_path)
+    ci_parser.add_argument("current", type=_path)
+    ci_parser.add_argument("--policy", type=_path)
+    ci_parser.add_argument("--sarif", type=_path)
+    ci_parser.set_defaults(handler=_ci)
+
+    registry_parser = commands.add_parser(
+        "registry", help="verify a repository-of-files registry entirely offline"
+    )
+    registry_commands = registry_parser.add_subparsers(dest="registry_command")
+    registry_verify = registry_commands.add_parser("verify", help="verify index and objects")
+    registry_verify.add_argument("root", type=_path)
+    registry_verify.add_argument("--trusted-key-id", action="append")
+    registry_verify.set_defaults(handler=_registry_verify)
+
+    sync_parser = commands.add_parser(
+        "sync", help="pull and atomically cache a verified local registry mirror"
+    )
+    sync_parser.add_argument("sources", nargs="+", type=_path)
+    sync_parser.add_argument("--cache", required=True, type=_path)
+    sync_parser.set_defaults(handler=_sync)
+
+    contribute_parser = commands.add_parser(
+        "contribute", help="preview and locally stage an explicit public contribution"
+    )
+    contribute_parser.add_argument("specification", type=_path)
+    contribute_parser.add_argument("destination", type=_path)
+    contribute_parser.add_argument("--confirm", action="store_true")
+    contribute_parser.set_defaults(handler=_contribute)
+
+    self_check_parser = commands.add_parser(
+        "self-check", help="create or verify a local versionable file-integrity baseline"
+    )
+    self_check_commands = self_check_parser.add_subparsers(dest="self_check_command")
+    self_check_create = self_check_commands.add_parser(
+        "create", help="create a hash baseline for explicitly listed files"
+    )
+    self_check_create.add_argument("root", type=_path)
+    self_check_create.add_argument("manifest", type=_path)
+    self_check_create.add_argument("--include", action="append", required=True)
+    self_check_create.set_defaults(handler=_self_check_create)
+    self_check_verify = self_check_commands.add_parser(
+        "verify", help="verify files against a protected baseline"
+    )
+    self_check_verify.add_argument("root", type=_path)
+    self_check_verify.add_argument("manifest", type=_path)
+    self_check_verify.set_defaults(handler=_self_check_verify)
     return parser
 
 
@@ -1034,6 +1160,155 @@ def _compose_evaluate(args: argparse.Namespace) -> int:
     validate_document(document, "sova.composition-report")
     sys.stdout.buffer.write(canonical_json_bytes(document) + b"\n")
     return 0 if report.successful is not None else 3
+
+
+def _rehearse_prepare(args: argparse.Namespace) -> int:
+    substitutes = (
+        tuple(args.substitute)
+        if args.substitute
+        else ("process", "database", "api", "network", "browser", "computer")
+    )
+    report = prepare_rehearsal_environment(
+        args.source,
+        args.workspace,
+        substitutes=substitutes,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(report.to_mapping()) + b"\n")
+    return 0
+
+
+def _rehearse_run(args: argparse.Namespace) -> int:
+    specification = specification_from_mapping(_load_object(args.specification))
+    report = run_rehearsal(specification, args.workspace, args.trace)
+    document = report.to_mapping()
+    args.report.write_bytes(canonical_json_bytes(document) + b"\n")
+    sys.stdout.buffer.write(canonical_json_bytes(document) + b"\n")
+    return 0
+
+
+def _rehearse_export(args: argparse.Namespace) -> int:
+    result = export_approved_changes(
+        _load_object(args.report),
+        args.workspace,
+        args.destination,
+        frozenset(args.approve),
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(result) + b"\n")
+    return 0
+
+
+def _trace_run(args: argparse.Namespace) -> int:
+    result = record_local_process(_load_object(args.specification), args.destination)
+    sys.stdout.buffer.write(canonical_json_bytes(result) + b"\n")
+    return 0 if result["processStatus"] == "succeeded" else 3
+
+
+def _trace_snapshot(args: argparse.Namespace) -> int:
+    document = build_behavior_snapshot(_load_object(args.specification)).to_mapping()
+    if args.output is None:
+        sys.stdout.buffer.write(canonical_json_bytes(document) + b"\n")
+    else:
+        args.output.write_bytes(canonical_json_bytes(document) + b"\n")
+        sys.stdout.write(f"{document['snapshotDigest']}  {args.output}\n")
+    return 0
+
+
+def _snapshot_from_file(path: Path) -> Any:
+    value = _load_object(path)
+    if value.get("artifactType") == "sova.behavior-snapshot":
+        axes = _object_member(value, "axes")
+        axes["id"] = _string_member(value, "id")
+        trace_reference = value.get("traceReference")
+        if trace_reference is not None:
+            if not isinstance(trace_reference, str):
+                raise FormatError("SOVA-DIFF-TRACE", "traceReference must be a string or null")
+            axes["traceReference"] = trace_reference
+        return build_behavior_snapshot(axes)
+    return build_behavior_snapshot(value)
+
+
+def _behavior_diff(args: argparse.Namespace) -> int:
+    report = compare_behavior_snapshots(
+        _snapshot_from_file(args.left),
+        _snapshot_from_file(args.right),
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(report.to_mapping()) + b"\n")
+    return 1 if report.behavioral_drift else 0
+
+
+def _monitor_policy(path: Path | None) -> dict[str, Any]:
+    return (
+        _load_object(path)
+        if path is not None
+        else {
+            "maxEnvironmentChanges": 0,
+            "maxBehaviorChanges": 0,
+            "maxMethodologyChanges": 0,
+            "allowedFlakyReproductions": 0,
+            "observedFlakyReproductions": 0,
+            "profile": "standard",
+            "retention": "operator-controlled",
+        }
+    )
+
+
+def _sentinel(args: argparse.Namespace) -> int:
+    report = run_sentinel(
+        _snapshot_from_file(args.baseline),
+        _snapshot_from_file(args.current),
+        policy=_monitor_policy(args.policy),
+        history_path=args.history,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 1 if report["status"] == "failed" else 0
+
+
+def _ci(args: argparse.Namespace) -> int:
+    diff = compare_behavior_snapshots(
+        _snapshot_from_file(args.baseline),
+        _snapshot_from_file(args.current),
+    )
+    report = evaluate_ci(diff, _monitor_policy(args.policy))
+    if args.sarif is not None:
+        args.sarif.write_bytes(canonical_json_bytes(report["sarif"]) + b"\n")
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return int(report["exitCode"])
+
+
+def _registry_verify(args: argparse.Namespace) -> int:
+    trusted = frozenset(args.trusted_key_id or [])
+    report = verify_registry(args.root, trusted_key_ids=trusted)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _sync(args: argparse.Namespace) -> int:
+    report = sync_registry(tuple(args.sources), args.cache)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _contribute(args: argparse.Namespace) -> int:
+    report = prepare_contribution(
+        _load_object(args.specification),
+        args.destination,
+        confirmed=bool(args.confirm),
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _self_check_create(args: argparse.Namespace) -> int:
+    document = build_integrity_manifest(args.root, tuple(args.include))
+    args.manifest.write_bytes(canonical_json_bytes(document) + b"\n")
+    sys.stdout.write(f"{document['manifestDigest']}  {args.manifest}\n")
+    return 0
+
+
+def _self_check_verify(args: argparse.Namespace) -> int:
+    report = verify_integrity_manifest(args.root, _load_object(args.manifest))
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 1 if report["status"] == "failed" else 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:

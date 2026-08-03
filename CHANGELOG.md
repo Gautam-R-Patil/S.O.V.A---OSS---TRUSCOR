@@ -99,6 +99,16 @@ have independent version ledgers.
   bounded search, fresh-observation minimization, element-removal attribution,
   portable `.sova` composition fragments, and a ground-truth composition-only
   failure fixture.
+- Credential-stripped substitute-only rehearsal with pluggable preparation,
+  separate user/attacker evidence, signed success/failure traces, clean diffs,
+  material-step captures, capability reach, and digest-bound selective export.
+- Shell-free allowlisted process tracing, multi-axis behavior/environment/
+  methodology drift, local sentinel history, deterministic CI/SARIF policy, a
+  reusable GitHub workflow, and protected-baseline SOVA self-checks.
+- An offline repository-of-files registry with content-addressed objects,
+  DSSE-compatible signed indexes, explicit key-pinning trust, pull-only atomic
+  mirror caching, verification tiers, consent-firewalled contribution staging,
+  and provenance-preserving external adapters.
 
 ### Fixed
 

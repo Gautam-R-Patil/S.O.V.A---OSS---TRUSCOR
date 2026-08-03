@@ -1,7 +1,7 @@
 # SOVA OSS claims register
 
 - **Register version:** 1.0
-- **Evidence snapshot:** 2026-08-02
+- **Evidence snapshot:** 2026-08-03
 - **Register owner:** Gautam R. Patil
 - **Next competitive recheck:** 2026-08-29
 - **Legal review state:** qualified counsel not yet recorded
@@ -83,6 +83,9 @@ guidance, or original research:
 - **SRC-LOCAL-ADR:** [Accepted SOVA decisions](../decisions/0005-topic-00-project-constitution.md)
 - **SRC-PROTOCOL:** [Predeclared SOVA comparison protocol](./predeclared-comparison-protocol.md)
 - **SRC-MELRA:** [MELRA public repository](https://github.com/XAGI-Lab/melra)
+- **SRC-AGENTASSAY:** [AgentAssay](https://arxiv.org/abs/2603.02601)
+- **SRC-OCI:** [OCI Distribution Specification](https://github.com/opencontainers/distribution-spec/blob/main/spec.md)
+- **SRC-TUF:** [The Update Framework metadata](https://theupdateframework.io/docs/metadata/)
 
 ## Product and implementation claims
 
@@ -99,8 +102,8 @@ guidance, or original research:
 | P-09 | `sova check` completes a representative component test in 60 seconds. | VALUE HYPOTHESIS | Product owner | No performance run yet | 2026-07-29 | Before alpha | Keep as a budget/profile target, not a guarantee. |
 | P-10 | SOVA traces can be DSSE-compatible Ed25519 signed and are tamper-evident for covered bytes under the published threat model. | VERIFIED | Evidence owner | SRC-DSSE; SRC-SIGSTORE; [threat model](../specifications/threat-model.md); integrity and hostile-input tests | 2026-07-31 | Before 0.2 | Included-key verification establishes no external signer identity; never say tamper-proof or unforgeable. |
 | P-11 | Semantic reproduction is a rate over repeated trials, not exact deterministic rerun. | VERIFIED | Research owner | Project definition; SRC-PROTOCOL | 2026-07-29 | 2026-10-27 | Allowed as SOVA terminology, not as a novelty claim. |
-| P-12 | The registry is pull-only and sends no target, trace, credential, or finding data. | PROVISIONAL | Privacy owner | SRC-LOCAL-ADR | 2026-07-29 | Before registry release | Must be enforced and network-tested before factual use. |
-| P-13 | SOVA can continuously detect safety regressions after model or component updates. | UNVERIFIED | Sentinel owner | No implementation or longitudinal result | 2026-07-29 | Before sentinel release | Say “planned regression testing.” |
+| P-12 | The implemented registry sync accepts verified local mirrors, writes an atomic offline cache, and has no target, trace, credential, finding, telemetry, or upload code path. | VERIFIED | Privacy owner | [ADR-0024](../decisions/0024-offline-content-addressed-community-registry.md); registry/sync hostile and integration tests | 2026-08-03 | Every registry/sync change | Bounded to local-mirror 0.1 sync; an external downloader or Git remote has its own privacy boundary. |
+| P-13 | SOVA can deterministically compare declared behavior/environment/methodology snapshots, fail a local CI gate on a known fixture regression, and append local sentinel history. | VERIFIED | Sentinel owner | [ADR-0023](../decisions/0023-multi-axis-behavior-drift-and-local-regression.md); Topics 18-20 CLI and integration tests | 2026-08-03 | Every monitoring-policy change | Not a longitudinal field result, stochastic detection guarantee, vulnerability finding, or continuously valid attestation. |
 | P-14 | SOVA can assign the responsible model, tool, memory, orchestration, permission, or environment layer. | UNVERIFIED | Forensics owner | Gate 01-B not run | 2026-07-29 | After Gate 01-B | Prohibited as achieved capability. |
 | P-15 | One safe owned conditional-behavior capsule can be executed through scripted and restricted-local backends, inspected, played back inertly, compared on declared outcomes, repackaged with both traces, and verified offline without Atlas. | VERIFIED | Architecture owner | `tests/integration/test_no_atlas_complete_vertical_slice.py`; hosted CI for the cited commit | 2026-07-31 | Every executor-contract change | Bounded to the deterministic fixture; host execution is not a security sandbox. |
 | P-16 | The public exact declared-outcome comparator refuses equivalence when a source trace is invalid or reports dropped events, non-full capture, or an absent selected event family. | VERIFIED | Evidence owner | `sova.reproduction`; reproduction failure tests | 2026-07-31 | Before 0.2 | This is not the private experimental semantic-reproduction mechanism or a general semantic judge. |
@@ -114,6 +117,9 @@ guidance, or original research:
 | P-24 | `sova forensics reconstruct` produces an evidence-linked partial-order timeline with explicit missing-sensor and uncertain-order markers, while paired attribution can support, contradict, confound, or abstain on declared intervention records. | VERIFIED | Forensics owner | [ADR-0019](../decisions/0019-evidence-linked-counterfactual-forensics.md); forensic unit and integration tests | 2026-08-03 | Every forensic-policy change | Bounded to implemented trace/external-event inputs and deterministic fixtures; real-system causal accuracy remains unproven. |
 | P-25 | SOVA can build prominently watermarked self-assessment evidence, project a compatible finding into SARIF, assign execution-bounded scanner labels, and prepare a local disclosure package without sending or publishing it. | VERIFIED | Evidence owner | [ADR-0020](../decisions/0020-bounded-evidence-adjudication-disclosure.md); evidence, CLI, and disclosure tests | 2026-08-03 | Every evidence/disclosure change | No certificate, independent attestation, universal safety finding, automated external contact, or real-component publication claim. |
 | P-26 | The reference composition search finds, minimizes, packages, and attributes one deterministic ground-truth memory-to-agent-to-tool failure whose constituents are negative in declared isolated tests. | VERIFIED | Composition owner | [ADR-0021](../decisions/0021-bounded-composition-only-search.md); composition unit and vertical-slice integration tests | 2026-08-03 | Every graph/search change | Synthetic fixture only; risk-guided superiority, real-system generalization, novelty, and patentability remain unproven. |
+| P-27 | The built-in rehearsal can strip credential-shaped files and assignments, let a deterministic user-agent adapter propose a real fixture file task, ledger non-file effects as inert substitutes, emit a signed trace, and export only approved digest-stable file changes without altering the source fixture. | VERIFIED | Rehearsal owner | [ADR-0022](../decisions/0022-substitute-only-rehearsal-and-selective-promotion.md); Topics 18-20 unit and vertical-slice tests | 2026-08-03 | Every rehearsal/backend change | Built-in host workspace is not a security sandbox or production-equivalent digital twin; live service fidelity is unproven. |
+| P-28 | The local process recorder requires an exact executable allowlist and explicit authorization, avoids a shell, emits a signed trace, and reports process, recorder, and instrumentation-path elapsed time. | VERIFIED | Trace owner | [ADR-0023](../decisions/0023-multi-axis-behavior-drift-and-local-regression.md); process success, timeout, malformed-event, and CLI tests | 2026-08-03 | Every recorder/executor change | Process is directly observed; other event families require adapter instrumentation; elapsed ratios are not causal benchmarks. |
+| P-29 | The repository-of-files registry verifies content and taxonomy digests plus a DSSE-compatible Ed25519 index offline; included-key integrity and explicitly pinned publisher identity are reported separately. | VERIFIED | Registry owner | [ADR-0024](../decisions/0024-offline-content-addressed-community-registry.md); signature, substitution, object, taxonomy, trust-pin, mirror, and contribution tests | 2026-08-03 | Every registry signature/trust change | This is tamper evidence inside the tested model, not non-repudiation, truth, or TRUSCOR attestation. |
 
 ## Market, incident, and operational claims
 

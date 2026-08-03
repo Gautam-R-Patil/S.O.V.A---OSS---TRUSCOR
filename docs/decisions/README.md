@@ -29,6 +29,9 @@ silently rewrite it.
 | [0019](./0019-evidence-linked-counterfactual-forensics.md) | Evidence-linked counterfactual forensics | Accepted |
 | [0020](./0020-bounded-evidence-adjudication-disclosure.md) | Bounded evidence, adjudication, and disclosure | Accepted |
 | [0021](./0021-bounded-composition-only-search.md) | Bounded composition-only search | Accepted |
+| [0022](./0022-substitute-only-rehearsal-and-selective-promotion.md) | Substitute-only rehearsal and selective promotion | Accepted |
+| [0023](./0023-multi-axis-behavior-drift-and-local-regression.md) | Multi-axis behavior drift and local regression | Accepted |
+| [0024](./0024-offline-content-addressed-community-registry.md) | Offline content-addressed community registry | Accepted |
 
 Use the next zero-padded number. Every ADR states its status, date, owner,
 scope, decision, alternatives, consequences, and superseded decisions.

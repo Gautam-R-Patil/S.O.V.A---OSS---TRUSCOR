@@ -1,0 +1,35 @@
+{
+  "actions": [
+    {
+      "actorId": "scripted-agent",
+      "id": "write-app",
+      "kind": "file.write",
+      "materialStep": true,
+      "operation": "replace",
+      "parameters": {
+        "content": "version two\n"
+      },
+      "target": "app.txt"
+    },
+    {
+      "actorId": "scripted-agent",
+      "id": "call-api",
+      "kind": "api",
+      "materialStep": true,
+      "operation": "post",
+      "parameters": {
+        "body": {
+          "value": "safe fixture"
+        }
+      },
+      "target": "fixture-api"
+    }
+  ],
+  "agentId": "scripted-agent",
+  "authorizationConfirmed": true,
+  "substitutes": [
+    "api"
+  ],
+  "task": "Update one fixture file and record one inert API attempt.",
+  "withAttack": false
+}
