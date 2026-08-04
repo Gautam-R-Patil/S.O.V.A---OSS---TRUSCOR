@@ -1258,18 +1258,13 @@ name = "sova-oss"
 version = "0.1.0a0"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "jsonschema" },
     { name = "jsonschema-rs" },
 ]
 
-[package.optional-dependencies]
-signing = [
-    { name = "cryptography" },
-]
-
 [package.dev-dependencies]
 dev = [
-    { name = "cryptography" },
     { name = "hypothesis" },
     { name = "mypy" },
     { name = "pip-audit" },
@@ -1282,15 +1277,13 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cryptography", marker = "extra == 'signing'", specifier = ">=49,<50" },
+    { name = "cryptography", specifier = ">=49,<50" },
     { name = "jsonschema", specifier = ">=4.26,<5" },
     { name = "jsonschema-rs", specifier = ">=0.49.2,<0.50" },
 ]
-provides-extras = ["signing"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "cryptography", specifier = ">=49,<50" },
     { name = "hypothesis", specifier = ">=6.160,<7" },
     { name = "mypy", specifier = ">=2.3,<3" },
     { name = "pip-audit", specifier = ">=2.10,<3" },

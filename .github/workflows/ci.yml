@@ -56,7 +56,11 @@ jobs:
           --cov=sova
           --cov-branch
           --cov-report=term-missing
+          --cov-report=json:coverage.json
           --cov-fail-under=95
+
+      - name: Require every registered CLI command handler to execute
+        run: uv run --locked python scripts/audit_cli_coverage.py coverage.json
 
       - name: Check generated glossary
         run: uv run --locked python scripts/generate_glossary.py --check

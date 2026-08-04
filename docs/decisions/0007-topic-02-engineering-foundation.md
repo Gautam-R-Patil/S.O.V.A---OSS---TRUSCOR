@@ -203,7 +203,7 @@ screening. Native components require a separate decision and build matrix.
       state controls exist.
 - [x] Secret, confidential-file, licence, dependency, fixture, raw-trace,
       credential, profile, and Atlas-report controls exist.
-- [x] The placeholder CLI builds and tests on each supported platform family.
+- [x] The initial CLI foundation builds and tests on each supported platform family.
 - [x] Topic 01 publication controls remain intact and no non-trivial mechanism
       or private material was published.
 

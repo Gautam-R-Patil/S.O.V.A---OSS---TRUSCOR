@@ -88,7 +88,7 @@ source = "decisions/0004-self-assessment-and-truscor-boundary.md"
 [[term]]
 term = "semantic reproduction"
 definition = "Repeatedly testing whether the same material security outcome recurs when bit-for-bit replay is unavailable, with conditions, trials, and uncertainty reported."
-status = "planned"
+status = "accepted"
 source = "decisions/0009-sova-behavior-capsule-and-trace-model.md"
 
 [[term]]

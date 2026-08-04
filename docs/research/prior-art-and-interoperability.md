@@ -1,7 +1,7 @@
 # SOVA OSS prior-art and interoperability matrix
 
 - **Matrix version:** 1.0
-- **Snapshot date:** 2026-07-29
+- **Snapshot date:** 2026-08-04
 - **Owner:** Gautam R. Patil
 - **Next full recheck:** 2026-08-29
 
@@ -350,6 +350,22 @@ invocation-bound approval materially resists agent prompt-injection under a
 predeclared operator study, and whether artifact-gated scoring measurably
 improves falsifiability and correction of agent benchmark results. Neither is a
 public novelty claim without controlled comparisons and independent review.
+
+## 2026 replay, trace-governance, and simulation refresh
+
+| Primary source | Established mechanism | SOVA decision |
+|---|---|---|
+| [Deterministic Replay for AI Agent Systems (`agrepl`)](https://arxiv.org/abs/2607.16200) | Transport interception, structured traces, isolated zero-network replay, request-key matching, and noise-aware diffs | **Generic deterministic agent replay is occupied.** SOVA keeps playback, controlled re-execution, and semantic reproduction distinct and withholds novelty claims pending comparative evidence. |
+| [Traccia](https://arxiv.org/abs/2607.14309) | OpenTelemetry-based AI governance with execution lineage and a hashed trace ledger | **Generic OTel AI governance and hashed-ledger claims are occupied.** A SOVA hash chain is only tamper evidence for covered events within its threat model. |
+| [Vidur-Agent / GAIATrace](https://arxiv.org/abs/2606.01725) | Trace-driven simulation for reproducible, lower-cost multi-model agent evaluation | **Trace-driven agent simulation is occupied.** SOVA must test its claim-specific evidence and reproduction decisions rather than claim simulation novelty. |
+| [AgentSim](https://arxiv.org/abs/2604.26653) | Verifiable stepwise agent-trace simulation | **Broad verifiable trace-simulation claims are unavailable.** Independent fidelity and threat-model comparisons are required. |
+| [Inspect evaluation logs](https://inspect.aisi.org.uk/eval-logs.html) | Structured/binary evaluation logs, recovery, incremental access, transcript analysis, and run-config export for reproduction | **Strong interoperability baseline.** SOVA imports must disclose losses and demonstrate added claim/evidence semantics rather than relabel Inspect logs. |
+
+The refresh narrows, rather than weakens, the research programme. Surviving
+questions concern claim-conditioned evidence sufficiency, explicit
+context-equivalence for semantic reproduction, evidence-bounded executor
+conformance, and evidence-guided interaction search. They remain research
+hypotheses until faithful baselines and independent validation exist.
 
 ## Unresolved names from the planning source
 

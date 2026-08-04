@@ -127,6 +127,11 @@ foundation is Topic 02. Building a throwaway harness before that decision would
 violate the roadmap’s own order. The first authorised post-foundation slice is
 the no-Atlas harness/evidence path.
 
+This is a historical Topic 01 staging statement. The bounded no-MELRA
+harness, evidence paths, and comparison fixtures are now implemented; the
+large confirmatory experiments below remain unrun unless their individual
+result rows say otherwise.
+
 ## Evidence gates
 
 | Gate | Decision | Result |

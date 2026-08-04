@@ -32,7 +32,7 @@ jobs:
       - name: Synchronize and test
         run: |
           uv sync --locked
-          uv run --locked pytest
+          uv run --locked python -m pytest
           uv run --locked python scripts/check_repository.py
 
       - name: Check tag and package version
@@ -42,8 +42,11 @@ jobs:
       - name: Build candidate
         run: uv build
 
-      - name: Generate candidate checksums
-        run: sha256sum dist/* > dist/SHA256SUMS
+      - name: Generate deterministic SBOM and candidate checksums
+        run: |
+          uv run --locked sova release sbom uv.lock dist/sova-oss.cdx.json --scope runtime
+          uv run --locked sova release checksums dist dist/SHA256SUMS
+          uv run --locked sova release verify-checksums dist dist/SHA256SUMS
 
       - name: Attest candidate provenance
         uses: actions/attest@c32b4b8b198b65d0bd9d63490e847ff7b53989d4 # v4.0.0

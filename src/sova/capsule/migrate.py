@@ -367,6 +367,12 @@ def migrate_capsule(
     source_manifest = reader.raw_manifest()
     raw_objects = source_manifest.get("objects", [])
     descriptors = reader.verify_object_index(raw_objects)
+    if source_manifest.get("schemaVersion") == destination_version:
+        source_bytes = source_path.read_bytes()
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        with destination_path.open("xb") as stream:
+            stream.write(source_bytes)
+        return sha256_digest(source_bytes)
     migrated = migrate_manifest(source_manifest, destination_version=destination_version)
     migrated["migration"]["sourcePackageDigest"] = sha256_digest(source_path.read_bytes())
     migrated["migration"]["preservedSourcePath"] = "migration/source-manifest.json"

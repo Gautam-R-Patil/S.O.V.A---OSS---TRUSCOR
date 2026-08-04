@@ -1,4 +1,4 @@
-<!-- status: planned -->
+<!-- status: implemented -->
 
 # Adapter compatibility
 

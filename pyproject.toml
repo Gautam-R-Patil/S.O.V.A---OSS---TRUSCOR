@@ -47,13 +47,9 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = [
+  "cryptography>=49,<50",
   "jsonschema>=4.26,<5",
   "jsonschema-rs>=0.49.2,<0.50",
-]
-
-[project.optional-dependencies]
-signing = [
-  "cryptography>=49,<50",
 ]
 
 [project.scripts]
@@ -67,7 +63,6 @@ Security = "https://github.com/Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR/security/p
 
 [dependency-groups]
 dev = [
-  "cryptography>=49,<50",
   "hypothesis>=6.160,<7",
   "mypy>=2.3,<3",
   "pip-audit>=2.10,<3",
@@ -85,13 +80,18 @@ default-groups = ["dev"]
 [tool.hatch.build.targets.sdist]
 include = [
   "/CHANGELOG.md",
+  "/CITATION.cff",
+  "/CODE_OF_CONDUCT.md",
   "/CONTRIBUTING.md",
   "/DUAL_USE_POLICY.md",
+  "/GOVERNANCE.md",
   "/LICENSE",
+  "/MAINTAINERS.md",
   "/NOTICE",
   "/README.md",
   "/SECURITY.md",
   "/TRADEMARKS.md",
+  "/docs",
   "/src",
 ]
 

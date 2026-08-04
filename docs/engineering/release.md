@@ -32,11 +32,19 @@ A CLI major version does not imply an artifact-schema major version.
 
 ## Current automation
 
-The release-candidate workflow builds and retains artifacts, emits SHA-256
-checksums, and creates GitHub/Sigstore build-provenance attestations for the
-candidate files. It does not publish to a package index. This is intentional: a
+The release-candidate workflow builds and retains artifacts, emits a
+timestamp-free CycloneDX 1.6 SBOM and stable SHA-256 manifest, verifies exact
+release-tree membership, and creates GitHub/Sigstore build-provenance
+attestations for the candidate files. It does not publish to a package index.
+This is intentional: a
 pushed tag or candidate attestation is not a substitute for founder/publication
 approval, and an attestation must still be verified by consumers.
+
+Local offline verification:
+
+```console
+sova release verify-checksums ./dist ./dist/SHA256SUMS
+```
 
 Verify a downloaded candidate online with:
 

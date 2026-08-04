@@ -16,7 +16,7 @@ opt-in is required for current foundation and contract development.
 ```bash
 uv sync --locked
 uv run sova --version
-uv run pytest
+uv run python -m pytest
 ```
 
 `uv` creates the project environment and installs exact versions from
@@ -30,7 +30,7 @@ uv lock --check
 uv run ruff format --check .
 uv run ruff check .
 uv run mypy
-uv run pytest --cov=sova --cov-branch --cov-report=term-missing
+uv run python -m pytest --cov=sova --cov-branch --cov-report=term-missing
 uv export --locked --quiet --format requirements.txt --all-groups --no-emit-project --output-file audit-requirements.txt
 uv run pip-audit --strict --cache-dir .cache/pip-audit --requirement audit-requirements.txt --no-deps --disable-pip --ignore-vuln GHSA-g6cj-pr64-35w5
 uv run python scripts/generate_glossary.py --check

@@ -26,7 +26,7 @@
   <a href="#why-sova">Why SOVA</a> •
   <a href="#what-sova-is-building">Capabilities</a> •
   <a href="#how-the-system-fits-together">System</a> •
-  <a href="#the-planned-developer-experience">Usage</a> •
+  <a href="#the-developer-experience">Usage</a> •
   <a href="#safety-by-construction">Safety</a> •
   <a href="#project-status">Status</a> •
   <a href="#licence-attribution-and-citation">Governance</a> •
@@ -47,13 +47,14 @@
 > local executors, observable deterministic oracles, capability mapping,
 > evidence-isolated orchestration, bounded checking, exact-gated local MCP,
 > fail-closed extensions/providers, evidence-first local community surfaces,
-> and shared domain primitives. Live
-> capture integrations, adaptive trigger search, causal forensics, and the
-> broader security commands remain under development.
+> replay, bounded trigger search, evidence-linked causal forensics, onboarding,
+> release integrity, neutral conformance vectors, authorized-target planning,
+> and shared domain primitives. Live target execution still requires an admitted
+> adapter, exact authorization, isolation, and target-specific evidence oracles.
 
 ## Implemented foundation, mapping, runtime, capsules, traces, and ecosystem boundaries
 
-The implemented Topic 02–11 engineering foundation is intentionally
+The implemented Topic 02–27 engineering foundation is intentionally
 experimental and honest:
 
 ```bash
@@ -61,7 +62,7 @@ git clone https://github.com/Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR.git
 cd S.O.V.A---OSS---TRUSCOR
 uv sync --locked
 uv run sova --version
-uv run pytest
+uv run python -m pytest
 ```
 
 It provides:
@@ -110,6 +111,13 @@ It provides:
   human-review states;
 - `sova check` and a complete repeated `sova demo sleeper` workflow producing
   signed traces, a portable capsule, a fresh reproduction, and a concise report.
+- account-free local initialization, credential-safe diagnostics, reviewed
+  managed-data deletion, first-run guides, and air-gapped operation;
+- deterministic CycloneDX 1.6 SBOMs, release checksums with undeclared-file
+  detection, and reproducible independent conformance kits;
+- secret-free authorized target contracts and deterministic website/software
+  assessment fixtures that validate the complete evidence pipeline without
+  claiming that a live target was exercised.
 
 Read [ADR-0007](./docs/decisions/0007-topic-02-engineering-foundation.md),
 [ADR-0008](./docs/decisions/0008-topic-03-domain-contracts.md), the
@@ -571,13 +579,28 @@ sova replay clip ./clip.json ./replay.y4m
 # Verify a signed, nonce-bound probe response offline
 sova probe verify ./response.json --nonce REQUEST_NONCE --scope manifest --key-id sha256:...
 
-# Planned later commands
+# Initialize and diagnose account-free local state
+sova init ./.sova-state --provider none
+sova doctor ./.sova-state
 
-# 1. Configure a model provider or a local model
-sova init
+# Generate and verify release and cross-implementation evidence
+sova release sbom uv.lock ./dist/sova-oss.cdx.json --scope runtime
+sova release checksums ./dist ./dist/SHA256SUMS
+sova release verify-checksums ./dist ./dist/SHA256SUMS
+sova conformance export ./sova-conformance-0.1.zip
+sova conformance verify ./sova-conformance-0.1.zip
 
-# Hunt for conditional behavior on an authorized target
-sova detonate ./my-agent --hunt-triggers --authorize
+# Plan an authorized website/software assessment without connecting to it
+sova target template browser-agent ./website-target.json
+sova target validate ./website-target.json
+sova target plan ./website-target.json ./website-plan.json
+
+# Validate the complete measurement pipeline on self-owned deterministic fixtures
+sova target fixture website ./website-fixture
+sova target fixture software ./software-fixture
+
+# Live offensive MCP operations require a separately issued approval
+sova mcp init-control ./control.key
 
 # Launch broader live-target rehearsal only after a stronger admitted backend
 sova rehearse prepare ./authorized-target ./isolated-workspace
@@ -587,8 +610,7 @@ One safe implemented demonstration is available now:
 
 ```bash
 # No model, provider key, network, MELRA, container, or native target is required.
-# A minimal package install must include the signing extra: pip install ".[signing]"
-# The repository's locked `uv sync` development environment already includes it.
+# The canonical package includes the cryptographic signing dependency.
 sova demo sleeper ./sova-demo
 sova verify --require-signature ./sova-demo/discovery/synthetic-sleeper.sova-trace
 sova playback ./sova-demo/discovery/synthetic-sleeper.sova-trace
@@ -651,7 +673,10 @@ The intended controls are:
 - **No claim that a bounded search proves universal safety.**
 
 > [!WARNING]
-> No offensive capability will be exposed through the SOVA MCP interface until the every-invocation human authorization mechanism exists and passes adversarial testing.
+> The local MCP exposes `detonate`, `rehearse`, and `probe` only through the
+> exact-gated path. Each invocation requires an expiring, single-use approval
+> created through a separate local control channel. This is authorization
+> enforcement, not proof that the chosen live target or containment backend is safe.
 
 ## What SOVA will not claim
 
@@ -740,7 +765,11 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Local MCP | MCP `2025-11-25` stdio, safe tools, three exact-gated tools, out-of-band human approval, manifest pin, and self-check implemented in [ADR-0025](./docs/decisions/0025-local-mcp-out-of-band-authorization.md) |
 | Extension SDK, providers, targets, interoperability | Experimental fail-closed contracts and no-network compatibility kit implemented in [ADR-0026](./docs/decisions/0026-fail-closed-extension-and-provider-ecosystem.md); independent adoption and real-provider transferability remain unproven |
 | Probe, Arena, leaderboard, CTF, replay media | Experimental local evidence path implemented in [ADR-0027](./docs/decisions/0027-evidence-first-local-community-surfaces.md); arbitrary untrusted-agent Arena containment and public comparative results remain unproven |
-| Remaining product surface | Topics 24 and later, plus explicitly documented real-runtime and independent validation gates |
+| Research/publication programme | Private source, opportunity, invention, and publication-readiness ledgers maintained; public novelty and submission remain human/external gates |
+| Onboarding and adoption | Account-free `init`, local `doctor`, reviewed data removal, installation/first-value/air-gap guides, and user pathways implemented |
+| Release and governance | Deterministic SBOM/checksum tools, public governance, compatibility policy, and release-candidate automation implemented; first signed public release remains a founder gate |
+| Standards and long horizon | Neutral conformance kit, schema/change governance, archival policy, and open-ended research branches implemented; independent adoption remains unproven |
+| Remaining validation | Exact authorized live-target runs, independent readers/adapters/reviewers, cross-provider comparisons, larger nondeterministic studies, and promoted release decisions |
 
 The first engineering objective is now implemented as a bounded synthetic
 no-Atlas/no-MELRA vertical slice:
@@ -760,7 +789,7 @@ planted sleeper component
 
 SOVA OSS is the complete local instrument for users to test and understand systems they are authorized to assess. It is not a crippled edition of a paid product:
 
-- every planned SOVA OSS command and generic security workflow belongs in the public repository;
+- every defined SOVA OSS command and generic security workflow belongs in the public repository;
 - no SOVA OSS feature depends on a TRUSCOR account, service, private plugin, or feature flag;
 - SOVA OSS outputs are visibly labelled operator-controlled self-assessments;
 - SOVA OSS never issues a TRUSCOR certificate, independent attestation, financial-loss conclusion, premium, or underwriting output;

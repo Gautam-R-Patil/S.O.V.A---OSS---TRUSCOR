@@ -33,9 +33,14 @@ claiming that the field set is ready for `1.0`.
 - [local MCP and human authorization](./local-mcp-0.1.md)
 - [extensions, providers, targets, and interoperability](./extensions-providers-interoperability-0.1.md)
 - [probe, local Arena, leaderboard, CTF, and replay media](./community-surfaces-0.1.md)
+- [authorized target assessment](./authorized-target-assessment-0.1.md)
+- [neutral conformance kit](./conformance-kit-0.1.md)
+- [supply-chain release artifacts](./supply-chain-release-0.1.md)
 
 The implementation and bounded validation result for the final three surfaces
 is recorded in [Topics 21-23 validation](../engineering/topics-21-23-validation.md).
+The onboarding, release, governance, conformance, and authorized-target fixture
+work is recorded in [Topics 24-27 validation](../engineering/topics-24-27-validation.md).
 
 The normative JSON Schema 2020-12 files ship in
 [`src/sova/schemas`](../../src/sova/schemas/README.md). Python is the reference

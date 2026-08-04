@@ -89,7 +89,7 @@ uv run sova --version
 uv run ruff format --check .
 uv run ruff check .
 uv run mypy
-uv run pytest --cov=sova --cov-branch
+uv run python -m pytest --cov=sova --cov-branch
 uv export --locked --quiet --format requirements.txt --all-groups --no-emit-project --output-file audit-requirements.txt
 uv run pip-audit --strict --cache-dir .cache/pip-audit --requirement audit-requirements.txt --no-deps --disable-pip
 uv run python scripts/generate_glossary.py --check
@@ -112,9 +112,12 @@ Install the local checks:
 uv run pre-commit install --hook-type pre-commit --hook-type commit-msg
 ```
 
-The placeholder CLI and Topic 03 domain-contract library are the only
-implemented product code. Do not represent planned security commands, artifact
-schemas, execution, or evidence capabilities as shipped.
+The public CLI, experimental artifact schemas, deterministic and restricted
+execution contracts, evidence/replay workflows, exact-gated local MCP,
+community surfaces, onboarding, release tooling, and neutral conformance kit
+are implemented. Do not represent fixture-only, planned, independently
+unvalidated, or live-target capabilities as production-proven or universally
+safe. Status labels and limitations in the relevant specification control.
 
 ## Research and citation
 

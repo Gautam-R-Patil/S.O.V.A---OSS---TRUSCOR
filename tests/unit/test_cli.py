@@ -76,6 +76,7 @@ def test_template_pack_validate_inspect_and_hash_workflow(
     manifest = tmp_path / "manifest.json"
     scenario = tmp_path / "scenario.json"
     capsule = tmp_path / "behavior.sova"
+    migrated = tmp_path / "behavior-migrated.sova"
 
     assert main(["template", "capsule", str(manifest), "--author", "Tester"]) == 0
     assert main(["template", "scenario", str(scenario)]) == 0
@@ -92,6 +93,9 @@ def test_template_pack_validate_inspect_and_hash_workflow(
     assert "content:" in capsys.readouterr().out
     assert main(["compat", str(capsule)]) == 0
     assert json.loads(capsys.readouterr().out)["lossless"] is True
+    assert main(["migrate", str(capsule), str(migrated)]) == 0
+    assert migrated.is_file()
+    assert migrated.read_bytes() == capsule.read_bytes()
 
 
 def test_lint_verify_format_and_json_validation_commands(

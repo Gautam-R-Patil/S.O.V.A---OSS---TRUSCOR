@@ -11,7 +11,7 @@ have independent version ledgers.
 
 ### Added
 
-- Buildable `sova-oss` Python package and dependency-free `sova` placeholder CLI.
+- Buildable `sova-oss` Python package and typed, tested `sova` command-line interface.
 - A fail-visible dependency-advisory register and source guard for the current
   `cryptography` PKCS#7 advisory, with an automatic removal condition when a
   compatible fixed release becomes available.
@@ -123,9 +123,26 @@ have independent version ledgers.
 - Signed nonce-bound probe evidence, a deterministic trace-per-attempt local
   Arena, signature-pinned static leaderboard, inert CTF catalog, and bounded
   redaction-first replay clip renderer with strict public CLI documents.
+- Account-free `sova init`, non-secret `sova doctor`, identity-bound managed
+  data deletion, a first-five-minutes path, user-path guides, governance, and
+  maintainer documentation.
+- Deterministic CycloneDX 1.6 SBOM generation, exact release checksums, hostile
+  bundle verification, and a reproducible neutral conformance ZIP containing
+  canonical schema, event, extension, and manifest vectors.
+- Secret-free authorized-target manifests and inert plans plus signed,
+  deterministic website and software fixtures that prove target planning,
+  observable execution, trace capture, capsule packaging, controlled
+  reproduction, comparison, and offline verification without contacting a
+  live target.
+- A machine-audited 67-command CLI surface whose registered handlers must all
+  execute in mandatory offline CI.
 
 ### Fixed
 
+- Standardized test invocation on `python -m pytest`, avoiding a Windows
+  console-entry-point import-path failure for the public `scripts` package.
+- Current-to-current `.sova` migration now performs an exact, no-overwrite
+  byte-preserving copy when the destination differs from the source.
 - Local MCP control-key creation now forces binary mode on Windows so random
   newline bytes cannot be translated to CRLF and alter the generated key.
 - Windows foreground/background cancellation now detects failed or timed-out

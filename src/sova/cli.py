@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sova import __version__
+from sova.assessment import build_assessment_plan, run_reference_assessment, target_template
 from sova.capsule import (
     analyze_migration,
     build_capsule,
@@ -35,6 +36,7 @@ from sova.composition import (
     CompositionStrategy,
     graph_from_mapping,
 )
+from sova.conformance import export_conformance_kit, verify_conformance_kit
 from sova.evidence import (
     ExecutionObservation,
     ObservationState,
@@ -84,6 +86,7 @@ from sova.monitoring import (
     run_sentinel,
     verify_integrity_manifest,
 )
+from sova.onboarding import delete_instance_data, diagnose_instance, initialize_instance
 from sova.registry import prepare_contribution, sync_registry, verify_registry
 from sova.rehearsal import (
     export_approved_changes,
@@ -91,6 +94,7 @@ from sova.rehearsal import (
     run_rehearsal,
     specification_from_mapping,
 )
+from sova.release import verify_checksums, write_checksums, write_cyclonedx_sbom
 from sova.replay import (
     ReplayMode,
     VerificationState,
@@ -106,6 +110,7 @@ from sova.safety import (
     known_backend_descriptors,
 )
 from sova.search import run_trigger_search_demo
+from sova.targets import TargetKind, target_manifest_from_mapping, validate_target_manifest
 from sova.trace import TraceReader, recover_trace
 from sova.trace.otel import export_event
 from sova.workflows import run_check, run_complete_demo
@@ -129,6 +134,101 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command")
+
+    init_parser = commands.add_parser(
+        "init", help="create an account-free local SOVA data directory"
+    )
+    init_parser.add_argument("root", type=_path)
+    init_parser.add_argument(
+        "--provider",
+        choices=("none", "openai", "anthropic", "google", "openrouter", "ollama", "custom"),
+        default="none",
+    )
+    init_parser.add_argument("--registry", type=_path)
+    init_parser.set_defaults(handler=_init)
+
+    doctor_parser = commands.add_parser(
+        "doctor", help="diagnose one local SOVA instance without exposing credentials"
+    )
+    doctor_parser.add_argument("root", type=_path)
+    doctor_parser.set_defaults(handler=_doctor)
+
+    data_parser = commands.add_parser("data", help="preview or remove managed local SOVA data")
+    data_commands = data_parser.add_subparsers(dest="data_command")
+    data_delete = data_commands.add_parser(
+        "delete", help="remove one exactly identified managed instance"
+    )
+    data_delete.add_argument("root", type=_path)
+    data_delete.add_argument("--instance-id", required=True)
+    data_delete.add_argument("--yes", action="store_true")
+    data_delete.set_defaults(handler=_data_delete)
+
+    release_parser = commands.add_parser(
+        "release", help="build and verify deterministic local release metadata"
+    )
+    release_commands = release_parser.add_subparsers(dest="release_command")
+    release_sbom = release_commands.add_parser(
+        "sbom", help="generate a timestamp-free CycloneDX SBOM from uv.lock"
+    )
+    release_sbom.add_argument("lock", type=_path)
+    release_sbom.add_argument("destination", type=_path)
+    release_sbom.add_argument("--scope", choices=("runtime", "all"), default="runtime")
+    release_sbom.set_defaults(handler=_release_sbom)
+    release_checksums = release_commands.add_parser(
+        "checksums", help="write a stable SHA-256 manifest for a release directory"
+    )
+    release_checksums.add_argument("root", type=_path)
+    release_checksums.add_argument("destination", type=_path)
+    release_checksums.set_defaults(handler=_release_checksums)
+    release_verify = release_commands.add_parser(
+        "verify-checksums", help="verify checksums and undeclared-file absence offline"
+    )
+    release_verify.add_argument("root", type=_path)
+    release_verify.add_argument("manifest", type=_path)
+    release_verify.set_defaults(handler=_release_verify_checksums)
+
+    conformance_parser = commands.add_parser(
+        "conformance", help="export or verify the neutral SOVA compatibility kit"
+    )
+    conformance_commands = conformance_parser.add_subparsers(dest="conformance_command")
+    conformance_export = conformance_commands.add_parser(
+        "export", help="export deterministic schemas and golden vectors"
+    )
+    conformance_export.add_argument("destination", type=_path)
+    conformance_export.set_defaults(handler=_conformance_export)
+    conformance_verify = conformance_commands.add_parser(
+        "verify", help="verify a compatibility kit entirely offline"
+    )
+    conformance_verify.add_argument("path", type=_path)
+    conformance_verify.set_defaults(handler=_conformance_verify)
+
+    target_parser = commands.add_parser(
+        "target", help="author, validate, plan, or fixture-test an authorized target"
+    )
+    target_commands = target_parser.add_subparsers(dest="target_command")
+    target_template_parser = target_commands.add_parser(
+        "template", help="write a secret-free portable target manifest"
+    )
+    target_template_parser.add_argument("kind", choices=tuple(kind.value for kind in TargetKind))
+    target_template_parser.add_argument("destination", type=_path)
+    target_template_parser.set_defaults(handler=_target_template)
+    target_validate = target_commands.add_parser(
+        "validate", help="validate a target manifest without connecting to it"
+    )
+    target_validate.add_argument("manifest", type=_path)
+    target_validate.set_defaults(handler=_target_validate)
+    target_plan = target_commands.add_parser(
+        "plan", help="write an inert authorization and execution plan"
+    )
+    target_plan.add_argument("manifest", type=_path)
+    target_plan.add_argument("destination", type=_path)
+    target_plan.set_defaults(handler=_target_plan)
+    target_fixture = target_commands.add_parser(
+        "fixture", help="prove the target-to-capsule pipeline on an owned deterministic fixture"
+    )
+    target_fixture.add_argument("kind", choices=("website", "software"))
+    target_fixture.add_argument("destination", type=_path)
+    target_fixture.set_defaults(handler=_target_fixture)
 
     inspect_parser = commands.add_parser("inspect", help="render an inert capsule summary")
     inspect_parser.add_argument("path", type=_path)
@@ -616,6 +716,87 @@ def _load_object(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise FormatError("SOVA-CLI-ROOT-TYPE", "JSON root must be an object")
     return value
+
+
+def _init(args: argparse.Namespace) -> int:
+    report = initialize_instance(args.root, provider=args.provider, registry=args.registry)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _doctor(args: argparse.Namespace) -> int:
+    report = diagnose_instance(args.root)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0 if report["status"] == "pass" else 1
+
+
+def _data_delete(args: argparse.Namespace) -> int:
+    report = delete_instance_data(
+        args.root,
+        instance_id=str(args.instance_id),
+        confirmed=bool(args.yes),
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _release_sbom(args: argparse.Namespace) -> int:
+    report = write_cyclonedx_sbom(args.lock, args.destination, scope=str(args.scope))
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _release_checksums(args: argparse.Namespace) -> int:
+    report = write_checksums(args.root, args.destination)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _release_verify_checksums(args: argparse.Namespace) -> int:
+    report = verify_checksums(args.root, args.manifest)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0 if report["accepted"] else 1
+
+
+def _conformance_export(args: argparse.Namespace) -> int:
+    report = export_conformance_kit(args.destination)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _conformance_verify(args: argparse.Namespace) -> int:
+    report = verify_conformance_kit(args.path)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0 if report["accepted"] else 1
+
+
+def _target_template(args: argparse.Namespace) -> int:
+    document = target_template(TargetKind(str(args.kind)))
+    args.destination.write_bytes(canonical_json_bytes(document) + b"\n")
+    sys.stdout.write(f"WROTE {args.destination}\n")
+    return 0
+
+
+def _target_validate(args: argparse.Namespace) -> int:
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    report = validate_target_manifest(target)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0 if report["accepted"] else 1
+
+
+def _target_plan(args: argparse.Namespace) -> int:
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    plan = build_assessment_plan(target)
+    args.destination.write_bytes(canonical_json_bytes(plan) + b"\n")
+    sys.stdout.write(f"{plan['planDigest']}  {args.destination}\n")
+    return 0
+
+
+def _target_fixture(args: argparse.Namespace) -> int:
+    artifacts = run_reference_assessment(str(args.kind), args.destination)
+    report = _load_object(artifacts.report)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0 if report["status"] == "pass" else 1
 
 
 def _inspect(args: argparse.Namespace) -> int:

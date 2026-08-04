@@ -12,6 +12,10 @@ from sova.formats import canonical_json_bytes, sha256_digest
 from sova.formats.errors import FormatError
 
 _ID = re.compile(r"^[a-z0-9][a-z0-9._:/-]{0,190}$")
+_SENSITIVE_KEY = re.compile(
+    r"(?:token|secret|password|credential|cookie|authorization|api[_-]?key)",
+    re.IGNORECASE,
+)
 
 
 class TargetKind(StrEnum):
@@ -55,8 +59,7 @@ class TargetManifest:
             raise FormatError("SOVA-TARGET-METADATA", "target version and authority are required")
         if any(not _ID.fullmatch(item) for item in self.capabilities):
             raise FormatError("SOVA-TARGET-CAPABILITY", "target capability is invalid")
-        if self.configuration.get("secret") is not None:
-            raise FormatError("SOVA-TARGET-SECRET", "target manifests cannot embed secret values")
+        _reject_sensitive_configuration(self.configuration)
 
     def to_mapping(self) -> dict[str, Any]:
         return {
@@ -75,6 +78,67 @@ class TargetManifest:
         return sha256_digest(canonical_json_bytes(self.to_mapping()))
 
 
+def _reject_sensitive_configuration(value: Any, path: str = "$.configuration") -> None:
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if not isinstance(key, str):
+                raise FormatError("SOVA-TARGET-CONFIG", "target configuration keys must be strings")
+            if _SENSITIVE_KEY.search(key):
+                raise FormatError(
+                    "SOVA-TARGET-SECRET",
+                    "target manifests cannot embed or name secret-bearing configuration",
+                    path=f"{path}.{key}",
+                )
+            _reject_sensitive_configuration(child, f"{path}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            _reject_sensitive_configuration(child, f"{path}[{index}]")
+
+
+def target_manifest_from_mapping(value: dict[str, Any]) -> TargetManifest:
+    """Construct a strict target manifest from untrusted JSON."""
+    required = {
+        "artifactType",
+        "schemaVersion",
+        "identifier",
+        "kind",
+        "version",
+        "capabilities",
+        "authorizationScope",
+        "configuration",
+    }
+    if set(value) != required:
+        raise FormatError(
+            "SOVA-TARGET-FIELDS",
+            "target manifest has missing or unknown fields",
+            details={"fields": sorted(value)},
+        )
+    if value.get("artifactType") != "sova.target-manifest" or value.get("schemaVersion") != "0.1.0":
+        raise FormatError(
+            "SOVA-TARGET-VERSION", "target artifact type or schema version is unsupported"
+        )
+    capabilities = value.get("capabilities")
+    configuration = value.get("configuration")
+    if not isinstance(capabilities, list) or not all(
+        isinstance(item, str) for item in capabilities
+    ):
+        raise FormatError("SOVA-TARGET-CAPABILITY", "target capabilities must be a string array")
+    if not isinstance(configuration, dict):
+        raise FormatError("SOVA-TARGET-CONFIG", "target configuration must be an object")
+    try:
+        kind = TargetKind(str(value.get("kind")))
+    except ValueError as error:
+        raise FormatError("SOVA-TARGET-KIND", "target kind is unsupported") from error
+    return TargetManifest(
+        str(value.get("identifier", "")),
+        kind,
+        str(value.get("version", "")),
+        tuple(capabilities),
+        str(value.get("authorizationScope", "")),
+        configuration,
+    )
+
+
 def validate_target_manifest(manifest: TargetManifest) -> dict[str, Any]:
     required = _REQUIRED_CAPABILITIES[manifest.kind]
     missing = sorted(required - set(manifest.capabilities))
@@ -89,3 +153,11 @@ def validate_target_manifest(manifest: TargetManifest) -> dict[str, Any]:
         "traceOnlyExecutionDisabled": trace_only_safe,
         "executorMechanicsEmbedded": False,
     }
+
+
+__all__ = [
+    "TargetKind",
+    "TargetManifest",
+    "target_manifest_from_mapping",
+    "validate_target_manifest",
+]
