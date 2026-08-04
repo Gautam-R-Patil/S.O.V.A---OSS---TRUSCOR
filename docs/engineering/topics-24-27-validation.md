@@ -28,6 +28,10 @@ identity-confirmed deletion, mapping, signed website/software fixture flows,
 conformance export/verification, the sleeper demo, trace verification, capsule
 inspection, and MCP manifest generation.
 
+After publication, commit `6f70420` passed the quality and DCO jobs, Linux
+Python 3.11-3.14, Windows 3.11/3.14, macOS 3.11/3.14, the aggregate CI gate,
+CodeQL, secret scanning, and the public-repository boundary workflow.
+
 The complete evidence and remaining external boundaries are recorded in the
 [whole-repository validation report](./final-validation-2026-08-04.md).
 

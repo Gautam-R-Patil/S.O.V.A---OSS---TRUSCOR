@@ -43,6 +43,7 @@ the project's own test suite.
 | Deterministic distributions | two source builds and two wheel builds matched byte-for-byte; release manifests carry artifact digests |
 | Release metadata | CycloneDX 1.6 runtime SBOM: 10 components; exact four-file checksum verification passed offline |
 | Clean-wheel smoke | install, init/doctor/delete, map, signed website/software fixtures, conformance kit, sleeper demo, inspect, verify, and MCP manifest passed |
+| Public CI matrix | quality, DCO, Linux 3.11-3.14, Windows 3.11/3.14, macOS 3.11/3.14, CI gate, CodeQL, secret scan, and public-boundary scan passed on commit `6f70420` |
 
 The optional official Codex lane was skipped because `codex login status`
 reported `Not logged in`. It is deliberately not a mandatory dependency and no
@@ -125,7 +126,7 @@ See [authorized target testing](../guides/authorized-target-testing.md) and the
 | 21-23 | Human-gated local MCP, extension/provider/target contracts, Inspect bridge, probe, Arena, leaderboard, CTF, and clips implemented | external providers/hosts, additional vulnerable-agent projects, and public comparisons |
 | 24 | Private source/opportunity/invention ledgers and four validated private review packages complete | submission remains HOLD pending missing experiments, independence, founder/IP review, and venue process |
 | 25 | Account-free install/init/doctor, deletion, guides, command reference, and wheel smoke path implemented | independent cold-install and adoption measurements |
-| 26 | Internal hardening, deterministic builds, SBOM/checksums, conformance kit, governance, and release workflows implemented | multi-OS CI result on the public commit, external reviews, signed tag/release, package provenance, founder launch approval |
+| 26 | Internal hardening, deterministic builds, SBOM/checksums, conformance kit, governance, release workflows, and public multi-OS CI implemented | external reviews, container/optional-runtime validation, signed tag/release, package provenance, founder launch approval |
 | 27 | Standards tracking, compatibility kit, archival policy, succession, aging policy, and explicit non-goals implemented | deliberately open-ended research and ecosystem adoption |
 
 Unchecked roadmap entries are not forgotten work. They identify evidence that
@@ -175,8 +176,8 @@ no patent was filed or publicly disclosed by this work.
 ## Release decision
 
 The repository is suitable for continued public pre-alpha development and
-authorized fixture evaluation. A promoted stable release is **HOLD** until the
-public commit passes its full GitHub matrix, founder policy/IP approval is
+authorized fixture evaluation. The public commit passed its full GitHub matrix.
+A promoted stable release is **HOLD** until founder policy/IP approval is
 recorded, at least one independent security review is resolved or disclosed,
 and signed release provenance is produced. A scientific or patent launch has
 separate gates and must not be inferred from software-test success.
