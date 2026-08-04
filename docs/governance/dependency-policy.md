@@ -44,6 +44,13 @@ release versions are kept in comments.
 Emergency security updates may use the administrator bypass only after a
 documented advisory review and the full test/boundary suite.
 
+An audit exception is allowed only when the advisory is verified against the
+upstream record, no fixed compatible release exists, the affected API is not
+reachable from SOVA, an automated guard preserves that fact, an owner and
+removal condition are recorded, and the exception remains visible in CI. The
+exception must be removed or the dependency replaced before the affected API is
+introduced. See the [advisory register](./dependency-advisory-register.md).
+
 ## Build and release
 
 - CI installs from the checked-in lockfile using `uv --locked`.

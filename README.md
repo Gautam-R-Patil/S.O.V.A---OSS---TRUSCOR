@@ -45,12 +45,13 @@
 > **SOVA is pre-alpha.** The repository now implements experimental `0.1`
 > `.sova` capsule and `.sova-trace` contracts, deterministic and restricted
 > local executors, observable deterministic oracles, capability mapping,
-> evidence-isolated orchestration, bounded checking, safe local tooling, and
-> shared domain primitives. Live
+> evidence-isolated orchestration, bounded checking, exact-gated local MCP,
+> fail-closed extensions/providers, evidence-first local community surfaces,
+> and shared domain primitives. Live
 > capture integrations, adaptive trigger search, causal forensics, and the
 > broader security commands remain under development.
 
-## Implemented foundation, mapping, runtime, capsules, and traces
+## Implemented foundation, mapping, runtime, capsules, traces, and ecosystem boundaries
 
 The implemented Topic 02–11 engineering foundation is intentionally
 experimental and honest:
@@ -405,11 +406,24 @@ The pre-alpha now includes:
   local sentinel history, CI/SARIF output, and file-integrity self-checks; and
 - a signed, content-addressed, offline registry with pull-only mirror caching
   and human-confirmed local contribution staging.
+- an MCP `2025-11-25` stdio server whose offensive tools require exact,
+  expiring, single-use human approval through a separate local control channel;
+- a digest-pinned MCP manifest and `sova check --self` drift check, with
+  checksum and GitHub/Sigstore provenance generation for release candidates;
+- eight typed extension kinds, metadata-only PyPA discovery, and a bounded
+  subprocess JSONL compatibility path that is explicitly not a security sandbox;
+- credential-late OpenAI, Anthropic, OpenRouter, and loopback Ollama adapters,
+  explicit role routing and model-swap envelopes, and no-network fake transports;
+- eight target-manifest kinds and a provenance-preserving Inspect AI Sample
+  JSON/JSONL bridge that reports conversion loss instead of executing setup;
+- freshness/scope/nonce-bound probe verification, a deterministic local Arena
+  with trace-and-capsule evidence per attempt, a static evidence-gated
+  leaderboard, an inert CTF catalog, and redaction-first captioned Y4M clips.
 
 These are implemented engineering capabilities, not a claim that the current
 generic search algorithm is novel or superior on real systems.
 
-## Capability roadmap
+## Capability surface and remaining expansion
 
 The implemented core above is the base. The remaining product expansion is:
 
@@ -541,6 +555,21 @@ sova self-check verify . ./integrity.json
 sova registry verify ./registry --trusted-key-id sha256:EXPECTED_KEY
 sova sync ./registry --cache ./.sova-registry-cache
 sova contribute ./contribution.json ./contribution-staging --confirm
+
+# Verify the installed MCP tool surface against its release pin
+sova check --self
+
+# Inspect the local MCP manifest without starting a server
+sova mcp manifest
+
+# Run the deterministic local Arena and build verifiable community artifacts
+sova arena run ./arena.json ./arena-output
+sova leaderboard build ./leaderboard.json ./leaderboard-output
+sova ctf build ./ctf.json ./ctf-catalog.json
+sova replay clip ./clip.json ./replay.y4m
+
+# Verify a signed, nonce-bound probe response offline
+sova probe verify ./response.json --nonce REQUEST_NONCE --scope manifest --key-id sha256:...
 
 # Planned later commands
 
@@ -708,7 +737,10 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `sova rehearse` | Credential-stripped substitute workspace, distinct user/attacker evidence, signed traces, review, and selective export implemented in [ADR-0022](./docs/decisions/0022-substitute-only-rehearsal-and-selective-promotion.md); the built-in backend is not a security sandbox |
 | `sova trace`, `diff`, `sentinel`, `ci`, and `self-check` | Deterministic local recorder, three-axis drift, local monitoring, reusable CI, SARIF/annotations, and protected-baseline integrity checks implemented in [ADR-0023](./docs/decisions/0023-multi-axis-behavior-drift-and-local-regression.md) |
 | Registry, `sync`, adapters, and `contribute` | Offline content-addressed registry, signed index, trust pinning, pull-only mirror cache, adapters, and local contribution staging implemented in [ADR-0024](./docs/decisions/0024-offline-content-addressed-community-registry.md) |
-| Remaining security CLI commands / SDK / local MCP | Topics 21 and later are not yet implemented |
+| Local MCP | MCP `2025-11-25` stdio, safe tools, three exact-gated tools, out-of-band human approval, manifest pin, and self-check implemented in [ADR-0025](./docs/decisions/0025-local-mcp-out-of-band-authorization.md) |
+| Extension SDK, providers, targets, interoperability | Experimental fail-closed contracts and no-network compatibility kit implemented in [ADR-0026](./docs/decisions/0026-fail-closed-extension-and-provider-ecosystem.md); independent adoption and real-provider transferability remain unproven |
+| Probe, Arena, leaderboard, CTF, replay media | Experimental local evidence path implemented in [ADR-0027](./docs/decisions/0027-evidence-first-local-community-surfaces.md); arbitrary untrusted-agent Arena containment and public comparative results remain unproven |
+| Remaining product surface | Topics 24 and later, plus explicitly documented real-runtime and independent validation gates |
 
 The first engineering objective is now implemented as a bounded synthetic
 no-Atlas/no-MELRA vertical slice:

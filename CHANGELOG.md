@@ -12,6 +12,9 @@ have independent version ledgers.
 ### Added
 
 - Buildable `sova-oss` Python package and dependency-free `sova` placeholder CLI.
+- A fail-visible dependency-advisory register and source guard for the current
+  `cryptography` PKCS#7 advisory, with an automatic removal condition when a
+  compatible fixed release becomes available.
 - Reproducible `uv` development lockfile and cross-platform CI.
 - Formatting, linting, strict typing, tests, coverage, security, provenance,
   compatibility, performance-budget, and failure-injection controls.
@@ -109,9 +112,22 @@ have independent version ledgers.
   DSSE-compatible signed indexes, explicit key-pinning trust, pull-only atomic
   mirror caching, verification tiers, consent-firewalled contribution staging,
   and provenance-preserving external adapters.
+- An account-free local MCP `2025-11-25` stdio server with a pinned tool
+  manifest, explicit side-effect declarations, separate-terminal exact
+  invocation approval, expiry, single-use replay protection, and signed
+  authorization evidence.
+- A fail-closed extension protocol, metadata-only PyPA discovery, shell-free
+  subprocess conformance runner, provider-neutral OpenAI/Anthropic/OpenRouter/
+  Ollama adapters with injected no-network tests, eight target declarations,
+  and an inert provenance-preserving Inspect AI bridge.
+- Signed nonce-bound probe evidence, a deterministic trace-per-attempt local
+  Arena, signature-pinned static leaderboard, inert CTF catalog, and bounded
+  redaction-first replay clip renderer with strict public CLI documents.
 
 ### Fixed
 
+- Local MCP control-key creation now forces binary mode on Windows so random
+  newline bytes cannot be translated to CRLF and alter the generated key.
 - Windows foreground/background cancellation now detects failed or timed-out
   `taskkill /T` attempts, falls back immediately to the owned root process, and
   retries transient temporary-I/O cleanup. Arbitrary descendant-tree

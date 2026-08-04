@@ -30,6 +30,12 @@ claiming that the field set is ready for `1.0`.
 - [safe real-task rehearsal](./rehearsal-0.1.md)
 - [behavioral monitoring, CI, and self-check](./behavioral-monitoring-and-ci-0.1.md)
 - [registry, synchronization, adapters, and contributions](./registry-and-contributions-0.1.md)
+- [local MCP and human authorization](./local-mcp-0.1.md)
+- [extensions, providers, targets, and interoperability](./extensions-providers-interoperability-0.1.md)
+- [probe, local Arena, leaderboard, CTF, and replay media](./community-surfaces-0.1.md)
+
+The implementation and bounded validation result for the final three surfaces
+is recorded in [Topics 21-23 validation](../engineering/topics-21-23-validation.md).
 
 The normative JSON Schema 2020-12 files ship in
 [`src/sova/schemas`](../../src/sova/schemas/README.md). Python is the reference

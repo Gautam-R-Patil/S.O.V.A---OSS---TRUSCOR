@@ -1,4 +1,4 @@
-<!-- status: planned -->
+<!-- status: implemented -->
 
 # Release process
 
@@ -32,9 +32,21 @@ A CLI major version does not imply an artifact-schema major version.
 
 ## Current automation
 
-The release-candidate workflow builds and retains artifacts for version tags but
-does not publish to a package index. This is intentional: a pushed tag is not a
-substitute for founder/publication approval.
+The release-candidate workflow builds and retains artifacts, emits SHA-256
+checksums, and creates GitHub/Sigstore build-provenance attestations for the
+candidate files. It does not publish to a package index. This is intentional: a
+pushed tag or candidate attestation is not a substitute for founder/publication
+approval, and an attestation must still be verified by consumers.
+
+Verify a downloaded candidate online with:
+
+```console
+gh attestation verify PATH/TO/ARTIFACT -R Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR
+```
+
+The local MCP tool surface is separately pinned by `sova check --self`; a schema
+or tool-description edit fails that self-check until the manifest digest is
+reviewed and intentionally updated.
 
 ## Compatibility
 

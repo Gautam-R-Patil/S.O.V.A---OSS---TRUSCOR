@@ -32,6 +32,9 @@ silently rewrite it.
 | [0022](./0022-substitute-only-rehearsal-and-selective-promotion.md) | Substitute-only rehearsal and selective promotion | Accepted |
 | [0023](./0023-multi-axis-behavior-drift-and-local-regression.md) | Multi-axis behavior drift and local regression | Accepted |
 | [0024](./0024-offline-content-addressed-community-registry.md) | Offline content-addressed community registry | Accepted |
+| [0025](./0025-local-mcp-out-of-band-authorization.md) | Local MCP with exact out-of-band authorization | Accepted |
+| [0026](./0026-fail-closed-extension-and-provider-ecosystem.md) | Fail-closed extension and provider ecosystem | Accepted |
+| [0027](./0027-evidence-first-local-community-surfaces.md) | Evidence-first local community surfaces | Accepted |
 
 Use the next zero-padded number. Every ADR states its status, date, owner,
 scope, decision, alternatives, consequences, and superseded decisions.

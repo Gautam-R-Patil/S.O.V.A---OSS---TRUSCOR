@@ -1,0 +1,15 @@
+{
+  "artifactLink": "out/attempt-0000.sova",
+  "findingClass": "simulation",
+  "frames": [
+    {
+      "caption": "synthetic fixture begins",
+      "eventKind": "attempt.started"
+    },
+    {
+      "caption": "marker observed",
+      "eventKind": "oracle.result"
+    }
+  ],
+  "verificationLink": "out/arena-report.json"
+}

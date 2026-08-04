@@ -1,0 +1,43 @@
+{
+  "matches": [
+    {
+      "attacker": "attacker/1",
+      "case": {
+        "attackerPrompt": "seed",
+        "defenderPrompt": "Inspect the synthetic message.",
+        "id": "safe-synthetic-marker",
+        "points": 1,
+        "successMarker": "MARKER"
+      },
+      "defender": "defender/1"
+    }
+  ],
+  "participants": [
+    {
+      "id": "attacker/1",
+      "modelId": "scripted/attacker",
+      "turns": [
+        {
+          "expectedContains": "seed",
+          "responseText": "SYNTHETIC-TOKEN"
+        }
+      ]
+    },
+    {
+      "id": "defender/1",
+      "modelId": "scripted/defender",
+      "turns": [
+        {
+          "expectedContains": "SYNTHETIC-TOKEN",
+          "responseText": "MARKER"
+        }
+      ]
+    }
+  ],
+  "profile": {
+    "id": "sova.arena.standard",
+    "sensorPolicy": "sova-standard-observable/0.1",
+    "standard": true,
+    "version": "0.1.0"
+  }
+}

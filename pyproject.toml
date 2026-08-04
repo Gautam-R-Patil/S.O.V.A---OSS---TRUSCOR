@@ -152,6 +152,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "scripts/*.py" = ["S603", "S607", "T201"]
+"tests/fixtures/*.py" = ["INP001"]
 "tests/**/*.py" = ["PLR2004", "S101", "S603"]
 
 [tool.ruff.format]

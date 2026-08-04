@@ -7,6 +7,7 @@ import argparse
 import json
 import sys
 from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -19,6 +20,13 @@ from sova.capsule import (
     migrate_capsule,
     render_capsule,
     scenario_template,
+)
+from sova.community import (
+    build_ctf_document,
+    build_leaderboard_document,
+    render_replay_clip_document,
+    run_arena_document,
+    verify_probe_response,
 )
 from sova.composition import (
     CompositionBudget,
@@ -56,6 +64,15 @@ from sova.formats import (
     validate_document,
 )
 from sova.formats.errors import FormatError
+from sova.local_mcp import (
+    LocalApprovalStore,
+    LocalToolContext,
+    create_control_key,
+    load_control_key,
+    manifest_self_check,
+    serve_stdio,
+    tool_manifest,
+)
 from sova.mapping import build_capability_map, write_capability_map, write_tool_snapshot
 from sova.mcp import MELRA_AUDIT_RECEIPT, PLAYWRIGHT_MCP_RECEIPT, WINDOWS_MCP_RECEIPT
 from sova.monitoring import (
@@ -219,6 +236,12 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         help="one condition label per trial; defaults to declared-baseline",
     )
     replay_study.set_defaults(handler=_replay_study)
+    replay_clip = replay_commands.add_parser(
+        "clip", help="render a redaction-first metadata-only local replay clip"
+    )
+    replay_clip.add_argument("specification", type=_path)
+    replay_clip.add_argument("destination", type=_path)
+    replay_clip.set_defaults(handler=_replay_clip)
 
     query_parser = commands.add_parser("query", help="query trace events offline")
     query_parser.add_argument("path", type=_path)
@@ -285,8 +308,14 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         "check",
         help="run a bounded local check and return an explicit assurance state",
     )
-    check_parser.add_argument("target")
-    check_parser.add_argument("destination", type=_path)
+    check_parser.add_argument("target", nargs="?")
+    check_parser.add_argument("destination", nargs="?", type=_path)
+    check_parser.add_argument(
+        "--self",
+        action="store_true",
+        dest="check_self",
+        help="verify the local SOVA MCP tool manifest and authorization posture",
+    )
     check_parser.add_argument(
         "--custom-profile",
         type=_path,
@@ -507,6 +536,78 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     self_check_verify.add_argument("root", type=_path)
     self_check_verify.add_argument("manifest", type=_path)
     self_check_verify.set_defaults(handler=_self_check_verify)
+
+    probe_parser = commands.add_parser(
+        "probe", help="verify signed, nonce-bound local probe evidence"
+    )
+    probe_commands = probe_parser.add_subparsers(dest="probe_command")
+    probe_verify = probe_commands.add_parser(
+        "verify", help="verify a signed probe response offline"
+    )
+    probe_verify.add_argument("response", type=_path)
+    probe_verify.add_argument("--nonce", required=True)
+    probe_verify.add_argument("--scope", action="append", required=True)
+    probe_verify.add_argument("--key-id")
+    probe_verify.add_argument("--revoked-key-id", action="append", default=[])
+    probe_verify.set_defaults(handler=_probe_verify)
+
+    arena_parser = commands.add_parser(
+        "arena", help="run deterministic local evidence-first Arena fixtures"
+    )
+    arena_commands = arena_parser.add_subparsers(dest="arena_command")
+    arena_run = arena_commands.add_parser("run", help="run a strict local Arena document")
+    arena_run.add_argument("specification", type=_path)
+    arena_run.add_argument("destination", type=_path)
+    arena_run.set_defaults(handler=_arena_run)
+
+    leaderboard_parser = commands.add_parser(
+        "leaderboard", help="build a verified static local leaderboard"
+    )
+    leaderboard_commands = leaderboard_parser.add_subparsers(dest="leaderboard_command")
+    leaderboard_build = leaderboard_commands.add_parser(
+        "build", help="build JSON and HTML from signed standard-profile evidence"
+    )
+    leaderboard_build.add_argument("specification", type=_path)
+    leaderboard_build.add_argument("destination", type=_path)
+    leaderboard_build.set_defaults(handler=_leaderboard_build)
+
+    ctf_parser = commands.add_parser("ctf", help="build an inert local CTF catalog")
+    ctf_commands = ctf_parser.add_subparsers(dest="ctf_command")
+    ctf_build = ctf_commands.add_parser(
+        "build", help="build a provenance-preserving reference-only CTF catalog"
+    )
+    ctf_build.add_argument("specification", type=_path)
+    ctf_build.add_argument("destination", type=_path)
+    ctf_build.set_defaults(handler=_ctf_build)
+
+    mcp_parser = commands.add_parser(
+        "mcp", help="run or administer the local account-free SOVA MCP server"
+    )
+    mcp_commands = mcp_parser.add_subparsers(dest="mcp_command")
+    mcp_manifest = mcp_commands.add_parser(
+        "manifest", help="print the stable versioned local MCP tool manifest"
+    )
+    mcp_manifest.set_defaults(handler=_mcp_manifest)
+    mcp_init = mcp_commands.add_parser(
+        "init-control", help="create a local out-of-band control key"
+    )
+    mcp_init.add_argument("key_file", type=_path)
+    mcp_init.set_defaults(handler=_mcp_init_control)
+    mcp_approve = mcp_commands.add_parser(
+        "approve", help="interactively approve one exact pending invocation"
+    )
+    mcp_approve.add_argument("challenge_id")
+    mcp_approve.add_argument("--control-dir", type=_path, required=True)
+    mcp_approve.add_argument("--key-file", type=_path, required=True)
+    mcp_approve.add_argument("--workspace", type=_path, required=True)
+    mcp_approve.set_defaults(handler=_mcp_approve)
+    mcp_serve = mcp_commands.add_parser("serve", help="serve local SOVA MCP over stdio")
+    mcp_serve.add_argument("--workspace", type=_path, required=True)
+    mcp_serve.add_argument("--evidence-dir", type=_path, required=True)
+    mcp_serve.add_argument("--control-dir", type=_path, required=True)
+    mcp_serve.add_argument("--key-file", type=_path, required=True)
+    mcp_serve.add_argument("--allow-sensitive-map", action="store_true")
+    mcp_serve.set_defaults(handler=_mcp_serve)
     return parser
 
 
@@ -688,6 +789,53 @@ def _query(args: argparse.Namespace) -> int:
     return 0
 
 
+def _replay_clip(args: argparse.Namespace) -> int:
+    report = render_replay_clip_document(_load_object(args.specification), args.destination)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _probe_verify(args: argparse.Namespace) -> int:
+    report = verify_probe_response(
+        _load_object(args.response),
+        expected_nonce=args.nonce,
+        expected_scope=tuple(args.scope),
+        now=datetime.now(UTC),
+        required_key_id=args.key_id,
+        revoked_key_ids=tuple(args.revoked_key_id),
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _arena_run(args: argparse.Namespace) -> int:
+    report = run_arena_document(_load_object(args.specification), args.destination)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _leaderboard_build(args: argparse.Namespace) -> int:
+    specification: Path = args.specification
+    report = build_leaderboard_document(
+        _load_object(specification),
+        args.destination,
+        base=specification.resolve().parent,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _ctf_build(args: argparse.Namespace) -> int:
+    specification: Path = args.specification
+    report = build_ctf_document(
+        _load_object(specification),
+        args.destination,
+        base=specification.resolve().parent,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
 def _compare(args: argparse.Namespace) -> int:
     kinds = tuple(args.kind) if args.kind else ("model.response", "oracle.completed")
     result = compare_observable_outcomes(args.left, args.right, kinds=kinds)
@@ -762,6 +910,19 @@ def _run_profile(custom_profile: Path | None) -> RunProfile:
 
 
 def _check(args: argparse.Namespace) -> int:
+    if args.check_self:
+        if args.target is not None or args.destination is not None:
+            raise FormatError(
+                "SOVA-CHECK-SELF-ARGS",
+                "sova check --self does not accept a target or destination",
+            )
+        self_result = manifest_self_check()
+        sys.stdout.buffer.write(canonical_json_bytes(self_result) + b"\n")
+        return 0 if self_result["accepted"] else 2
+    if args.target is None or args.destination is None:
+        raise FormatError(
+            "SOVA-CHECK-ARGS", "check requires target and destination unless --self is used"
+        )
     result = run_check(
         args.target,
         args.destination,
@@ -769,6 +930,70 @@ def _check(args: argparse.Namespace) -> int:
     )
     sys.stdout.buffer.write(canonical_json_bytes(result.to_mapping()) + b"\n")
     return result.exit_code
+
+
+def _mcp_manifest(_args: argparse.Namespace) -> int:
+    sys.stdout.buffer.write(canonical_json_bytes(tool_manifest()) + b"\n")
+    return 0
+
+
+def _mcp_init_control(args: argparse.Namespace) -> int:
+    create_control_key(args.key_file)
+    sys.stdout.buffer.write(
+        canonical_json_bytes(
+            {
+                "artifactType": "sova.mcp-control-key-created",
+                "schemaVersion": "0.1.0",
+                "path": str(args.key_file),
+                "secretPrinted": False,
+            }
+        )
+        + b"\n"
+    )
+    return 0
+
+
+def _mcp_store(args: argparse.Namespace) -> LocalApprovalStore:
+    return LocalApprovalStore(
+        args.control_dir,
+        load_control_key(args.key_file),
+        workspace=args.workspace,
+    )
+
+
+def _mcp_approve(args: argparse.Namespace) -> int:
+    if not sys.stdin.isatty():
+        raise FormatError(
+            "SOVA-LOCAL-MCP-INTERACTIVE",
+            "approval requires a human-operated interactive terminal",
+        )
+    store = _mcp_store(args)
+    challenge = store.challenge_record(args.challenge_id)
+    review = challenge.get("invocation")
+    if not isinstance(review, dict):
+        raise FormatError("SOVA-LOCAL-MCP-CHALLENGE", "challenge invocation is malformed")
+    sys.stderr.write(canonical_json_bytes(review).decode("utf-8") + "\n")
+    exact_phrase = input("Type the exact approval phrase displayed in the challenge: ")
+    reviewed = input("Have you reviewed every effect and risk? Type YES: ") == "YES"
+    token = store.approve(
+        args.challenge_id,
+        exact_phrase=exact_phrase,
+        reviewed_effects=reviewed,
+        human_confirmed=True,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(token) + b"\n")
+    return 0
+
+
+def _mcp_serve(args: argparse.Namespace) -> int:
+    context = LocalToolContext(
+        args.workspace.resolve(),
+        args.evidence_dir.resolve(),
+        _mcp_store(args),
+        sensitive_mapping_allowed=bool(args.allow_sensitive_map),
+    )
+    serve_stdio(context)
+    return 0
 
 
 def _map(args: argparse.Namespace) -> int:

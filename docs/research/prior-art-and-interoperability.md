@@ -330,6 +330,27 @@ find and minimize one planted composition-only effect. Risk-guided superiority,
 real-system yield, novelty, and patentability remain unverified. Public SOVA
 must compare with these sources rather than claim an empty category.
 
+## Local authorization, extensions, and community evidence surfaces
+
+| Primary source | Established mechanism | SOVA decision |
+|---|---|---|
+| [MCP tools 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/server/tools) and [elicitation](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation) | Version-negotiated tool discovery/calls, JSON Schema inputs, annotations as hints, and client-mediated user elicitation | **Build on + tighten locally.** SOVA exposes MCP-compatible schemas but keeps offensive approval outside the model-visible MCP surface. |
+| [RFC 8628 OAuth device flow](https://www.rfc-editor.org/rfc/rfc8628.html) and [RFC 9396 rich authorization requests](https://www.rfc-editor.org/rfc/rfc9396.html) | Out-of-band user authorization, expiring codes, and structured authorization details | **Prior art / broad novelty NO-GO.** Exact local invocation binding is a SOVA safety profile, not a claim to have invented out-of-band authorization. |
+| [PyPA plugin discovery](https://packaging.python.org/en/latest/guides/creating-and-discovering-plugins/) | Package metadata and entry-point based plugin discovery | **Build on.** Discover metadata without loading third-party code and keep execution in an explicit subprocess boundary. |
+| [OpenAI API](https://platform.openai.com/docs/api-reference), [Anthropic API](https://docs.anthropic.com/en/api/overview), [OpenRouter API](https://openrouter.ai/docs/api-reference/overview), and [Ollama API](https://docs.ollama.com/api/introduction) | Provider-specific request, model-discovery, authentication, usage, and local-endpoint conventions | **Adapter engineering.** Preserve provider differences and test without network through injected transports; do not claim model equivalence. |
+| [Inspect AI sample datasets](https://inspect.aisi.org.uk/datasets.html#sample-json) | Portable sample JSON/JSONL with input, target, choices, metadata, files, setup, and sandbox fields | **Import/export inertly.** Preserve provenance and unknown fields while reporting SOVA semantics that cannot round-trip. |
+| [DSSE protocol](https://github.com/secure-systems-lab/dsse/blob/master/protocol.md) and [in-toto Statement v1](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md) | Typed signed envelopes and predicate-oriented attestations | **Build on.** Probe and trace signatures provide integrity and provenance under a stated trust policy, never truth or non-repudiation. |
+| [GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations) | Build-provenance attestations for release artifacts | **Use for release candidates.** Runtime authorization and artifact-build provenance remain separate controls. |
+| [AgentDojo](https://arxiv.org/abs/2406.13352) and [OWASP FinBot CTF](https://github.com/GenAI-Security-Project/finbot-ctf) | Reproducible agent-security benchmark/CTF environments with attacks and task evaluation | **Interoperate + compare later.** The current SOVA Arena is only a deterministic evidence-path fixture; arbitrary-agent isolation and comparative field results remain open validation work. |
+
+These sources make broad patents on local out-of-band approval, plugin
+discovery, provider routing, signed responses, or static leaderboards a
+**NO-GO**. A narrower research direction remains **HOLD**: whether exact
+invocation-bound approval materially resists agent prompt-injection under a
+predeclared operator study, and whether artifact-gated scoring measurably
+improves falsifiability and correction of agent benchmark results. Neither is a
+public novelty claim without controlled comparisons and independent review.
+
 ## Unresolved names from the planning source
 
 The source planning document also named `unworldly`, `halo-record`,

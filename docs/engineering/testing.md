@@ -47,6 +47,13 @@ proofs, four composition-search strategies, fresh-observation minimization,
 credential-value rejection, and one capsule-to-trace-to-forensics-to-evidence
 composition-only vertical slice.
 
+Topics 21-23 add MCP protocol/error handling, exact out-of-band approval,
+expiry/replay/widening resistance, sensitive-map consent, extension metadata
+discovery without import, bounded hostile subprocess output, injected
+no-network provider adapters, target contracts, inert Inspect AI round trips,
+signed probe binding/freshness, deterministic Arena evidence, standard-profile
+leaderboard verification, inert CTF catalogs, and redaction-first replay media.
+
 ## Determinism
 
 - The default seed is `20260729`.

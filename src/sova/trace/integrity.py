@@ -88,6 +88,63 @@ def _pae(payload_type: str, payload: bytes) -> bytes:
     )
 
 
+def sign_dsse_payload(payload_type: str, payload: bytes, keypair: Ed25519Keypair) -> dict[str, Any]:
+    """Sign an already canonicalized payload with a DSSE v1 envelope."""
+    if not payload_type or not payload_type.isascii():
+        raise FormatError("SOVA-INTEGRITY-PAYLOAD-TYPE", "DSSE payload type is invalid")
+    private_cls, _public_cls, _serialization = _crypto()
+    signature = private_cls.from_private_bytes(keypair.private_key).sign(
+        _pae(payload_type, payload)
+    )
+    return {
+        "payloadType": payload_type,
+        "payload": base64.b64encode(payload).decode("ascii"),
+        "signatures": [
+            {
+                "keyid": keypair.key_id,
+                "sig": base64.b64encode(signature).decode("ascii"),
+            }
+        ],
+    }
+
+
+def verify_dsse_payload(
+    envelope: dict[str, Any],
+    public_key: bytes,
+    *,
+    expected_payload_type: str,
+) -> bytes:
+    """Verify a single-signature DSSE payload against separately supplied key bytes."""
+    _private_cls, public_cls, _serialization = _crypto()
+    if set(envelope) != {"payloadType", "payload", "signatures"}:
+        raise FormatError("SOVA-INTEGRITY-MALFORMED-SIGNATURE", "DSSE envelope is malformed")
+    signatures = envelope.get("signatures")
+    if (
+        not isinstance(signatures, list)
+        or len(signatures) != 1
+        or not isinstance(signatures[0], dict)
+    ):
+        raise FormatError(
+            "SOVA-INTEGRITY-MALFORMED-SIGNATURE",
+            "exactly one DSSE signature is required",
+        )
+    payload_type = envelope.get("payloadType")
+    if payload_type != expected_payload_type:
+        raise FormatError("SOVA-INTEGRITY-PAYLOAD-TYPE", "DSSE payload type is unexpected")
+    payload = _decode_base64(envelope.get("payload"))
+    signature = _decode_base64(signatures[0].get("sig"))
+    key_id = sha256_digest(public_key)
+    if signatures[0].get("keyid") != key_id:
+        raise FormatError("SOVA-INTEGRITY-KEY-MISMATCH", "DSSE key identifier mismatch")
+    try:
+        public_cls.from_public_bytes(public_key).verify(signature, _pae(payload_type, payload))
+    except Exception as error:
+        raise FormatError(
+            "SOVA-INTEGRITY-SIGNATURE-INVALID", "DSSE signature verification failed"
+        ) from error
+    return payload
+
+
 def sign_trace_manifest(
     manifest: dict[str, Any],
     keypair: Ed25519Keypair,

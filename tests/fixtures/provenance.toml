@@ -56,3 +56,11 @@ license = "Apache-2.0"
 expected = "accept"
 sha256 = "f37633f90f789fce07ef4fb9f974cd75868a549a9b7bcdfeeb764676e161c4c9"
 purpose = "Constrain the optional Codex lane to five non-sensitive observable result fields."
+
+[[fixture]]
+path = "tests/fixtures/external_extension.py"
+provenance_class = "synthetic"
+license = "Apache-2.0"
+expected = "execute-as-explicit-test-subprocess"
+sha256 = "e79b444c2f966b64db080183a8caa054fe528e142c4467930d1994633ebe1177"
+purpose = "Exercise the external JSONL extension protocol without importing code into the SOVA process."
