@@ -17,11 +17,13 @@ human text or HTML artifact is the command's purpose.
 | Registry/community | `registry verify`, `sync`, `contribute`, `probe verify`, `arena run`, `leaderboard build`, `ctf build` |
 | Local MCP | `mcp manifest`, `mcp init-control`, `mcp approve`, `mcp serve` |
 | Release and compatibility | `release sbom`, `release checksums`, `release verify-checksums`, `conformance export`, `conformance verify` |
-| Authorized targets | `target template`, `target validate`, `target plan`, `target fixture` |
+| Authorized targets | `target template`, `target validate`, `target plan`, `target fixture`, `detonate owned-web-fixture` |
 
-`detonate` and `probe` are exposed as exact-gated local MCP tools, not as an
-unguarded CLI shortcut. Every offensive MCP invocation requires an expiring,
-single-use approval through the separate local control channel.
+The CLI exposes only the built-in self-owned loopback detonation. It requires a
+human-operated terminal and an exact fresh approval phrase for every action.
+General `detonate` and `probe` remain exact-gated local MCP tools; every
+offensive MCP invocation requires an expiring, single-use approval through the
+separate local control channel.
 
 Trace playback, controlled re-execution, and semantic reproduction are distinct
 operations. No command claims to capture hidden chain-of-thought.

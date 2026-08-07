@@ -7,6 +7,7 @@ import base64
 import binascii
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Self
+from urllib.parse import urlsplit
 
 from sova.executors import (
     ActionOutcome,
@@ -100,6 +101,42 @@ def _selected(
             **dict(constants or {}),
             **{name: arguments[name] for name in names if name in arguments},
         }
+
+    return build
+
+
+def _origin(value: str) -> str:
+    parsed = urlsplit(value)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or parsed.hostname is None
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise FormatError("SOVA-MCP-NAVIGATION-URL", "browser URL must be an HTTP(S) origin")
+    default_port = 80 if parsed.scheme == "http" else 443
+    port = parsed.port or default_port
+    rendered_port = "" if port == default_port else f":{port}"
+    return f"{parsed.scheme}://{parsed.hostname.casefold()}{rendered_port}"
+
+
+def _navigate_builder(
+    allowed_origins: tuple[str, ...],
+) -> Callable[[Mapping[str, Any]], dict[str, Any]]:
+    normalized = frozenset(_origin(value) for value in allowed_origins)
+
+    def build(arguments: Mapping[str, Any]) -> dict[str, Any]:
+        value = arguments.get("url")
+        if not isinstance(value, str):
+            raise FormatError("SOVA-MCP-NAVIGATION-URL", "browser navigation requires a URL")
+        requested = _origin(value)
+        if normalized and requested not in normalized:
+            raise FormatError(
+                "SOVA-MCP-NAVIGATION-SCOPE",
+                "browser navigation URL is outside the admitted origin set",
+                details={"requestedOrigin": requested, "allowedOrigins": sorted(normalized)},
+            )
+        return {"url": value}
 
     return build
 
@@ -306,7 +343,9 @@ class MCPExecutorAdapter:
         self._client.close()
 
 
-def playwright_mappings() -> tuple[ToolMapping, ...]:
+def playwright_mappings(
+    *, allowed_origins: tuple[str, ...] = ()
+) -> tuple[ToolMapping, ...]:
     """Pinned portable subset of Microsoft Playwright MCP actions."""
     snapshot = "browser_snapshot"
     return (
@@ -326,7 +365,7 @@ def playwright_mappings() -> tuple[ToolMapping, ...]:
             side_effect=SideEffect.MUTATE,
             idempotent=False,
             evidence=("url", "snapshot"),
-            argument_builder=_selected("url"),
+            argument_builder=_navigate_builder(allowed_origins),
             post_observe_tool=snapshot,
         ),
         ToolMapping(

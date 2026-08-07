@@ -49,8 +49,10 @@
 > fail-closed extensions/providers, evidence-first local community surfaces,
 > replay, bounded trigger search, evidence-linked causal forensics, onboarding,
 > release integrity, neutral conformance vectors, authorized-target planning,
-> and shared domain primitives. Live target execution still requires an admitted
-> adapter, exact authorization, isolation, and target-specific evidence oracles.
+> and shared domain primitives. The built-in loopback fixture now exercises a
+> real browser through the pinned Playwright MCP adapter; arbitrary external
+> targets still require separately verified control, exact authorization,
+> stronger isolation where appropriate, and target-specific evidence oracles.
 
 ## Implemented foundation, mapping, runtime, capsules, traces, and ecosystem boundaries
 
@@ -118,6 +120,10 @@ It provides:
 - secret-free authorized target contracts and deterministic website/software
   assessment fixtures that validate the complete evidence pipeline without
   claiming that a live target was exercised.
+- an authorization-gated real-browser vertical slice that launches a self-owned
+  loopback website, drives Chrome through pinned Playwright MCP, records signed
+  primary and reproduction traces, compares observable outcomes, and packages
+  the evidence as a `.sova` capsule.
 
 Read [ADR-0007](./docs/decisions/0007-topic-02-engineering-foundation.md),
 [ADR-0008](./docs/decisions/0008-topic-03-domain-contracts.md), the
@@ -599,6 +605,10 @@ sova target plan ./website-target.json ./website-plan.json
 sova target fixture website ./website-fixture
 sova target fixture software ./software-fixture
 
+# Exercise a real browser against SOVA's self-owned loopback website.
+# Every effect requires an exact interactive approval phrase.
+sova detonate owned-web-fixture ./live-browser-proof
+
 # Live offensive MCP operations require a separately issued approval
 sova mcp init-control ./control.key
 
@@ -753,7 +763,8 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Synthetic detonation and sensors | Event-sourced fake world, inert canaries, sink-only collector, unified sensor coverage, deterministic oracles, and nine ground-truth target families implemented |
 | `sova map` | Air-gapped typed inventory, provenance-separated reach closures, map schema, and tool-definition drift implemented in [ADR-0013](./docs/decisions/0013-provenance-separated-capability-map.md) |
 | SOVA Runtime | Provider-neutral isolated roles, standard/custom profiles, evidence firewall, local minimized experience, opaque sessions, and verified executor fallback implemented in [ADR-0014](./docs/decisions/0014-evidence-firewalled-runtime.md) |
-| `sova check` | Bundled bounded synthetic target and honest confirmed/inconclusive exit states implemented in [ADR-0015](./docs/decisions/0015-bounded-check-and-no-melra-proof.md); arbitrary target execution awaits adapters |
+| `sova check` | Bundled bounded synthetic target and honest confirmed/inconclusive exit states implemented in [ADR-0015](./docs/decisions/0015-bounded-check-and-no-melra-proof.md); general live-target check orchestration remains in progress |
+| `sova detonate` | Real Playwright/Chrome execution, signed trace, evidence capsule, inert playback compatibility, and controlled reproduction pass on the self-owned loopback fixture; arbitrary external targets and native software remain gated/in progress |
 | MELRA adapter | Public `0.3.0-alpha.0` boundary reviewed; adapter and conformance remain Topic 13 |
 | Sleeper demonstration | Implemented with named narrow baselines, two-dimensional search, signed discovery/reproduction traces, `.sova`, independent offline verification, and reset evidence |
 | `sova forensics` | Evidence-linked partial-order reconstruction and paired-intervention attribution implemented in [ADR-0019](./docs/decisions/0019-evidence-linked-counterfactual-forensics.md); real-system accuracy remains unproven |
@@ -769,7 +780,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Onboarding and adoption | Account-free `init`, local `doctor`, reviewed data removal, installation/first-value/air-gap guides, and user pathways implemented |
 | Release and governance | Deterministic SBOM/checksum tools, public governance, compatibility policy, and release-candidate automation implemented; first signed public release remains a founder gate |
 | Standards and long horizon | Neutral conformance kit, schema/change governance, archival policy, and open-ended research branches implemented; independent adoption remains unproven |
-| Remaining validation | Exact authorized live-target runs, independent readers/adapters/reviewers, cross-provider comparisons, larger nondeterministic studies, and promoted release decisions |
+| Remaining validation | Authorized non-fixture targets, native software isolation, real-provider/swarm Arena execution, independent readers/adapters/reviewers, cross-provider comparisons, larger nondeterministic studies, and promoted release decisions |
 
 The first engineering objective is now implemented as a bounded synthetic
 no-Atlas/no-MELRA vertical slice:

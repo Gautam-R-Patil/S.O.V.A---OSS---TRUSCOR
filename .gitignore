@@ -39,6 +39,7 @@
 /receipts/
 /artifacts/private/
 /browser-profiles/
+/.playwright-mcp/
 
 # Only explicitly synthetic, provenance-recorded trace goldens may be public
 !/tests/fixtures/golden/trace/*.sova-trace

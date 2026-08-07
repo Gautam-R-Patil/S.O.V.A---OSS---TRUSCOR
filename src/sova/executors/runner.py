@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 from sova.executors.contract import (
     ActionOutcome,
@@ -41,6 +42,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
+    from sova.trace.integrity import Ed25519Keypair
+
 
 def action_intent_for_step(
     scenario: dict[str, Any],
@@ -61,6 +64,10 @@ def action_intent_for_step(
     inputs = step["inputs"]
     path = inputs.get("path") if isinstance(inputs.get("path"), str) else None
     domain = inputs.get("domain") if isinstance(inputs.get("domain"), str) else None
+    if domain is None and step["action"] == "browser.navigate":
+        url = inputs.get("url")
+        if isinstance(url, str):
+            domain = urlsplit(url).hostname
     return ActionIntent(
         id=f"sova:intent:{scenario['id']}:{step['id']}",
         target=target,
@@ -91,6 +98,7 @@ class ScenarioRunResult:
     steps_attempted: int
     steps_succeeded: int
     trace_path: Path
+    oracle_status: str = "not-evaluated"
 
 
 def _load(capsule: Path) -> tuple[dict[str, Any], dict[str, bytes]]:
@@ -114,7 +122,7 @@ def _load(capsule: Path) -> tuple[dict[str, Any], dict[str, bytes]]:
     return scenario, artifacts
 
 
-def _expanded_steps(scenario: dict[str, Any]) -> list[dict[str, Any]]:
+def expanded_steps(scenario: dict[str, Any]) -> list[dict[str, Any]]:
     sequences = {item["id"]: item["steps"] for item in scenario["sequences"]}
     result: list[dict[str, Any]] = []
     active: set[str] = set()
@@ -143,6 +151,11 @@ def _expanded_steps(scenario: dict[str, Any]) -> list[dict[str, Any]]:
     return result
 
 
+# Retain the pre-public helper name for internal compatibility while callers
+# move to the exported spelling.
+_expanded_steps = expanded_steps
+
+
 def run_capsule(  # noqa: PLR0912, PLR0913, PLR0915
     capsule: Path,
     trace_path: Path,
@@ -156,10 +169,14 @@ def run_capsule(  # noqa: PLR0912, PLR0913, PLR0915
     secret_provider: SecretProvider | None = None,
     source_trace_digest: str | None = None,
     condition_drift: tuple[dict[str, Any], ...] = (),
+    signing_key: Ed25519Keypair | None = None,
+    environment: dict[str, Any] | None = None,
+    fingerprints: dict[str, Any] | None = None,
+    capture_profile: str = "standard",
 ) -> ScenarioRunResult:
     """Run abstract steps only after exact capability and authorization checks."""
     scenario, artifacts = _load(capsule)
-    steps = _expanded_steps(scenario)
+    steps = expanded_steps(scenario)
     max_steps = scenario["safety"]["budgets"].get("maxSteps")
     if isinstance(max_steps, bool) or not isinstance(max_steps, int) or max_steps < 1:
         raise FormatError(
@@ -174,6 +191,20 @@ def run_capsule(  # noqa: PLR0912, PLR0913, PLR0915
         }
     )
     capabilities = executor.capabilities()
+    capability_digest = sha256_digest(
+        canonical_json_bytes(
+            [
+                {
+                    "name": item.name,
+                    "version": item.version,
+                    "sideEffect": item.side_effect.value,
+                    "idempotent": item.idempotent,
+                    "evidence": list(item.evidence),
+                }
+                for item in capabilities
+            ]
+        )
+    )
     report = negotiate(capabilities, required)
     by_action = {capability.name: capability for capability in capabilities}
     effectful = not isinstance(executor, ScriptedExecutor) and any(
@@ -204,13 +235,17 @@ def run_capsule(  # noqa: PLR0912, PLR0913, PLR0915
         }
     writer = TraceWriter(
         trace_path,
+        capture_profile=capture_profile,
         authorization=trace_authorization,
+        environment=environment,
+        fingerprints=fingerprints,
         executor={
             "id": f"sova:executor:{executor.name}",
             "name": executor.name,
             "version": "0.1",
-            "capabilityDigest": None,
+            "capabilityDigest": capability_digest,
         },
+        signing_key=signing_key,
     )
     writer.append(
         "run.started",
@@ -376,7 +411,13 @@ def run_capsule(  # noqa: PLR0912, PLR0913, PLR0915
         },
     )
     writer.finalize(completion=completion)
-    return ScenarioRunResult(completion, attempted, succeeded, trace_path)
+    return ScenarioRunResult(
+        completion,
+        attempted,
+        succeeded,
+        trace_path,
+        oracle_report.status.value,
+    )
 
 
-__all__ = ["ScenarioRunResult", "action_intent_for_step", "run_capsule"]
+__all__ = ["ScenarioRunResult", "action_intent_for_step", "expanded_steps", "run_capsule"]

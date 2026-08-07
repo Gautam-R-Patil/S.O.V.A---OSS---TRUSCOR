@@ -26,21 +26,66 @@ def playwright_stdio_spec(
     package_runner: Path,
     workspace: Path,
     browser_executable: Path,
+    allowed_origins: tuple[str, ...] = (),
 ) -> StdioServerSpec:
-    """Create an isolated headless Playwright MCP launch with exact versions."""
+    """Create a workspace-local isolated Playwright MCP launch.
+
+    On Windows ``npx.cmd`` cannot be launched reliably with ``shell=False``.
+    Resolve it to Node's real ``npx-cli.js`` entrypoint instead of invoking a
+    command shell.  Cache, browser bookkeeping, and evidence stay inside the
+    caller's workspace; no persistent browser profile is used.
+
+    Playwright documents ``--allowed-origins`` as request filtering rather
+    than a security boundary.  SOVA therefore also validates every navigation
+    target before dispatch and verifies the final observed page separately.
+    """
+    workspace = workspace.resolve()
+    npm_cache = workspace / ".cache" / "npm-playwright"
+    browser_cache = workspace / ".cache" / "playwright-browsers"
+    local_app_data = workspace / ".cache" / "playwright-local-app-data"
+    output = workspace / ".sova" / "playwright-output"
+    for directory in (npm_cache, browser_cache, local_app_data, output):
+        directory.mkdir(parents=True, exist_ok=True)
+    runner = package_runner.resolve()
+    if runner.suffix.casefold() in {".cmd", ".bat"}:
+        node = runner.with_name("node.exe")
+        npx_cli = runner.parent / "node_modules" / "npm" / "bin" / "npx-cli.js"
+        argv = (
+            (_file(node, "Node executable"), _file(npx_cli, "npx CLI"))
+            if node.is_file() and npx_cli.is_file()
+            else (_file(runner, "package runner"),)
+        )
+    else:
+        argv = (_file(runner, "package runner"),)
+    origin_args: tuple[str, ...] = ()
+    if allowed_origins:
+        if any(not origin or ";" in origin for origin in allowed_origins):
+            raise FormatError("SOVA-MCP-ORIGIN", "allowed origins must be non-empty URI origins")
+        origin_args = ("--allowed-origins", ";".join(allowed_origins))
     return StdioServerSpec(
         "microsoft-playwright-mcp",
         (
-            _file(package_runner, "package runner"),
+            *argv,
             "--yes",
+            "--cache",
+            str(npm_cache),
             "@playwright/mcp@0.0.78",
             "--headless",
             "--isolated",
+            "--block-service-workers",
+            "--image-responses",
+            "omit",
+            "--output-dir",
+            str(output),
             "--executable-path",
             _file(browser_executable, "browser executable"),
+            *origin_args,
         ),
         workspace,
-        {},
+        {
+            "LOCALAPPDATA": str(local_app_data),
+            "PLAYWRIGHT_BROWSERS_PATH": str(browser_cache),
+        },
         PLAYWRIGHT_MCP_RECEIPT.version,
         PLAYWRIGHT_MCP_RECEIPT.source,
         PLAYWRIGHT_MCP_RECEIPT.license,

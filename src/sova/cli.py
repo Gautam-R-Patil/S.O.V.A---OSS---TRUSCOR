@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -66,6 +67,7 @@ from sova.formats import (
     validate_document,
 )
 from sova.formats.errors import FormatError
+from sova.live import run_owned_web_vertical_slice
 from sova.local_mcp import (
     LocalApprovalStore,
     LocalToolContext,
@@ -229,6 +231,20 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     target_fixture.add_argument("kind", choices=("website", "software"))
     target_fixture.add_argument("destination", type=_path)
     target_fixture.set_defaults(handler=_target_fixture)
+
+    detonate_parser = commands.add_parser(
+        "detonate",
+        help="run authorization-gated dynamic behavior assessments",
+    )
+    detonate_commands = detonate_parser.add_subparsers(dest="detonate_command")
+    detonate_fixture = detonate_commands.add_parser(
+        "owned-web-fixture",
+        help="prove the real browser-to-evidence pipeline on SOVA's loopback fixture",
+    )
+    detonate_fixture.add_argument("destination", type=_path)
+    detonate_fixture.add_argument("--package-runner", type=_path)
+    detonate_fixture.add_argument("--browser-executable", type=_path)
+    detonate_fixture.set_defaults(handler=_detonate_owned_web_fixture)
 
     inspect_parser = commands.add_parser("inspect", help="render an inert capsule summary")
     inspect_parser.add_argument("path", type=_path)
@@ -802,6 +818,84 @@ def _target_fixture(args: argparse.Namespace) -> int:
 def _inspect(args: argparse.Namespace) -> int:
     sys.stdout.write(render_capsule(args.path))
     return 0
+
+
+def _detected_path(explicit: Path | None, candidates: tuple[str, ...], role: str) -> Path:
+    if explicit is not None:
+        value = explicit.resolve()
+        if value.is_file():
+            return value
+        raise FormatError("SOVA-LIVE-EXECUTABLE", f"{role} does not exist")
+    for candidate in candidates:
+        discovered = shutil.which(candidate)
+        if discovered:
+            return Path(discovered).resolve()
+        local = Path(candidate)
+        if local.is_file():
+            return local.resolve()
+    raise FormatError(
+        "SOVA-LIVE-EXECUTABLE",
+        f"{role} was not detected; pass its exact path explicitly",
+    )
+
+
+def _detonate_owned_web_fixture(args: argparse.Namespace) -> int:
+    if not sys.stdin.isatty():
+        raise FormatError(
+            "SOVA-LIVE-INTERACTIVE-APPROVAL",
+            "live detonation requires a human-operated interactive terminal",
+        )
+    package_runner = _detected_path(
+        args.package_runner,
+        ("npx.cmd", "npx"),
+        "Node package runner",
+    )
+    browser = _detected_path(
+        args.browser_executable,
+        (
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            "chrome.exe",
+            "msedge.exe",
+        ),
+        "Chromium browser executable",
+    )
+
+    def prompt(challenge: Any, intent: Any) -> str:
+        review = {
+            "target": intent.target,
+            "action": intent.action,
+            "effect": intent.effect.name.lower(),
+            "domain": intent.domain,
+            "offensive": intent.offensive,
+            "irreversible": intent.irreversible,
+            "requiredEvidence": sorted(intent.required_evidence),
+        }
+        sys.stderr.write(json.dumps(review, indent=2) + "\n")
+        sys.stderr.write(f"Type exactly: {challenge.exact_phrase}\n")
+        return input("approval> ")
+
+    artifacts = run_owned_web_vertical_slice(
+        args.destination,
+        package_runner=package_runner,
+        browser_executable=browser,
+        approval_prompt=prompt,
+    )
+    sys.stdout.write(
+        json.dumps(
+            {
+                "status": artifacts.status,
+                "destination": str(args.destination.resolve()),
+                "trace": str(artifacts.trace),
+                "reproductionTrace": str(artifacts.reproduction_trace),
+                "evidenceCapsule": str(artifacts.evidence_capsule),
+                "report": str(artifacts.report),
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    return 0 if artifacts.status == "pass" else 1
 
 
 def _validate(args: argparse.Namespace) -> int:

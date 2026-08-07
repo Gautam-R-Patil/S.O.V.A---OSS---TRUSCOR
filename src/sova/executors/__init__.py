@@ -17,7 +17,12 @@ from sova.executors.contract import (
     negotiate,
 )
 from sova.executors.local import RestrictedLocalExecutor
-from sova.executors.runner import ScenarioRunResult, action_intent_for_step, run_capsule
+from sova.executors.runner import (
+    ScenarioRunResult,
+    action_intent_for_step,
+    expanded_steps,
+    run_capsule,
+)
 from sova.executors.scripted import ScriptedAction, ScriptedExecutor
 
 __all__ = [
@@ -38,6 +43,7 @@ __all__ = [
     "SecretProvider",
     "SideEffect",
     "action_intent_for_step",
+    "expanded_steps",
     "negotiate",
     "run_capsule",
 ]

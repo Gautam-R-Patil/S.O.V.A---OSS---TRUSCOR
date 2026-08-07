@@ -158,6 +158,31 @@ def test_playwright_adapter_discovers_subset_normalizes_and_post_observes(
     assert [call[0] for call in client.calls] == ["browser_navigate", "browser_snapshot"]
 
 
+def test_playwright_adapter_enforces_exact_navigation_origin(tmp_path: Path) -> None:
+    client = FakeMCPClient(
+        ("browser_navigate",),
+        [MCPToolResult(content=(), structured_content=None, is_error=False)],
+    )
+    adapter = MCPExecutorAdapter(
+        "playwright",
+        client,
+        playwright_mappings(allowed_origins=("https://owned.example",)),
+    )
+    outcome = adapter.execute(
+        ActionRequest(
+            "navigate",
+            "browser.navigate",
+            {"url": "https://attacker.example/redirect"},
+            5,
+        ),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.FAILED
+    assert outcome.error_code == "SOVA-MCP-NAVIGATION-SCOPE"
+    assert client.calls == []
+
+
 def test_windows_mapping_excludes_dangerous_host_tools() -> None:
     mapping_tools = {item.tool for item in windows_mcp_mappings()}
     assert not mapping_tools & {"PowerShell", "Registry", "FileSystem", "Process", "Clipboard"}
@@ -178,6 +203,8 @@ def test_pinned_open_source_launch_specs_are_fail_closed(tmp_path: Path) -> None
     assert "@playwright/mcp@0.0.78" in playwright.argv
     assert "--isolated" in playwright.argv
     assert "--headless" in playwright.argv
+    assert "--block-service-workers" in playwright.argv
+    assert playwright.environment["PLAYWRIGHT_BROWSERS_PATH"].startswith(str(tmp_path))
 
     windows = windows_mcp_stdio_spec(
         uvx=uvx,

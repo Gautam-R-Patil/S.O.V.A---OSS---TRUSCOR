@@ -11,6 +11,10 @@ have independent version ledgers.
 
 ### Added
 
+- An authorization-gated `sova detonate owned-web-fixture` path that drives a
+  real loopback website through pinned Playwright MCP and Chrome, records signed
+  primary/reproduction traces, compares observable outcomes, and packages a
+  `.sova` evidence capsule.
 - Buildable `sova-oss` Python package and typed, tested `sova` command-line interface.
 - A fail-visible dependency-advisory register and source guard for the current
   `cryptography` PKCS#7 advisory, with an automatic removal condition when a

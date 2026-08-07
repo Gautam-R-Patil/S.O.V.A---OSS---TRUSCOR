@@ -125,9 +125,11 @@ def _contains(container: Any, expected: Any) -> bool:
     if isinstance(container, str) and isinstance(expected, str):
         return expected in container
     if isinstance(container, Mapping):
-        return expected in container or expected in container.values()
+        return expected in container or any(
+            _contains(value, expected) for value in container.values()
+        )
     if isinstance(container, (list, tuple)):
-        return expected in container
+        return any(_contains(value, expected) for value in container)
     return False
 
 
