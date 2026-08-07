@@ -11,6 +11,11 @@ have independent version ledgers.
 
 ### Added
 
+- Authorization-gated local-software detonation that executes finite
+  process-only capsules against two credential-stripped disposable workspace
+  copies, observes bounded process/output/file-delta evidence, signs and
+  compares primary/reproduction traces, and packages a verified capsule without
+  claiming host isolation or legal-authority verification.
 - An offline `sova case build` workflow that verifies exact capsule-to-trace
   binding and produces forensic reconstruction, inert timeline, payload-free
   replay media, evidence/SARIF reports, behavior snapshot, selective disclosure,
@@ -167,7 +172,7 @@ have independent version ledgers.
   observable execution, trace capture, capsule packaging, controlled
   reproduction, comparison, and offline verification without contacting a
   live target.
-- A machine-audited 77-command CLI surface whose registered handlers must all
+- A machine-audited 79-command CLI surface whose registered handlers must all
   execute in mandatory offline CI.
 
 ### Fixed

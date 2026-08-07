@@ -80,6 +80,8 @@ from sova.live import (
     run_agent_browser_campaign,
     run_browser_campaign,
     run_live_browser_assessment,
+    run_live_software_assessment,
+    run_owned_software_vertical_slice,
     run_owned_web_campaign,
     run_owned_web_vertical_slice,
 )
@@ -274,6 +276,12 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     detonate_fixture.add_argument("--package-runner", type=_path)
     detonate_fixture.add_argument("--browser-executable", type=_path)
     detonate_fixture.set_defaults(handler=_detonate_owned_web_fixture)
+    detonate_software_fixture = detonate_commands.add_parser(
+        "owned-software-fixture",
+        help="prove the real local-process-to-evidence pipeline on SOVA's inert fixture",
+    )
+    detonate_software_fixture.add_argument("destination", type=_path)
+    detonate_software_fixture.set_defaults(handler=_detonate_owned_software_fixture)
     detonate_browser = detonate_commands.add_parser(
         "browser",
         help="execute one capsule on one exactly authorized browser target",
@@ -285,6 +293,16 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     detonate_browser.add_argument("--package-runner", type=_path)
     detonate_browser.add_argument("--browser-executable", type=_path)
     detonate_browser.set_defaults(handler=_detonate_browser)
+    detonate_software = detonate_commands.add_parser(
+        "software",
+        help="execute one capsule on credential-stripped copies of trusted local software",
+    )
+    detonate_software.add_argument("manifest", type=_path)
+    detonate_software.add_argument("capsule", type=_path)
+    detonate_software.add_argument("workspace", type=_path)
+    detonate_software.add_argument("destination", type=_path)
+    detonate_software.add_argument("--executable", type=_path, required=True)
+    detonate_software.set_defaults(handler=_detonate_software)
 
     inspect_parser = commands.add_parser("inspect", help="render an inert capsule summary")
     inspect_parser.add_argument("path", type=_path)
@@ -1136,6 +1154,69 @@ def _detonate_browser(args: argparse.Namespace) -> int:
         + b"\n"
     )
     return 0 if artifacts.status == "pass" else 1
+
+
+def _software_approval_prompt(challenge: Any, intents: Any) -> str:
+    sys.stderr.write(
+        json.dumps(
+            {
+                "approvedIntents": [
+                    {
+                        "id": intent.id,
+                        "target": intent.target,
+                        "action": intent.action,
+                        "effect": intent.effect.name.lower(),
+                        "offensive": intent.offensive,
+                        "irreversible": intent.irreversible,
+                        "requiredEvidence": sorted(intent.required_evidence),
+                    }
+                    for intent in intents
+                ],
+                "hostProcessWarning": (
+                    "The admitted executable is trusted by the operator. This is restricted "
+                    "host-process execution, not a security sandbox; network and writes outside "
+                    "the disposable workspace are not independently blocked or observed."
+                ),
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    sys.stderr.write(f"Type exactly: {challenge.exact_phrase}\n")
+    return input("approval> ")
+
+
+def _require_live_software_terminal() -> None:
+    if not sys.stdin.isatty():
+        raise FormatError(
+            "SOVA-SOFTWARE-INTERACTIVE-APPROVAL",
+            "live software detonation requires a human-operated interactive terminal",
+        )
+
+
+def _detonate_owned_software_fixture(args: argparse.Namespace) -> int:
+    _require_live_software_terminal()
+    artifacts = run_owned_software_vertical_slice(
+        args.destination,
+        approval_prompt=_software_approval_prompt,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(artifacts.to_mapping()) + b"\n")
+    return 0 if artifacts.status == "pass" else 3
+
+
+def _detonate_software(args: argparse.Namespace) -> int:
+    _require_live_software_terminal()
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    artifacts = run_live_software_assessment(
+        target,
+        args.capsule,
+        args.workspace,
+        args.destination,
+        executable=args.executable,
+        approval_prompt=_software_approval_prompt,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(artifacts.to_mapping()) + b"\n")
+    return 0 if artifacts.status == "pass" else 3
 
 
 def _live_campaign_prompt(challenge: Any, intents: Any) -> str:

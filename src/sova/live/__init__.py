@@ -30,6 +30,13 @@ from sova.live.control import (
     create_website_control_challenge,
 )
 from sova.live.fixture_web import OwnedWebFixture
+from sova.live.software import (
+    LiveSoftwareArtifacts,
+    SoftwareApprovalPrompt,
+    build_owned_software_capsule,
+    run_live_software_assessment,
+    run_owned_software_vertical_slice,
+)
 
 __all__ = [
     "AgentBrowserCampaignArtifacts",
@@ -37,10 +44,13 @@ __all__ = [
     "BrowserCampaignArtifacts",
     "ControlFetchResult",
     "LiveBrowserArtifacts",
+    "LiveSoftwareArtifacts",
     "OwnedWebFixture",
+    "SoftwareApprovalPrompt",
     "UrllibControlFetcher",
     "WebsiteControlChallenge",
     "browser_campaign_from_mapping",
+    "build_owned_software_capsule",
     "build_owned_web_capsule",
     "challenge_from_mapping",
     "collect_website_control_proof",
@@ -51,6 +61,8 @@ __all__ = [
     "run_agent_browser_campaign",
     "run_browser_campaign",
     "run_live_browser_assessment",
+    "run_live_software_assessment",
+    "run_owned_software_vertical_slice",
     "run_owned_web_campaign",
     "run_owned_web_vertical_slice",
 ]

@@ -619,6 +619,15 @@ sova target fixture software ./software-fixture
 # Each approved action then consumes a distinct signed one-use token.
 sova detonate owned-web-fixture ./live-browser-proof
 
+# Exercise a real local process against two clean copies of SOVA's owned fixture.
+# The exact actions and host-process limitations require a human approval phrase.
+sova detonate owned-software-fixture ./live-software-proof
+
+# Run the same bounded process/output/workspace-delta workflow for trusted
+# software you own or are explicitly authorized to assess.
+sova detonate software ./software-target.json ./scenario.sova ./source-workspace \
+  ./software-proof --executable /absolute/path/to/trusted-program
+
 # For an external website you own, first edit a browser-agent target manifest.
 sova target challenge ./website-target.json ./website-challenge.json
 # Host the emitted token at its exact proofUrl, then verify it without redirects.
@@ -793,7 +802,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `sova map` | Air-gapped typed inventory, provenance-separated reach closures, map schema, and tool-definition drift implemented in [ADR-0013](./docs/decisions/0013-provenance-separated-capability-map.md) |
 | SOVA Runtime | Provider-neutral isolated roles, standard/custom profiles, evidence firewall, local minimized experience, opaque sessions, and verified executor fallback implemented in [ADR-0014](./docs/decisions/0014-evidence-firewalled-runtime.md) |
 | `sova check` | Bundled synthetic and authorized live-browser checks with finite candidate sets, exact human approval, signed traces, controlled reproduction, and honest confirmed/not-observed/inconclusive states |
-| `sova detonate` | Real Playwright/Chrome execution, signed trace, evidence capsule, inert playback compatibility, and controlled reproduction pass on the self-owned loopback fixture; operator-owned external HTTPS sites have a well-known control-proof and exact-approval path, while native software remains in progress |
+| `sova detonate` | Real Playwright/Chrome website execution plus bounded trusted local-process execution on two credential-stripped copies; both require exact human approval and produce signed primary/reproduction traces plus evidence capsules. Native desktop UI automation and untrusted-code isolation remain unsupported |
 | `sova hunt` | Bounded operator-authored or provider-assisted candidate search executes in real Playwright/Chrome, records snapshot/console/network observations, detects near misses, reproduces the winning recipe under fresh approval, and emits signed traces plus an offline-verifiable discovery capsule; deterministic tests verify isolated roles, while a real external-provider acceptance run remains optional and unclaimed |
 | MELRA adapter | Public `0.3.0-alpha.0` boundary reviewed; adapter and conformance remain Topic 13 |
 | Sleeper demonstration | Implemented with named narrow baselines, two-dimensional search, signed discovery/reproduction traces, `.sova`, independent offline verification, and reset evidence |

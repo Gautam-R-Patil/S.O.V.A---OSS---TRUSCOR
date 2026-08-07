@@ -147,6 +147,66 @@ def test_external_browser_detonation_parses_optional_proof_and_failure_state(
         cli._detonate_browser(args)
 
 
+def test_owned_and_external_software_detonation_routes_exact_approval(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    _tty(monkeypatch)
+    artifacts = SimpleNamespace(
+        status="pass",
+        to_mapping=lambda: {"status": "pass", "liveTargetExecuted": True},
+    )
+
+    def owned(destination: Path, **options: Any) -> Any:
+        assert destination == tmp_path / "owned-output"
+        prompt = options["approval_prompt"]
+        assert prompt(SimpleNamespace(exact_phrase="APPROVE"), (_intent(),)) == "APPROVE"
+        return artifacts
+
+    monkeypatch.setattr(cli, "run_owned_software_vertical_slice", owned)
+    assert (
+        cli._detonate_owned_software_fixture(
+            argparse.Namespace(destination=tmp_path / "owned-output")
+        )
+        == 0
+    )
+    assert json.loads(capfd.readouterr().out)["liveTargetExecuted"] is True
+
+    target = object()
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {})
+    monkeypatch.setattr(cli, "target_manifest_from_mapping", lambda _value: target)
+    external_artifacts = SimpleNamespace(
+        status="inconclusive",
+        to_mapping=lambda: {"status": "inconclusive", "liveTargetExecuted": True},
+    )
+
+    def external(received: object, *args: object, **options: Any) -> Any:
+        assert received is target
+        assert args == (
+            tmp_path / "source.sova",
+            tmp_path / "workspace",
+            tmp_path / "external-output",
+        )
+        assert options["executable"] == tmp_path / "runner.exe"
+        return external_artifacts
+
+    monkeypatch.setattr(cli, "run_live_software_assessment", external)
+    args = argparse.Namespace(
+        manifest=tmp_path / "target.json",
+        capsule=tmp_path / "source.sova",
+        workspace=tmp_path / "workspace",
+        destination=tmp_path / "external-output",
+        executable=tmp_path / "runner.exe",
+    )
+    assert cli._detonate_software(args) == 3
+    assert json.loads(capfd.readouterr().out)["status"] == "inconclusive"
+
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: False))
+    with pytest.raises(FormatError, match="human-operated"):
+        cli._detonate_owned_software_fixture(argparse.Namespace(destination=tmp_path / "blocked"))
+
+
 def test_campaign_helpers_render_complete_and_partial_outputs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

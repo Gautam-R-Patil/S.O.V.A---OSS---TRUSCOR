@@ -54,6 +54,8 @@ def target_template(kind: TargetKind) -> dict[str, Any]:
         TargetKind.LOCAL_PROCESS: {
             "interface": "stdin-jsonl",
             "workspaceMode": "isolated-copy-required",
+            "authorityBasis": "replace-with-self-or-explicit",
+            "authorityReference": "replace-with-non-secret-reference",
         },
         TargetKind.REST_API: {
             "allowedOrigins": ["https://owned-target.example.invalid"],

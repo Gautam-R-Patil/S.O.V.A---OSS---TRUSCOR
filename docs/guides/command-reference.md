@@ -17,7 +17,7 @@ human text or HTML artifact is the command's purpose.
 | Registry/community | `registry verify`, `sync`, `contribute`, `probe verify`, `arena run`, `arena agent-run`, `leaderboard build`, `ctf build` |
 | Local MCP | `mcp manifest`, `mcp init-control`, `mcp approve`, `mcp serve` |
 | Release and compatibility | `release sbom`, `release checksums`, `release verify-checksums`, `conformance export`, `conformance verify` |
-| Authorized targets | `target template`, `target validate`, `target plan`, `target fixture`, `target challenge`, `target prove`, `detonate owned-web-fixture`, `detonate browser`, `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser` |
+| Authorized targets | `target template`, `target validate`, `target plan`, `target fixture`, `target challenge`, `target prove`, `detonate owned-web-fixture`, `detonate owned-software-fixture`, `detonate browser`, `detonate software`, `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser` |
 
 The CLI browser detonation accepts the built-in loopback fixture or one external
 HTTPS origin with a current well-known control proof. It requires a
@@ -25,6 +25,14 @@ human-operated terminal and an exact fresh approval phrase for every action.
 Other `detonate` and `probe` operations remain exact-gated local MCP tools;
 every offensive MCP invocation requires an expiring, single-use approval
 through the separate local control channel.
+
+The software detonation commands accept only finite `process.exec` scenarios
+against credential-stripped disposable copies and one exact trusted
+executable. They capture process output plus bounded workspace-file deltas,
+then perform a fresh controlled reproduction. The backend is ordinary
+restricted host-process execution—not a security sandbox or native desktop UI
+driver—and does not block or observe target effects outside the copied
+workspace.
 
 `sova check target.json OUTPUT --browser-campaign campaign.json` uses the same
 proof-of-control and exact-batch approval boundary for a non-offensive dynamic

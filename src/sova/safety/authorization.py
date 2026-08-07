@@ -71,6 +71,7 @@ class ControlProofMethod(StrEnum):
     DNS = "dns"
     SCOPED_DOCUMENT = "scoped-document"
     LEGAL_ACQUISITION = "legal-acquisition"
+    LOCAL_POSSESSION = "local-possession"
 
 
 class ApprovalLevel(IntEnum):
@@ -355,6 +356,21 @@ def validate_control_proof(  # noqa: PLR0912 - proof families are explicit and f
         or not evidence.get("licenseOrAuthority")
     ):
         reasons.append("legal-acquisition-proof-invalid")
+    elif method == ControlProofMethod.LOCAL_POSSESSION:
+        digests = (
+            evidence.get("executableDigest"),
+            evidence.get("workspaceFingerprint"),
+            evidence.get("targetDigest"),
+        )
+        if (
+            not target.startswith("sova:local-software:")
+            or evidence.get("challenge") != proof.challenge
+            or evidence.get("operatorAssertion") is not True
+            or any(
+                not isinstance(value, str) or _SHA256.fullmatch(value) is None for value in digests
+            )
+        ):
+            reasons.append("local-possession-proof-invalid")
     return not reasons, tuple(reasons)
 
 
