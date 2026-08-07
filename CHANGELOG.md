@@ -11,6 +11,10 @@ have independent version ledgers.
 
 ### Added
 
+- A provider-assisted `sova rehearse agent-run` path with bounded sanitized
+  workspace disclosure, exact pre-call and pre-execution approvals, a tool-free
+  strict-JSON planner, fail-closed budgets, signed planning/execution traces,
+  and a portable evidence capsule while preserving substitute-only effects.
 - Authorization-gated local-software detonation that executes finite
   process-only capsules against two credential-stripped disposable workspace
   copies, observes bounded process/output/file-delta evidence, signs and

@@ -559,6 +559,7 @@ sova compose evaluate ./composition-study.json --strategy trigger-aware-sequence
 # Prepare, run, review, and selectively stage a credential-free rehearsal
 sova rehearse prepare ./my-agent ./rehearsal
 sova rehearse run ./rehearsal-task.json ./rehearsal ./task.sova-trace ./report.json
+sova rehearse agent-run ./provider-request.json ./provider-runtime.json ./rehearsal ./agent-run --allow-provider-calls
 sova rehearse export ./report.json ./rehearsal ./accepted --approve sha256:CHANGE_ID
 
 # Freeze and compare behavior, then run local/CI gates

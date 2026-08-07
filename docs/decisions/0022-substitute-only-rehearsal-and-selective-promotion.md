@@ -22,6 +22,13 @@ proposed change by content digest, records deletions as requests, and exports
 only explicitly selected, digest-stable file changes to a new staging tree. It
 never patches or deletes production content automatically.
 
+An optional provider-assisted planner may receive only a bounded sanitized
+view of an already prepared workspace. It has no target or host tools. The
+operator must approve the exact disclosure before the provider call and the
+exact canonical plan after validation but before rehearsal. Provider output is
+untrusted input to the existing action contract; it cannot weaken workspace,
+substitute, signing, evidence, or review controls.
+
 Isolation preparation is pluggable behind `RehearsalIsolationBackend`. The
 built-in filesystem backend is not called a security sandbox. Stronger
 container, gVisor, or microVM implementations may be admitted later under the
@@ -35,6 +42,8 @@ SOVA.
 - Apply all changes after a successful task: removes per-change human review.
 - Build a new microVM platform in SOVA: duplicates mature isolation projects.
 - Treat simulated fidelity as proven: the built-in backend has no field-validity result.
+- Let a provider directly operate the rehearsal: collapses proposal, authority,
+  execution, and evidence boundaries.
 
 ## Consequences
 

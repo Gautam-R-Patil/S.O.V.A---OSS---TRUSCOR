@@ -36,6 +36,45 @@ same gates. `ScriptedRehearsalAgent` proves the deterministic offline lane;
 framework-specific user-agent adapters can implement the protocol without
 turning SOVA's attacker into the task-driving agent.
 
+### Provider-assisted agent run
+
+`sova rehearse agent-run REQUEST PROVIDER_RUNTIME WORKSPACE OUTPUT
+--allow-provider-calls` adds a credential-late, tool-free planning lane. It is
+optional; the SOVA core and mandatory tests do not require a provider, network,
+or API credential.
+
+The request declares a task, SOVA-owned agent identity, maximum action count,
+and exact workspace-disclosure bounds. SOVA inventories only regular files in
+the already prepared workspace. Rehearsal control files are never disclosed.
+The default disclosure is metadata-only: normalized paths, byte sizes, and
+SHA-256 digests. Text content is included only after explicit opt-in, within
+per-file and total-byte ceilings, and after capture-time credential redaction.
+The terminal shows the complete disclosure summary and requires an exact
+digest-bound phrase before the first provider call.
+
+The provider receives one strict JSON contract and no browser, computer,
+terminal, target, filesystem, or host tools. Its response must contain only a
+non-empty bounded action list with exact fields. SOVA assigns the actor ID,
+rejects unknown kinds and fields, validates every normal rehearsal invariant,
+rejects credential-shaped output, and fails closed on forbidden tool calls,
+invalid usage, or configured token-budget uncertainty. Provider prose and
+private reasoning are neither required nor claimed. Only observable structured
+output is considered, and that output is untrusted planning data.
+
+After validation, SOVA displays the complete action plan and requires a second
+exact phrase bound to the canonical plan digest. No plan effect occurs before
+that review. Approved file effects remain inside the prepared disposable
+workspace; non-file effects remain inert substitute ledger entries. Planning
+and execution use the same ephemeral signing key and produce separate signed
+traces. A `.sova` capsule packages the portable plan, request, and both traces;
+the report records disclosure, usage metadata, hashes, claims, and limitations.
+
+`maxTotalTokens` remains fail-closed: when configured, missing adapter-reported
+usage or an exceeded limit aborts the run. `maxModelTurns` must admit the one
+strategist invocation. Provider availability, plan quality, and cross-provider
+equivalence remain optional external validation results, never mandatory CI
+claims.
+
 `withAttack` requires a named attack profile. The attacker receives a distinct
 actor ID and phase. Material browser/computer steps receive an SVG state capture
 that explicitly says no production service was contacted. Success and failure

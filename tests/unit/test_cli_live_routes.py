@@ -301,6 +301,62 @@ def test_all_campaign_cli_routes_delegate_with_no_target_tools_in_test(
     capfd.readouterr()
 
 
+def test_provider_rehearsal_cli_requires_permission_tty_and_delegates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    _tty(monkeypatch)
+    request = object()
+    runtime = SimpleNamespace(max_model_turns=5, max_total_tokens=100)
+    router = object()
+    artifacts = SimpleNamespace(
+        status="pass",
+        to_mapping=lambda: {
+            "status": "pass",
+            "planningTrace": str(tmp_path / "planning.sova-trace"),
+        },
+    )
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {})
+    monkeypatch.setattr(cli, "provider_rehearsal_request_from_mapping", lambda _value: request)
+    monkeypatch.setattr(cli, "provider_runtime_from_mapping", lambda _value: runtime)
+    monkeypatch.setattr(cli, "provider_model_router", lambda *_args, **_kwargs: router)
+
+    def run(*args: object, **options: Any) -> Any:
+        assert args == (request, tmp_path / "workspace", tmp_path / "artifacts")
+        assert options["router"] is router
+        assert options["provider_calls_authorized"] is True
+        challenge = SimpleNamespace(
+            phase="provider-disclosure",
+            scope_digest="sha256:fixture",
+            exact_phrase="APPROVE",
+            summary={"providerToolsAvailable": False},
+        )
+        assert options["approval_prompt"](challenge) == "APPROVE"
+        return artifacts
+
+    monkeypatch.setattr(cli, "run_provider_rehearsal", run)
+    args = argparse.Namespace(
+        request=tmp_path / "request.json",
+        provider_runtime=tmp_path / "provider.json",
+        workspace=tmp_path / "workspace",
+        destination=tmp_path / "artifacts",
+        allow_provider_calls=True,
+    )
+    assert cli._rehearse_agent_run(args) == 0
+    assert json.loads(capfd.readouterr().out)["status"] == "pass"
+
+    args.allow_provider_calls = False
+    with pytest.raises(FormatError) as permission:
+        cli._rehearse_agent_run(args)
+    assert permission.value.issue.code == "SOVA-PROVIDER-CALLS-NOT-ALLOWED"
+    args.allow_provider_calls = True
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: False))
+    with pytest.raises(FormatError) as interactive:
+        cli._rehearse_agent_run(args)
+    assert interactive.value.issue.code == "SOVA-REHEARSE-PROVIDER-INTERACTIVE"
+
+
 def _check_args(tmp_path: Path, **changes: Any) -> argparse.Namespace:
     values = {
         "check_self": False,

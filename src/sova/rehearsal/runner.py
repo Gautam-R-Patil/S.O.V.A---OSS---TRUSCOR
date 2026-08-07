@@ -77,6 +77,8 @@ def _file_change(workspace: Path, action: RehearsalAction) -> ProposedChange:
         and workspace.resolve() not in resolved_parent.parents
     ):
         raise FormatError("SOVA-REHEARSE-PATH", "target escaped rehearsal workspace")
+    if target.is_symlink():
+        raise FormatError("SOVA-REHEARSE-PATH", "file action target cannot be a symbolic link")
     before_digest = _digest_or_none(target)
     before_text = _text_or_empty(target)
     if action.kind == RehearsalActionKind.FILE_WRITE:

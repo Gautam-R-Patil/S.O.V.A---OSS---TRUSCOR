@@ -111,6 +111,8 @@ from sova.registry import prepare_contribution, sync_registry, verify_registry
 from sova.rehearsal import (
     export_approved_changes,
     prepare_rehearsal_environment,
+    provider_rehearsal_request_from_mapping,
+    run_provider_rehearsal,
     run_rehearsal,
     specification_from_mapping,
 )
@@ -706,6 +708,16 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     rehearse_run.add_argument("trace", type=_path)
     rehearse_run.add_argument("report", type=_path)
     rehearse_run.set_defaults(handler=_rehearse_run)
+    rehearse_agent_run = rehearse_commands.add_parser(
+        "agent-run",
+        help="ask a tool-free provider to propose, review, and rehearse a substitute-only plan",
+    )
+    rehearse_agent_run.add_argument("request", type=_path)
+    rehearse_agent_run.add_argument("provider_runtime", type=_path)
+    rehearse_agent_run.add_argument("workspace", type=_path)
+    rehearse_agent_run.add_argument("destination", type=_path)
+    rehearse_agent_run.add_argument("--allow-provider-calls", action="store_true")
+    rehearse_agent_run.set_defaults(handler=_rehearse_agent_run)
     rehearse_export = rehearse_commands.add_parser(
         "export", help="stage only explicitly approved file changes"
     )
@@ -2259,6 +2271,58 @@ def _rehearse_run(args: argparse.Namespace) -> int:
     args.report.write_bytes(canonical_json_bytes(document) + b"\n")
     sys.stdout.buffer.write(canonical_json_bytes(document) + b"\n")
     return 0
+
+
+def _provider_rehearsal_approval_prompt(challenge: Any) -> str:
+    sys.stderr.write(
+        json.dumps(
+            {
+                "phase": challenge.phase,
+                "scopeDigest": challenge.scope_digest,
+                "summary": challenge.summary,
+                "warning": (
+                    "The provider has no tools. Approved file actions affect only the prepared "
+                    "workspace; non-file actions use inert substitutes. The built-in backend "
+                    "is not a security sandbox."
+                ),
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    sys.stderr.write(f"Type exactly: {challenge.exact_phrase}\n")
+    return input("approval> ")
+
+
+def _require_provider_rehearsal_terminal() -> None:
+    if not sys.stdin.isatty():
+        raise FormatError(
+            "SOVA-REHEARSE-PROVIDER-INTERACTIVE",
+            "provider rehearsal requires a human-operated interactive terminal",
+        )
+
+
+def _rehearse_agent_run(args: argparse.Namespace) -> int:
+    if not args.allow_provider_calls:
+        raise FormatError(
+            "SOVA-PROVIDER-CALLS-NOT-ALLOWED",
+            "provider rehearsal requires the explicit --allow-provider-calls flag",
+        )
+    _require_provider_rehearsal_terminal()
+    request = provider_rehearsal_request_from_mapping(_load_object(args.request))
+    runtime = provider_runtime_from_mapping(_load_object(args.provider_runtime))
+    artifacts = run_provider_rehearsal(
+        request,
+        args.workspace,
+        args.destination,
+        router=provider_model_router(runtime, secret_resolver=os.getenv),
+        max_model_turns=runtime.max_model_turns,
+        max_total_tokens=runtime.max_total_tokens,
+        provider_calls_authorized=True,
+        approval_prompt=_provider_rehearsal_approval_prompt,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(artifacts.to_mapping()) + b"\n")
+    return 0 if artifacts.status == "pass" else 3
 
 
 def _rehearse_export(args: argparse.Namespace) -> int:
