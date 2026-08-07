@@ -131,7 +131,7 @@ from sova.search import run_trigger_search_demo
 from sova.targets import TargetKind, target_manifest_from_mapping, validate_target_manifest
 from sova.trace import TraceReader, recover_trace
 from sova.trace.otel import export_event
-from sova.workflows import run_browser_check, run_check, run_complete_demo
+from sova.workflows import build_case_workspace, run_browser_check, run_check, run_complete_demo
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -604,6 +604,28 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         default="json",
     )
     evidence_parser.set_defaults(handler=_evidence)
+
+    case_parser = commands.add_parser(
+        "case", help="build a complete offline review workspace from linked evidence"
+    )
+    case_commands = case_parser.add_subparsers(dest="case_command")
+    case_build = case_commands.add_parser(
+        "build", help="verify a capsule and its signed trace, then render a local case workspace"
+    )
+    case_build.add_argument("trace", type=_path)
+    case_build.add_argument("capsule", type=_path)
+    case_build.add_argument("destination", type=_path)
+    case_build.add_argument("--title", default="SOVA behavior case")
+    case_build.add_argument(
+        "--classification",
+        choices=("simulation", "bundled-target", "real-disclosed-finding"),
+        default="bundled-target",
+    )
+    case_build.add_argument("--component", default="operator-controlled target")
+    case_build.add_argument("--component-version", default="not-recorded")
+    case_build.add_argument("--disclosure-cleared", action="store_true")
+    case_build.add_argument("--reviewed-for-export", action="store_true")
+    case_build.set_defaults(handler=_case_build)
 
     adjudicate_parser = commands.add_parser(
         "adjudicate", help="bound scanner disagreement using reviewed execution observations"
@@ -1905,6 +1927,22 @@ def _evidence(args: argparse.Namespace) -> int:
         sys.stdout.buffer.write(canonical_json_bytes(evidence_to_sarif(bundle)) + b"\n")
     else:
         sys.stdout.write(render_evidence_report(bundle, audience=args.format))
+    return 0
+
+
+def _case_build(args: argparse.Namespace) -> int:
+    artifacts = build_case_workspace(
+        args.trace,
+        args.capsule,
+        args.destination,
+        title=args.title,
+        classification=args.classification,
+        component=args.component,
+        component_version=args.component_version,
+        disclosure_cleared=args.disclosure_cleared,
+        reviewed_for_export=args.reviewed_for_export,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(artifacts.to_mapping()) + b"\n")
     return 0
 
 

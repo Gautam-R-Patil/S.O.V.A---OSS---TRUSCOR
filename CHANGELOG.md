@@ -11,6 +11,10 @@ have independent version ledgers.
 
 ### Added
 
+- An offline `sova case build` workflow that verifies exact capsule-to-trace
+  binding and produces forensic reconstruction, inert timeline, payload-free
+  replay media, evidence/SARIF reports, behavior snapshot, selective disclosure,
+  and a contribution preview whose human gates remain closed.
 - Authorization-gated dynamic `sova check` execution for controlled browser
   targets, with non-offensive campaign enforcement, signed evidence,
   controlled reproduction, and explicit not-observed/inconclusive semantics.
@@ -163,7 +167,7 @@ have independent version ledgers.
   observable execution, trace capture, capsule packaging, controlled
   reproduction, comparison, and offline verification without contacting a
   live target.
-- A machine-audited 67-command CLI surface whose registered handlers must all
+- A machine-audited 77-command CLI surface whose registered handlers must all
   execute in mandatory offline CI.
 
 ### Fixed

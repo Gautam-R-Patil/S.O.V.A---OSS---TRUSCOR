@@ -542,6 +542,9 @@ sova forensics benchmark
 sova evidence ./evidence.json --format technical
 sova evidence ./evidence.json --format sarif
 
+# Turn one linked signed trace/capsule into a complete offline review workspace
+sova case build ./run.sova-trace ./finding.sova ./case-workspace
+
 # Prepare an inert scanner test plan, then evaluate reviewed observations
 sova adjudicate plan ./adjudication-study.json
 sova adjudicate evaluate ./adjudication-study.json
@@ -795,6 +798,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | MELRA adapter | Public `0.3.0-alpha.0` boundary reviewed; adapter and conformance remain Topic 13 |
 | Sleeper demonstration | Implemented with named narrow baselines, two-dimensional search, signed discovery/reproduction traces, `.sova`, independent offline verification, and reset evidence |
 | `sova forensics` | Evidence-linked reconstruction, reviewed-trial attribution, and repeated authorized real-browser message-removal interventions with signed evidence; general causal accuracy remains unproven |
+| `sova case build` | Exact trace/capsule binding plus one offline forensic, replay, evidence, monitoring, and blocked contribution-preview workspace; no re-execution, network, upload, or automatic disclosure |
 | `sova evidence`, `adjudicate`, and `disclose` | Watermarked evidence, SARIF projection/import, bounded scanner labels, human-gated local disclosure preparation, and four report views implemented in [ADR-0020](./docs/decisions/0020-bounded-evidence-adjudication-disclosure.md) |
 | `sova compose` | Typed metadata-only graph, four bounded search strategies, fresh-evidence minimization, element-removal attribution, portable capsule fragment, and deterministic composition-only fixture implemented in [ADR-0021](./docs/decisions/0021-bounded-composition-only-search.md); comparative search superiority remains unproven |
 | `sova rehearse` | Credential-stripped substitute workspace, distinct user/attacker evidence, signed traces, review, and selective export implemented in [ADR-0022](./docs/decisions/0022-substitute-only-rehearsal-and-selective-promotion.md); the built-in backend is not a security sandbox |

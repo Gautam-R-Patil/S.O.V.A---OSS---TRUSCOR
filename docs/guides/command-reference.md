@@ -12,7 +12,7 @@ human text or HTML artifact is the command's purpose.
 | Capsule | `inspect`, `validate`, `lint`, `verify`, `migrate`, `compat`, `format`, `hash`, `template`, `pack` |
 | Trace/replay | `playback`, `replay modes`, `replay timeline`, `replay study`, `replay clip`, `query`, `compare`, `export`, `recover-trace` |
 | First value | `map`, `check`, `demo`, `safety backends`, `executors receipts` |
-| Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics browser-counterfactual`, `forensics benchmark`, `evidence`, `adjudicate`, `compose` |
+| Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics browser-counterfactual`, `forensics benchmark`, `evidence`, `case build`, `adjudicate`, `compose` |
 | Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse export`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `ci`, `self-check` |
 | Registry/community | `registry verify`, `sync`, `contribute`, `probe verify`, `arena run`, `arena agent-run`, `leaderboard build`, `ctf build` |
 | Local MCP | `mcp manifest`, `mcp init-control`, `mcp approve`, `mcp serve` |
@@ -44,3 +44,8 @@ the verdict.
 synthetic multi-agent message experiment. It grants participants no tools,
 requires an explicit provider-call flag, emits signed trace/capsule evidence,
 and always marks the run custom and non-comparable.
+
+`sova case build TRACE CAPSULE OUTPUT` verifies that the capsule contains the
+exact complete signed trace, then creates a local forensic, replay, evidence,
+monitoring, and contribution-preview workspace. It performs no target action,
+network request, upload, or automatic disclosure approval.

@@ -167,3 +167,117 @@ def test_named_provider_participant_is_credential_late() -> None:
     )
     assert model.model_id == "openai:fixture-model:arena-defender"
     assert resolutions == []
+
+
+def test_provider_role_model_rejects_invalid_roles_and_bounded_output() -> None:
+    adapter = OpenAIAdapter(
+        FakeTransport((_response('{"ok":true}'),)),
+        secret_resolver=lambda _name: "fixture-secret",
+    )
+    for role in ("", "x" * 129):
+        with pytest.raises(ProviderError, match="role"):
+            ProviderRoleModel(adapter, "fixture-model", role)
+
+    oversized = '{"value":"' + ("x" * (1024 * 1024)) + '"}'
+    model = ProviderRoleModel(
+        OpenAIAdapter(
+            FakeTransport((_response(oversized),)),
+            secret_resolver=lambda _name: "fixture-secret",
+        ),
+        "fixture-model",
+        "bounded-role",
+    )
+    with pytest.raises(ProviderError, match="byte limit"):
+        model.respond("fixture")
+
+
+def test_provider_role_model_reports_unknown_usage_as_none() -> None:
+    body = json.dumps(
+        {
+            "id": "response-fixture",
+            "status": "completed",
+            "output_text": '{"ok":true}',
+            "usage": {"input_tokens": "unknown", "cached": False},
+        }
+    ).encode()
+    model = ProviderRoleModel(
+        OpenAIAdapter(
+            FakeTransport((HttpResponse(200, {}, body),)),
+            secret_resolver=lambda _name: "fixture-secret",
+        ),
+        "fixture-model",
+        RoleKind.RECON,
+    )
+    assert model.respond("fixture").token_count is None
+
+
+@pytest.mark.parametrize(
+    ("provider", "model"),
+    [("unknown", "model"), ("openai", "")],
+)
+def test_provider_route_rejects_unsupported_provider_or_empty_model(
+    provider: str,
+    model: str,
+) -> None:
+    with pytest.raises(ProviderError):
+        ProviderRoute(provider, model)
+
+
+@pytest.mark.parametrize(
+    ("mutate", "message"),
+    [
+        (lambda value: value.update(extra=True), "fields"),
+        (lambda value: value.update(schemaVersion="9"), "version"),
+        (lambda value: value.update(routes=[]), "routes and budgets"),
+        (lambda value: value["budgets"].update(extra=1), "budget fields"),
+        (
+            lambda value: value["routes"].update(
+                {"unsupported-role": value["routes"].pop("recon")}
+            ),
+            "role is unsupported",
+        ),
+        (lambda value: value["routes"].update(recon=[]), "route fields"),
+        (
+            lambda value: value["routes"]["recon"].update(temperature="not-a-number"),
+            "route numbers",
+        ),
+        (
+            lambda value: value["routes"]["recon"].update(maxOutputTokens=True),
+            "token limit",
+        ),
+        (lambda value: value["budgets"].update(maxModelTurns=True), "model-turn budget"),
+        (lambda value: value["budgets"].update(maxTotalTokens="many"), "token budget"),
+    ],
+)
+def test_provider_runtime_parser_rejects_each_hostile_shape(
+    mutate: object,
+    message: str,
+) -> None:
+    value = _config().to_mapping()
+    assert callable(mutate)
+    mutate(value)
+    with pytest.raises(ProviderError, match=message):
+        provider_runtime_from_mapping(value)
+
+
+def test_provider_runtime_budget_bounds_and_all_adapter_routes_are_lazy() -> None:
+    routes = dict(_config().routes)
+    providers = ("openai", "anthropic", "openrouter", "ollama", "openai")
+    for role, provider in zip(routes, providers, strict=True):
+        routes[role] = ProviderRoute(provider, f"{provider}-fixture")
+    resolutions: list[str] = []
+
+    def resolve(name: str) -> str:
+        resolutions.append(name)
+        return "fixture-secret"
+
+    router = provider_model_router(
+        ProviderRuntimeConfig(routes, max_total_tokens=None),
+        secret_resolver=resolve,
+    )
+    assert all(router.has_role(role) for role in routes)
+    assert resolutions == []
+
+    for turns, tokens in ((4, None), (101, None), (8, 0), (8, 10_000_001)):
+        with pytest.raises(ProviderError, match="budget"):
+            ProviderRuntimeConfig(routes, max_model_turns=turns, max_total_tokens=tokens)

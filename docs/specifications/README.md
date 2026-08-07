@@ -26,6 +26,7 @@ claiming that the field set is ready for `1.0`.
 - [bounded trigger search](./trigger-search-0.1.md)
 - [forensics and counterfactual attribution](./forensics-0.1.md)
 - [evidence, adjudication, disclosure, and reports](./evidence-adjudication-disclosure-0.1.md)
+- [offline evidence case workspace](./case-workspace-0.1.md)
 - [composition and emergent-chain testing](./composition-testing-0.1.md)
 - [safe real-task rehearsal](./rehearsal-0.1.md)
 - [behavioral monitoring, CI, and self-check](./behavioral-monitoring-and-ci-0.1.md)

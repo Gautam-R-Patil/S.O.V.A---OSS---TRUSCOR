@@ -66,7 +66,12 @@ def _target_origin(target: TargetManifest) -> tuple[str, str]:
     if parsed.scheme != "https" and parsed.hostname.casefold() not in _LOOPBACK:
         raise FormatError("SOVA-CONTROL-TLS", "external website proof requires HTTPS")
     default_port = 80 if parsed.scheme == "http" else 443
-    port = parsed.port or default_port
+    try:
+        port = parsed.port or default_port
+    except ValueError as error:
+        raise FormatError(
+            "SOVA-CONTROL-ORIGIN", "allowed website origin port is invalid"
+        ) from error
     rendered_port = "" if port == default_port else f":{port}"
     return f"{parsed.scheme}://{parsed.hostname.casefold()}{rendered_port}", parsed.hostname
 

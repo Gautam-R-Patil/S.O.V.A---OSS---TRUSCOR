@@ -32,7 +32,7 @@ from sova.replay import VerificationState, verify_artifact
 from sova.runtime import ModelRouter, RoleKind, RoleModel, standard_profile
 from sova.targets import TargetKind, TargetManifest
 from sova.trace import TraceReader
-from sova.workflows import run_browser_check
+from sova.workflows import build_case_workspace, run_browser_check
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -438,6 +438,14 @@ def test_optional_real_playwright_mcp_dynamic_check(tmp_path: Path) -> None:
         )
     assert result.status == "confirmed-behavior" and result.exit_code == 1
     assert TraceReader(result.traces[-1]).verify(require_signature=True).signature_valid
+    assert result.capsule is not None
+    case = build_case_workspace(
+        result.traces[-1],
+        result.capsule,
+        tmp_path / "real-browser-case",
+        title="Owned live browser fixture behavior",
+    )
+    assert case.event_count > 0 and case.index.is_file()
 
 
 @pytest.mark.integration
