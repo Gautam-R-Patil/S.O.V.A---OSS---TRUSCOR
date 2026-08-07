@@ -16,8 +16,11 @@ from sova.live import (
     build_owned_web_capsule,
     collect_website_control_proof,
     create_website_control_challenge,
+    owned_web_campaign,
     owned_web_target,
+    run_browser_campaign,
     run_live_browser_assessment,
+    run_owned_web_campaign,
     run_owned_web_vertical_slice,
 )
 from sova.mcp import MCPTool, MCPToolResult
@@ -40,6 +43,8 @@ class _DeterministicBrowserMCP:
             "browser_snapshot",
             "browser_type",
             "browser_click",
+            "browser_console_messages",
+            "browser_network_requests",
         )
         self._tools = tuple(MCPTool(name, name, {"type": "object"}, None, {}) for name in names)
         self.armed = False
@@ -227,6 +232,54 @@ def test_external_https_runner_requires_and_consumes_bound_control_proof(
 
 
 @pytest.mark.integration
+def test_bounded_live_campaign_discovers_reproduces_and_packages(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    origin = "http://127.0.0.1:9187"
+    runner = tmp_path / "npx.exe"
+    browser = tmp_path / "browser.exe"
+    runner.write_bytes(b"deterministic test placeholder")
+    browser.write_bytes(b"deterministic test placeholder")
+    monkeypatch.setattr("sova.live.campaign.StdioMCPClient", _DeterministicBrowserMCP)
+    prompts: list[int] = []
+
+    def approve(challenge: Any, intents: Any) -> str:
+        prompts.append(len(intents))
+        return str(challenge.exact_phrase)
+
+    artifacts = run_browser_campaign(
+        owned_web_target(origin),
+        owned_web_campaign(origin + "/"),
+        tmp_path / "campaign-result",
+        package_runner=runner,
+        browser_executable=browser,
+        approval_prompt=approve,
+    )
+
+    assert artifacts.status == "pass"
+    assert len(artifacts.traces) == 4
+    assert len(prompts) == 2
+    assert prompts[0] > prompts[1]
+    assert artifacts.reproduction_trace is not None
+    assert artifacts.discovery_capsule is not None
+    report = strict_json_loads(artifacts.report.read_bytes())
+    assert isinstance(report, dict)
+    assert report["claims"] == {
+        "autonomousNovelAttackGeneration": False,
+        "behaviorDiscovered": True,
+        "boundedCandidateSearchExecuted": True,
+        "controlledReproductionObserved": True,
+        "privateModelThoughtsCaptured": False,
+        "realBrowserExecuted": True,
+        "universalCoverage": False,
+    }
+    assert report["attempts"][2]["score"] == "0.5"
+    assert report["attempts"][3]["triggered"] is True
+    assert verify_artifact(artifacts.discovery_capsule).state == VerificationState.VERIFIED
+
+
+@pytest.mark.integration
 @pytest.mark.skipif(
     os.environ.get("SOVA_RUN_REAL_BROWSER") != "1",
     reason="set SOVA_RUN_REAL_BROWSER=1 for the optional installed-browser lane",
@@ -241,3 +294,21 @@ def test_optional_real_playwright_mcp_owned_fixture(tmp_path: Path) -> None:
         approval_prompt=lambda challenge, _intent: challenge.exact_phrase,
     )
     assert artifacts.status == "pass"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    os.environ.get("SOVA_RUN_REAL_BROWSER") != "1",
+    reason="set SOVA_RUN_REAL_BROWSER=1 for the optional installed-browser lane",
+)
+def test_optional_real_playwright_mcp_trigger_hunt(tmp_path: Path) -> None:
+    artifacts = run_owned_web_campaign(
+        tmp_path / "real-browser-campaign",
+        package_runner=Path(r"C:\Program Files\nodejs\npx.cmd"),
+        browser_executable=Path(
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+        ),
+        approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
+    )
+    assert artifacts.status == "pass"
+    assert len(artifacts.traces) == 4

@@ -12,12 +12,12 @@ human text or HTML artifact is the command's purpose.
 | Capsule | `inspect`, `validate`, `lint`, `verify`, `migrate`, `compat`, `format`, `hash`, `template`, `pack` |
 | Trace/replay | `playback`, `replay modes`, `replay timeline`, `replay study`, `replay clip`, `query`, `compare`, `export`, `recover-trace` |
 | First value | `map`, `check`, `demo`, `safety backends`, `executors receipts` |
-| Search and analysis | `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics benchmark`, `evidence`, `adjudicate`, `compose` |
+| Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics benchmark`, `evidence`, `adjudicate`, `compose` |
 | Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse export`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `ci`, `self-check` |
 | Registry/community | `registry verify`, `sync`, `contribute`, `probe verify`, `arena run`, `leaderboard build`, `ctf build` |
 | Local MCP | `mcp manifest`, `mcp init-control`, `mcp approve`, `mcp serve` |
 | Release and compatibility | `release sbom`, `release checksums`, `release verify-checksums`, `conformance export`, `conformance verify` |
-| Authorized targets | `target template`, `target validate`, `target plan`, `target fixture`, `target challenge`, `target prove`, `detonate owned-web-fixture`, `detonate browser` |
+| Authorized targets | `target template`, `target validate`, `target plan`, `target fixture`, `target challenge`, `target prove`, `detonate owned-web-fixture`, `detonate browser`, `hunt owned-web-fixture`, `hunt browser` |
 
 The CLI browser detonation accepts the built-in loopback fixture or one external
 HTTPS origin with a current well-known control proof. It requires a

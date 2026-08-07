@@ -34,6 +34,7 @@ claiming that the field set is ready for `1.0`.
 - [extensions, providers, targets, and interoperability](./extensions-providers-interoperability-0.1.md)
 - [probe, local Arena, leaderboard, CTF, and replay media](./community-surfaces-0.1.md)
 - [authorization-gated live browser assessment](./live-browser-assessment-0.1.md)
+- [bounded live browser campaign](./live-browser-campaign-0.1.md)
 - [authorized target assessment](./authorized-target-assessment-0.1.md)
 - [neutral conformance kit](./conformance-kit-0.1.md)
 - [supply-chain release artifacts](./supply-chain-release-0.1.md)

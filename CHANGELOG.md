@@ -21,6 +21,10 @@ have independent version ledgers.
 - Closed exact-batch terminal authorization that lets a person review a bounded
   run once while preserving distinct signed, scope-bound, one-use tokens for
   every individual action.
+- A real-browser `sova hunt` campaign that evaluates an exact reviewed
+  candidate set, records snapshot/console/network sensors, detects observable
+  near misses, performs fresh controlled reproduction, and emits signed traces
+  plus an offline-verifiable discovery capsule.
 - Buildable `sova-oss` Python package and typed, tested `sova` command-line interface.
 - A fail-visible dependency-advisory register and source guard for the current
   `cryptography` PKCS#7 advisory, with an automatic removal condition when a

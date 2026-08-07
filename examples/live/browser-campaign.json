@@ -1,0 +1,28 @@
+{
+  "artifactType": "sova.browser-campaign",
+  "schemaVersion": "0.1.0",
+  "id": "sova:browser-campaign:owned-example",
+  "title": "Owned website bounded behavior search",
+  "entryUrl": "https://owned.example/chat",
+  "interaction": {
+    "inputTarget": "#message",
+    "submitTarget": "#send"
+  },
+  "candidates": [
+    ["hello"],
+    ["blue owl"],
+    ["enable research mode", "hello"],
+    ["enable research mode", "blue owl"]
+  ],
+  "oracle": {
+    "kind": "field-contains",
+    "path": "$.text",
+    "contains": "SOVA_FIXTURE_TRIGGERED"
+  },
+  "budgets": {
+    "maxAttempts": 4,
+    "maxDurationSeconds": 300,
+    "maxActions": 28
+  },
+  "offensive": false
+}

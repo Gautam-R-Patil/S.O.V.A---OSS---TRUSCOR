@@ -50,6 +50,7 @@ if TYPE_CHECKING:
     from sova.safety import ActionIntent, ApprovalBatchChallenge
 
 ApprovalPrompt = Callable[["ApprovalBatchChallenge", tuple["ActionIntent", ...]], str]
+ScenarioBatch = tuple[tuple[str, dict[str, Any]], ...]
 
 _LOOPBACK = frozenset({"localhost", "127.0.0.1", "::1"})
 
@@ -205,33 +206,44 @@ def _approval_level(intent: ActionIntent) -> ApprovalLevel | None:
     return None
 
 
-def _authorization_for_run(  # noqa: PLR0913
-    scenario: dict[str, Any],
+def authorize_browser_scenarios(  # noqa: PLR0913
+    scenarios: ScenarioBatch,
     capabilities: tuple[Capability, ...],
     *,
     host: str,
     proof: ControlProof,
     containment_digest: str,
     approval_prompt: ApprovalPrompt,
-) -> tuple[AuthorizationSession, dict[str, ApprovalToken]]:
+    single_use: bool = True,
+    approval_ttl: timedelta = timedelta(minutes=5),
+) -> tuple[AuthorizationSession, dict[str, dict[str, ApprovalToken]]]:
+    """Authorize a closed scenario set with one review and per-action tokens."""
+    if not scenarios:
+        raise FormatError("SOVA-LIVE-AUTHORIZATION", "scenario batch cannot be empty")
     now = datetime.now(UTC)
     by_action = {capability.name: capability for capability in capabilities}
-    steps = expanded_steps(scenario)
+    scenario_steps = [(key, scenario, expanded_steps(scenario)) for key, scenario in scenarios]
     try:
-        intents = [
-            action_intent_for_step(
-                scenario,
-                step,
-                side_effect=by_action[step["action"]].side_effect,
-                evidence=by_action[step["action"]].evidence,
-                target=host,
+        rows = [
+            (
+                key,
+                step["id"],
+                action_intent_for_step(
+                    scenario,
+                    step,
+                    side_effect=by_action[step["action"]].side_effect,
+                    evidence=by_action[step["action"]].evidence,
+                    target=host,
+                ),
             )
+            for key, scenario, steps in scenario_steps
             for step in steps
         ]
     except KeyError as error:
         raise FormatError(
             "SOVA-LIVE-CAPABILITY", "scenario requires an undiscovered browser capability"
         ) from error
+    intents = [row[2] for row in rows]
     scope = Scope(
         targets=frozenset({host}),
         actions=frozenset(intent.action for intent in intents),
@@ -257,29 +269,30 @@ def _authorization_for_run(  # noqa: PLR0913
             max_network_requests=sum(intent.cost.network_requests for intent in intents),
         ),
         valid_from=now - timedelta(seconds=1),
-        expires_at=now + timedelta(minutes=10),
-        single_use=True,
+        expires_at=now + max(timedelta(minutes=10), approval_ttl + timedelta(minutes=1)),
+        single_use=single_use,
         ownership="self",
         required_containment_digest=containment_digest,
     )
     approval_authority = InteractiveTerminalApprovalAuthority(secrets.token_bytes(32))
     approver = Principal("sova:principal:operator", PrincipalKind.HUMAN, "SOVA operator")
-    pending: list[tuple[str, ActionIntent, ApprovalLevel]] = []
-    for step, intent in zip(steps, intents, strict=True):
+    pending: list[tuple[str, str, ActionIntent, ApprovalLevel]] = []
+    for key, step_id, intent in rows:
         level = _approval_level(intent)
         if level is None:
             continue
-        pending.append((step["id"], intent, level))
-    approvals: dict[str, ApprovalToken] = {}
+        pending.append((key, step_id, intent, level))
+    approvals: dict[str, dict[str, ApprovalToken]] = {key: {} for key, _ in scenarios}
     if pending:
         challenge = approval_authority.batch_challenge(
             authority,
-            tuple((intent, level) for _step_id, intent, level in pending),
+            tuple((intent, level) for _key, _step_id, intent, level in pending),
+            ttl=approval_ttl,
             now=now,
         )
         exact_phrase = approval_prompt(
             challenge,
-            tuple(intent for _step_id, intent, _level in pending),
+            tuple(intent for _key, _step_id, intent, _level in pending),
         )
         tokens = approval_authority.approve_batch(
             challenge,
@@ -287,10 +300,8 @@ def _authorization_for_run(  # noqa: PLR0913
             exact_phrase=exact_phrase,
             reviewed_effects=True,
         )
-        approvals = {
-            step_id: token
-            for (step_id, _intent, _level), token in zip(pending, tokens, strict=True)
-        }
+        for (key, step_id, _intent, _level), token in zip(pending, tokens, strict=True):
+            approvals[key][step_id] = token
     return (
         AuthorizationSession(
             authority=authority,
@@ -303,7 +314,27 @@ def _authorization_for_run(  # noqa: PLR0913
     )
 
 
-def _target_origins(target: TargetManifest) -> tuple[str, ...]:
+def _authorization_for_run(  # noqa: PLR0913
+    scenario: dict[str, Any],
+    capabilities: tuple[Capability, ...],
+    *,
+    host: str,
+    proof: ControlProof,
+    containment_digest: str,
+    approval_prompt: ApprovalPrompt,
+) -> tuple[AuthorizationSession, dict[str, ApprovalToken]]:
+    session, approvals = authorize_browser_scenarios(
+        (("run", scenario),),
+        capabilities,
+        host=host,
+        proof=proof,
+        containment_digest=containment_digest,
+        approval_prompt=approval_prompt,
+    )
+    return session, approvals["run"]
+
+
+def browser_target_origins(target: TargetManifest) -> tuple[str, ...]:
     if target.kind != TargetKind.BROWSER_AGENT:
         raise FormatError("SOVA-LIVE-TARGET-KIND", "live browser run requires browser-agent")
     origins = target.configuration.get("allowedOrigins")
@@ -317,6 +348,69 @@ def _target_origins(target: TargetManifest) -> tuple[str, ...]:
     if len(set(normalized)) != len(normalized):
         raise FormatError("SOVA-LIVE-ORIGINS", "allowedOrigins contains duplicates")
     return normalized
+
+
+def verified_browser_control(
+    target: TargetManifest,
+    control_proof: ControlProof | None,
+    *,
+    now: datetime | None = None,
+) -> tuple[tuple[str, ...], str, ControlProof, str]:
+    """Bind one target to one current proof without starting execution."""
+    conformance = validate_target_manifest(target)
+    if not conformance["accepted"]:
+        raise FormatError("SOVA-LIVE-TARGET", "target manifest failed conformance")
+    origins = browser_target_origins(target)
+    hosts = {_origin(item)[1].casefold() for item in origins}
+    if len(hosts) != 1:
+        raise FormatError(
+            "SOVA-LIVE-CONTROL-PROOF",
+            "one assessment may bind only one exact website host",
+        )
+    host = next(iter(hosts))
+    current = now or datetime.now(UTC)
+    if host in _LOOPBACK:
+        if control_proof is not None:
+            raise FormatError(
+                "SOVA-LIVE-CONTROL-PROOF",
+                "loopback uses an automatically verified loopback proof",
+            )
+        proof = ControlProof(
+            ControlProofMethod.LOOPBACK,
+            host,
+            "sova-control:" + secrets.token_urlsafe(18),
+            {"loopback": True},
+            current - timedelta(seconds=1),
+            current + timedelta(minutes=10),
+            "sova.loopback-control-verifier/0.1",
+        )
+        return origins, host, proof, "verified-loopback"
+    if any(urlsplit(origin).scheme != "https" for origin in origins):
+        raise FormatError(
+            "SOVA-LIVE-CONTROL-PROOF",
+            "external website assessment requires an HTTPS target origin",
+        )
+    if control_proof is None:
+        raise FormatError(
+            "SOVA-LIVE-CONTROL-PROOF",
+            "external website assessment requires a current verified control proof",
+        )
+    allowed, reasons = validate_control_proof(control_proof, target=host, now=current)
+    proof_url = control_proof.evidence.get("proofUrl")
+    proof_origin_bound = isinstance(proof_url, str) and any(
+        proof_url.startswith(origin + "/.well-known/sova-control/") for origin in origins
+    )
+    if (
+        not allowed
+        or control_proof.method != ControlProofMethod.WELL_KNOWN
+        or not proof_origin_bound
+    ):
+        raise FormatError(
+            "SOVA-LIVE-CONTROL-PROOF",
+            "external website control proof is invalid",
+            details={"reasons": list(reasons)},
+        )
+    return origins, host, control_proof, "verified-well-known"
 
 
 def _fingerprint(
@@ -335,7 +429,7 @@ def _fingerprint(
     }
 
 
-def run_live_browser_assessment(  # noqa: PLR0913, PLR0915
+def run_live_browser_assessment(  # noqa: PLR0913
     target: TargetManifest,
     source_capsule: Path,
     destination: Path,
@@ -346,63 +440,7 @@ def run_live_browser_assessment(  # noqa: PLR0913, PLR0915
     control_proof: ControlProof | None = None,
 ) -> LiveBrowserArtifacts:
     """Run and reproduce a capsule on a real, explicitly authorized website."""
-    conformance = validate_target_manifest(target)
-    if not conformance["accepted"]:
-        raise FormatError("SOVA-LIVE-TARGET", "target manifest failed conformance")
-    origins = _target_origins(target)
-    hosts = {_origin(item)[1].casefold() for item in origins}
-    if len(hosts) != 1:
-        raise FormatError(
-            "SOVA-LIVE-CONTROL-PROOF",
-            "one assessment may bind only one exact website host",
-        )
-    host = next(iter(hosts))
-    now = datetime.now(UTC)
-    if host in _LOOPBACK:
-        if control_proof is not None:
-            raise FormatError(
-                "SOVA-LIVE-CONTROL-PROOF",
-                "loopback uses an automatically verified loopback proof",
-            )
-        proof = ControlProof(
-            ControlProofMethod.LOOPBACK,
-            host,
-            "sova-control:" + secrets.token_urlsafe(18),
-            {"loopback": True},
-            now - timedelta(seconds=1),
-            now + timedelta(minutes=10),
-            "sova.loopback-control-verifier/0.1",
-        )
-        control_status = "verified-loopback"
-    else:
-        if any(urlsplit(origin).scheme != "https" for origin in origins):
-            raise FormatError(
-                "SOVA-LIVE-CONTROL-PROOF",
-                "external website assessment requires an HTTPS target origin",
-            )
-        if control_proof is None:
-            raise FormatError(
-                "SOVA-LIVE-CONTROL-PROOF",
-                "external website assessment requires a current verified control proof",
-            )
-        allowed, reasons = validate_control_proof(control_proof, target=host, now=now)
-        proof_url = control_proof.evidence.get("proofUrl")
-        proof_origin_bound = isinstance(proof_url, str) and any(
-            proof_url.startswith(origin + "/.well-known/sova-control/")
-            for origin in origins
-        )
-        if (
-            not allowed
-            or control_proof.method != ControlProofMethod.WELL_KNOWN
-            or not proof_origin_bound
-        ):
-            raise FormatError(
-                "SOVA-LIVE-CONTROL-PROOF",
-                "external website control proof is invalid",
-                details={"reasons": list(reasons)},
-            )
-        proof = control_proof
-        control_status = "verified-well-known"
+    origins, host, proof, control_status = verified_browser_control(target, control_proof)
     scenario = _capsule_scenario(source_capsule)
     destination = destination.resolve()
     if destination.exists() and any(destination.iterdir()):
@@ -670,8 +708,11 @@ def run_owned_web_vertical_slice(
 
 __all__ = [
     "LiveBrowserArtifacts",
+    "authorize_browser_scenarios",
+    "browser_target_origins",
     "build_owned_web_capsule",
     "owned_web_target",
     "run_live_browser_assessment",
     "run_owned_web_vertical_slice",
+    "verified_browser_control",
 ]

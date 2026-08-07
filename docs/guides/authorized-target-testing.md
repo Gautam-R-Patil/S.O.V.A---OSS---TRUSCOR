@@ -93,6 +93,34 @@ Review the `.sova` procedure, accounts, fixtures, stop conditions, retention,
 and disclosure policy before approving it. Remove the hosted challenge token
 after proof collection.
 
+## Search a bounded candidate set through a real browser
+
+First prove the complete path on SOVA's owned loopback target:
+
+```console
+sova hunt owned-web-fixture ./live-browser-hunt
+sova verify --require-signature ./live-browser-hunt/traces/attempt-004.sova-trace
+sova verify ./live-browser-hunt/discovery.sova
+```
+
+This runs four exact candidates, observes a near miss, discovers the planted
+two-turn behavior, requests fresh approval for controlled reproduction, and
+packages the winning scenario and signed traces.
+
+For an external website you control, start with
+[`examples/live/browser-campaign.json`](../../examples/live/browser-campaign.json),
+update its URL, UI targets, candidates, oracle, and exact derived action count,
+then run:
+
+```console
+sova hunt browser website-target.json browser-campaign.json website-hunt \
+  --control-proof website-proof.json
+```
+
+Version 0.1 searches only the reviewed finite candidate set. It does not
+generate unreviewed actions at runtime, bypass CAPTCHA, create unsolicited
+accounts, or infer permission from a login session.
+
 ## What can be validated without a live browser
 
 `sova target fixture website DEST` and `sova target fixture software DEST`

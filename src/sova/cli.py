@@ -68,11 +68,14 @@ from sova.formats import (
 )
 from sova.formats.errors import FormatError
 from sova.live import (
+    browser_campaign_from_mapping,
     challenge_from_mapping,
     collect_website_control_proof,
     control_proof_from_mapping,
     create_website_control_challenge,
+    run_browser_campaign,
     run_live_browser_assessment,
+    run_owned_web_campaign,
     run_owned_web_vertical_slice,
 )
 from sova.local_mcp import (
@@ -495,6 +498,31 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         "receipts", help="print pinned MELRA and open-source fallback receipts"
     )
     executor_receipts.set_defaults(handler=_executor_receipts)
+
+    hunt_parser = commands.add_parser(
+        "hunt",
+        help="run an authorization-gated bounded behavior search",
+    )
+    hunt_commands = hunt_parser.add_subparsers(dest="hunt_command")
+    hunt_fixture = hunt_commands.add_parser(
+        "owned-web-fixture",
+        help="discover and reproduce the planted behavior through a real browser",
+    )
+    hunt_fixture.add_argument("destination", type=_path)
+    hunt_fixture.add_argument("--package-runner", type=_path)
+    hunt_fixture.add_argument("--browser-executable", type=_path)
+    hunt_fixture.set_defaults(handler=_hunt_owned_web_fixture)
+    hunt_browser = hunt_commands.add_parser(
+        "browser",
+        help="search a declared candidate set on one exactly authorized website",
+    )
+    hunt_browser.add_argument("manifest", type=_path)
+    hunt_browser.add_argument("campaign", type=_path)
+    hunt_browser.add_argument("destination", type=_path)
+    hunt_browser.add_argument("--control-proof", type=_path)
+    hunt_browser.add_argument("--package-runner", type=_path)
+    hunt_browser.add_argument("--browser-executable", type=_path)
+    hunt_browser.set_defaults(handler=_hunt_browser)
 
     hunt_demo_parser = commands.add_parser(
         "hunt-demo",
@@ -1029,6 +1057,109 @@ def _detonate_browser(args: argparse.Namespace) -> int:
         + b"\n"
     )
     return 0 if artifacts.status == "pass" else 1
+
+
+def _live_campaign_prompt(challenge: Any, intents: Any) -> str:
+    sys.stderr.write(
+        json.dumps(
+            {
+                "approvedIntents": [
+                    {
+                        "id": intent.id,
+                        "target": intent.target,
+                        "action": intent.action,
+                        "effect": intent.effect.name.lower(),
+                        "domain": intent.domain,
+                        "offensive": intent.offensive,
+                        "irreversible": intent.irreversible,
+                        "requiredEvidence": sorted(intent.required_evidence),
+                    }
+                    for intent in intents
+                ]
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    sys.stderr.write(f"Type exactly: {challenge.exact_phrase}\n")
+    return input("approval> ")
+
+
+def _require_live_campaign_terminal() -> None:
+    if not sys.stdin.isatty():
+        raise FormatError(
+            "SOVA-LIVE-INTERACTIVE-APPROVAL",
+            "live browser search requires a human-operated interactive terminal",
+        )
+
+
+def _campaign_executables(args: argparse.Namespace) -> tuple[Path, Path]:
+    package_runner = _detected_path(
+        args.package_runner,
+        ("npx.cmd", "npx"),
+        "Node package runner",
+    )
+    browser = _detected_path(
+        args.browser_executable,
+        (
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            "chrome.exe",
+            "msedge.exe",
+        ),
+        "Chromium browser executable",
+    )
+    return package_runner, browser
+
+
+def _campaign_output(artifacts: Any) -> dict[str, Any]:
+    return {
+        "status": artifacts.status,
+        "traces": [str(path) for path in artifacts.traces],
+        "reproductionTrace": (
+            None if artifacts.reproduction_trace is None else str(artifacts.reproduction_trace)
+        ),
+        "discoveryCapsule": (
+            None if artifacts.discovery_capsule is None else str(artifacts.discovery_capsule)
+        ),
+        "report": str(artifacts.report),
+    }
+
+
+def _hunt_owned_web_fixture(args: argparse.Namespace) -> int:
+    _require_live_campaign_terminal()
+    package_runner, browser = _campaign_executables(args)
+    artifacts = run_owned_web_campaign(
+        args.destination,
+        package_runner=package_runner,
+        browser_executable=browser,
+        approval_prompt=_live_campaign_prompt,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(_campaign_output(artifacts)) + b"\n")
+    return 0 if artifacts.status == "pass" else 2
+
+
+def _hunt_browser(args: argparse.Namespace) -> int:
+    _require_live_campaign_terminal()
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    campaign = browser_campaign_from_mapping(_load_object(args.campaign))
+    proof = (
+        control_proof_from_mapping(_load_object(args.control_proof))
+        if args.control_proof is not None
+        else None
+    )
+    package_runner, browser = _campaign_executables(args)
+    artifacts = run_browser_campaign(
+        target,
+        campaign,
+        args.destination,
+        package_runner=package_runner,
+        browser_executable=browser,
+        approval_prompt=_live_campaign_prompt,
+        control_proof=proof,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(_campaign_output(artifacts)) + b"\n")
+    return 0 if artifacts.status == "pass" else 2
 
 
 def _validate(args: argparse.Namespace) -> int:

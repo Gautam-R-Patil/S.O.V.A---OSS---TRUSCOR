@@ -469,6 +469,28 @@ def playwright_mappings(
             evidence=("screenshot",),
             argument_builder=_identity,
         ),
+        ToolMapping(
+            action="browser.console",
+            tool="browser_console_messages",
+            version="0.1",
+            side_effect=SideEffect.READ,
+            idempotent=True,
+            evidence=("console-messages",),
+            argument_builder=_selected("level"),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
+        ToolMapping(
+            action="browser.network",
+            tool="browser_network_requests",
+            version="0.1",
+            side_effect=SideEffect.READ,
+            idempotent=True,
+            evidence=("network-requests",),
+            argument_builder=_selected("includeStatic"),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
     )
 
 
