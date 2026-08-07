@@ -65,9 +65,7 @@ def _prompt(
                 "version": target.version,
                 "capabilities": list(target.capabilities),
                 "configuration": safe_configuration,
-                "configurationDigest": sha256_digest(
-                    canonical_json_bytes(target.configuration)
-                ),
+                "configurationDigest": sha256_digest(canonical_json_bytes(target.configuration)),
             },
             "campaignPolicy": {
                 "entryUrl": base.entry_url,
@@ -96,8 +94,10 @@ def _prompt(
 
 
 def _string_list(value: Any, *, field: str) -> list[str]:
-    if not isinstance(value, list) or not value or not all(
-        isinstance(item, str) and item for item in value
+    if (
+        not isinstance(value, list)
+        or not value
+        or not all(isinstance(item, str) and item for item in value)
     ):
         raise FormatError(
             "SOVA-AGENT-CAMPAIGN-OUTPUT",
@@ -125,11 +125,15 @@ def _validate_role_output(role: RoleKind, value: dict[str, Any]) -> dict[str, An
             "provider attacker output fields are invalid",
         )
     candidates = value["candidates"]
-    if not isinstance(candidates, list) or not candidates or not all(
-        isinstance(candidate, list)
-        and candidate
-        and all(isinstance(message, str) and message for message in candidate)
-        for candidate in candidates
+    if (
+        not isinstance(candidates, list)
+        or not candidates
+        or not all(
+            isinstance(candidate, list)
+            and candidate
+            and all(isinstance(message, str) and message for message in candidate)
+            for candidate in candidates
+        )
     ):
         raise FormatError(
             "SOVA-AGENT-CAMPAIGN-OUTPUT",
@@ -478,9 +482,7 @@ def run_agent_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             if consumed_tokens > max_total_tokens:
                 _fail("SOVA-AGENT-CAMPAIGN-BUDGET", "token budget exhausted")
         parent = _event(writer, judge, phase="evidence", parent=parent)
-        deterministic_assessment = (
-            "confirmed" if browser.status == "pass" else "not-confirmed"
-        )
+        deterministic_assessment = "confirmed" if browser.status == "pass" else "not-confirmed"
         conflict = advisory["assessment"] != deterministic_assessment
         writer.append(
             "judge.completed",

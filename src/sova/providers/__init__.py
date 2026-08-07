@@ -24,6 +24,7 @@ from sova.providers.runtime import (
     ProviderRoleModel,
     ProviderRoute,
     ProviderRuntimeConfig,
+    provider_model_from_route,
     provider_model_router,
     provider_runtime_from_mapping,
 )
@@ -48,6 +49,7 @@ __all__ = [
     "ProviderRuntimeConfig",
     "UrllibTransport",
     "compare_model_results",
+    "provider_model_from_route",
     "provider_model_router",
     "provider_runtime_from_mapping",
     "run_model_swap",

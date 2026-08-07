@@ -134,12 +134,9 @@ def test_live_browser_coordinator_captures_reproduces_and_packages(
 
     assert artifacts.status == "pass"
     assert TraceReader(artifacts.trace).verify(require_signature=True).signature_valid
-    assert TraceReader(artifacts.reproduction_trace).verify(
-        require_signature=True
-    ).signature_valid
+    assert TraceReader(artifacts.reproduction_trace).verify(require_signature=True).signature_valid
     assert (
-        verify_artifact(artifacts.trace, require_signature=True).state
-        == VerificationState.VERIFIED
+        verify_artifact(artifacts.trace, require_signature=True).state == VerificationState.VERIFIED
     )
     report = strict_json_loads(artifacts.report.read_bytes())
     assert isinstance(report, dict)
@@ -370,9 +367,7 @@ def test_tool_isolated_agent_roles_plan_an_approved_real_browser_campaign(
     )
 
     assert artifacts.status == "pass"
-    assert TraceReader(artifacts.orchestration_trace).verify(
-        require_signature=True
-    ).signature_valid
+    assert TraceReader(artifacts.orchestration_trace).verify(require_signature=True).signature_valid
     report = strict_json_loads(artifacts.report.read_bytes())
     assert isinstance(report, dict)
     assert report["claims"] == {
@@ -401,9 +396,7 @@ def test_optional_real_playwright_mcp_owned_fixture(tmp_path: Path) -> None:
     artifacts = run_owned_web_vertical_slice(
         tmp_path / "real-browser",
         package_runner=Path(r"C:\Program Files\nodejs\npx.cmd"),
-        browser_executable=Path(
-            r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-        ),
+        browser_executable=Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
         approval_prompt=lambda challenge, _intent: challenge.exact_phrase,
     )
     assert artifacts.status == "pass"
@@ -418,9 +411,7 @@ def test_optional_real_playwright_mcp_trigger_hunt(tmp_path: Path) -> None:
     artifacts = run_owned_web_campaign(
         tmp_path / "real-browser-campaign",
         package_runner=Path(r"C:\Program Files\nodejs\npx.cmd"),
-        browser_executable=Path(
-            r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-        ),
+        browser_executable=Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
         approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
     )
     assert artifacts.status == "pass"
@@ -474,12 +465,8 @@ def test_optional_real_playwright_mcp_agent_planned_hunt(tmp_path: Path) -> None
             max_model_turns=5,
             max_total_tokens=25,
             package_runner=Path(r"C:\Program Files\nodejs\npx.cmd"),
-            browser_executable=Path(
-                r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-            ),
+            browser_executable=Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
             approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
         )
     assert artifacts.status == "pass"
-    assert TraceReader(artifacts.orchestration_trace).verify(
-        require_signature=True
-    ).signature_valid
+    assert TraceReader(artifacts.orchestration_trace).verify(require_signature=True).signature_valid

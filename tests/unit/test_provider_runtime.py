@@ -18,6 +18,7 @@ from sova.providers import (
     ProviderRoleModel,
     ProviderRoute,
     ProviderRuntimeConfig,
+    provider_model_from_route,
     provider_model_router,
     provider_runtime_from_mapping,
 )
@@ -150,3 +151,19 @@ def test_public_provider_runtime_example_is_valid_and_secret_free() -> None:
     rendered = json.dumps(parsed.to_mapping()).casefold()
     assert "api_key" not in rendered
     assert "secret" not in rendered
+
+
+def test_named_provider_participant_is_credential_late() -> None:
+    resolutions: list[str] = []
+
+    def resolve(name: str) -> str:
+        resolutions.append(name)
+        return "fixture-secret"
+
+    model = provider_model_from_route(
+        ProviderRoute("openai", "fixture-model"),
+        role="arena-defender",
+        secret_resolver=resolve,
+    )
+    assert model.model_id == "openai:fixture-model:arena-defender"
+    assert resolutions == []

@@ -5,16 +5,26 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from sova.community.agent_arena import (
+    AgentArenaArtifacts,
+    AgentArenaBudget,
+    AgentArenaCase,
+    AgentArenaMatch,
+    run_agent_arena,
+)
 from sova.community.arena import ArenaCase, ArenaMatch, ArenaProfile, run_local_arena
 from sova.community.ctf import CTFScenario, build_ctf_catalog
 from sova.community.leaderboard import LeaderboardSubmission, build_static_leaderboard
 from sova.community.media import ReplayClipSpec, ReplayFrame, render_replay_clip
 from sova.formats.errors import FormatError
 from sova.models import ScriptedModel, ScriptedTurn
+from sova.providers import ProviderRoute, provider_model_from_route
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
+
+    from sova.runtime import RoleModel
 
 
 def _object(value: object, path: str) -> dict[str, Any]:
@@ -157,6 +167,137 @@ def run_arena_document(document: dict[str, Any], destination: Path) -> dict[str,
     return run_local_arena(profile, matches, models, destination)
 
 
+def _number(value: object, path: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise FormatError("SOVA-COMMUNITY-TYPE", f"{path} must be a number")
+    try:
+        return float(value)
+    except (TypeError, ValueError) as error:
+        raise FormatError("SOVA-COMMUNITY-TYPE", f"{path} must be a number") from error
+
+
+def run_agent_arena_document(
+    document: dict[str, Any],
+    destination: Path,
+    *,
+    secret_resolver: Callable[[str], str | None],
+    provider_calls_authorized: bool,
+) -> AgentArenaArtifacts:
+    """Run a strict secret-free provider-capable local Arena document."""
+    _fields(document, "$", required=("profile", "budget", "participants", "matches"))
+    profile_value = _object(document["profile"], "$.profile")
+    _fields(
+        profile_value,
+        "$.profile",
+        required=("id", "version", "standard"),
+        optional=("sensorPolicy",),
+    )
+    profile = ArenaProfile(
+        _text(profile_value["id"], "$.profile.id"),
+        _text(profile_value["version"], "$.profile.version"),
+        _boolean(profile_value["standard"], "$.profile.standard"),
+        _text(
+            profile_value.get("sensorPolicy", "sova-agent-arena-observable/0.1"),
+            "$.profile.sensorPolicy",
+        ),
+    )
+    budget_value = _object(document["budget"], "$.budget")
+    _fields(
+        budget_value,
+        "$.budget",
+        required=(
+            "rounds",
+            "maxDurationSeconds",
+            "maxOutputBytes",
+            "maxTotalTokens",
+            "contentCapture",
+        ),
+    )
+    token_budget = budget_value["maxTotalTokens"]
+    if token_budget is not None:
+        token_budget = _integer(token_budget, "$.budget.maxTotalTokens")
+    budget = AgentArenaBudget(
+        _integer(budget_value["rounds"], "$.budget.rounds"),
+        _integer(budget_value["maxDurationSeconds"], "$.budget.maxDurationSeconds"),
+        _integer(budget_value["maxOutputBytes"], "$.budget.maxOutputBytes"),
+        token_budget,
+        _text(budget_value["contentCapture"], "$.budget.contentCapture"),
+    )
+    models: dict[str, RoleModel] = {}
+    for index, raw_participant in enumerate(_sequence(document["participants"], "$.participants")):
+        path = f"$.participants[{index}]"
+        participant = _object(raw_participant, path)
+        _fields(
+            participant,
+            path,
+            required=(
+                "id",
+                "provider",
+                "model",
+                "temperature",
+                "maxOutputTokens",
+                "timeoutSeconds",
+            ),
+        )
+        identifier = _text(participant["id"], f"{path}.id")
+        if identifier in models:
+            raise FormatError("SOVA-AGENT-ARENA-PARTICIPANT", "participant id is duplicated")
+        route = ProviderRoute(
+            _text(participant["provider"], f"{path}.provider"),
+            _text(participant["model"], f"{path}.model"),
+            _number(participant["temperature"], f"{path}.temperature"),
+            _integer(participant["maxOutputTokens"], f"{path}.maxOutputTokens"),
+            _number(participant["timeoutSeconds"], f"{path}.timeoutSeconds"),
+        )
+        models[identifier] = provider_model_from_route(
+            route,
+            role=f"agent-arena:{identifier}",
+            secret_resolver=secret_resolver,
+        )
+    matches: list[AgentArenaMatch] = []
+    for index, raw_match in enumerate(_sequence(document["matches"], "$.matches")):
+        path = f"$.matches[{index}]"
+        match = _object(raw_match, path)
+        _fields(match, path, required=("challenger", "defender", "judge", "case"))
+        case_path = f"{path}.case"
+        case = _object(match["case"], case_path)
+        _fields(
+            case,
+            case_path,
+            required=(
+                "id",
+                "seed",
+                "challengerObjective",
+                "defenderObjective",
+                "successSignal",
+                "points",
+            ),
+        )
+        matches.append(
+            AgentArenaMatch(
+                _text(match["challenger"], f"{path}.challenger"),
+                _text(match["defender"], f"{path}.defender"),
+                _text(match["judge"], f"{path}.judge"),
+                AgentArenaCase(
+                    _text(case["id"], f"{case_path}.id"),
+                    _text(case["seed"], f"{case_path}.seed"),
+                    _text(case["challengerObjective"], f"{case_path}.challengerObjective"),
+                    _text(case["defenderObjective"], f"{case_path}.defenderObjective"),
+                    _text(case["successSignal"], f"{case_path}.successSignal"),
+                    _integer(case["points"], f"{case_path}.points"),
+                ),
+            )
+        )
+    return run_agent_arena(
+        profile,
+        matches,
+        models,
+        budget,
+        destination,
+        provider_calls_authorized=provider_calls_authorized,
+    )
+
+
 def build_leaderboard_document(
     document: dict[str, Any],
     destination: Path,
@@ -290,5 +431,6 @@ __all__ = [
     "build_ctf_document",
     "build_leaderboard_document",
     "render_replay_clip_document",
+    "run_agent_arena_document",
     "run_arena_document",
 ]

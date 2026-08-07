@@ -27,6 +27,15 @@ path.
 This implementation proves the evidence path. It is not yet a containment
 backend for arbitrary untrusted agents and does not establish model superiority.
 
+The provider-capable extension, `sova arena agent-run`, adds bounded multi-round
+challenger/defender interaction and an isolated advisory judge inside a
+synthetic message-only environment. It captures observable prompts, responses,
+inter-agent communication, environment state, oracle decisions, budgets, and
+failures in signed traces. It never exposes target tools, and deterministic
+signal membership—not model self-grading—controls the score. These runs are
+custom, non-comparable, and excluded from the standard leaderboard. See the
+[Agent Arena specification](./agent-arena-0.1.md).
+
 ## Static leaderboard
 
 A snapshot accepts building blocks, frameworks, components, and models—not
@@ -71,6 +80,7 @@ The public CLI accepts strict JSON documents and rejects unknown fields:
 ```console
 sova probe verify response.json --nonce REQUEST_NONCE --scope manifest --key-id sha256:...
 sova arena run arena.json arena-output
+sova arena agent-run agent-arena.json agent-arena-output --allow-provider-calls
 sova leaderboard build leaderboard.json leaderboard-output
 sova ctf build ctf.json ctf-catalog.json
 sova replay clip clip.json replay.y4m

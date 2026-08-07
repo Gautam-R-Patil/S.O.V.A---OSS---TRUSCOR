@@ -28,6 +28,7 @@ from sova.community import (
     build_ctf_document,
     build_leaderboard_document,
     render_replay_clip_document,
+    run_agent_arena_document,
     run_arena_document,
     verify_probe_response,
 )
@@ -757,6 +758,18 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     arena_run.add_argument("specification", type=_path)
     arena_run.add_argument("destination", type=_path)
     arena_run.set_defaults(handler=_arena_run)
+    arena_agent_run = arena_commands.add_parser(
+        "agent-run",
+        help="run provider-capable agents in a fully observed synthetic message environment",
+    )
+    arena_agent_run.add_argument("specification", type=_path)
+    arena_agent_run.add_argument("destination", type=_path)
+    arena_agent_run.add_argument(
+        "--allow-provider-calls",
+        action="store_true",
+        help="explicitly permit configured model-provider calls, which may incur cost",
+    )
+    arena_agent_run.set_defaults(handler=_arena_agent_run)
 
     leaderboard_parser = commands.add_parser(
         "leaderboard", help="build a verified static local leaderboard"
@@ -1413,6 +1426,28 @@ def _arena_run(args: argparse.Namespace) -> int:
     report = run_arena_document(_load_object(args.specification), args.destination)
     sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
     return 0
+
+
+def _arena_agent_run(args: argparse.Namespace) -> int:
+    if not args.allow_provider_calls:
+        raise FormatError(
+            "SOVA-PROVIDER-CALLS-NOT-ALLOWED",
+            "agent Arena requires the explicit --allow-provider-calls flag",
+        )
+    artifacts = run_agent_arena_document(
+        _load_object(args.specification),
+        args.destination,
+        secret_resolver=os.getenv,
+        provider_calls_authorized=True,
+    )
+    output = {
+        "status": artifacts.status,
+        "report": str(artifacts.report),
+        "traces": [str(path) for path in artifacts.traces],
+        "capsules": [str(path) for path in artifacts.capsules],
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
+    return 0 if artifacts.status == "pass" else 2
 
 
 def _leaderboard_build(args: argparse.Namespace) -> int:

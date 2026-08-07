@@ -96,9 +96,7 @@ class BrowserCampaign:
         if not self.oracle_contains or len(self.oracle_contains) > _MAX_MESSAGE_CHARS:
             raise FormatError("SOVA-LIVE-CAMPAIGN-ORACLE", "oracle contains value is invalid")
         if not 1 <= self.max_attempts <= len(self.candidates):
-            raise FormatError(
-                "SOVA-LIVE-CAMPAIGN-BUDGET", "maxAttempts must fit the candidate set"
-            )
+            raise FormatError("SOVA-LIVE-CAMPAIGN-BUDGET", "maxAttempts must fit the candidate set")
         if not 1 <= self.max_duration_seconds <= _MAX_DURATION_SECONDS:
             raise FormatError("SOVA-LIVE-CAMPAIGN-BUDGET", "duration budget is out of bounds")
         if self.total_actions > _MAX_CAMPAIGN_ACTIONS:
@@ -173,9 +171,10 @@ def browser_campaign_from_mapping(value: dict[str, Any]) -> BrowserCampaign:
             "campaign has missing or unknown fields",
             details={"fields": sorted(value)},
         )
-    if value.get("artifactType") != "sova.browser-campaign" or value.get(
-        "schemaVersion"
-    ) != "0.1.0":
+    if (
+        value.get("artifactType") != "sova.browser-campaign"
+        or value.get("schemaVersion") != "0.1.0"
+    ):
         raise FormatError("SOVA-LIVE-CAMPAIGN-VERSION", "campaign version is unsupported")
     interaction = value.get("interaction")
     oracle = value.get("oracle")
@@ -427,9 +426,7 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
     rendered_port = (
         "" if (entry_origin.port or default_port) == default_port else f":{entry_origin.port}"
     )
-    normalized_entry_origin = (
-        f"{entry_origin.scheme}://{entry_host.casefold()}{rendered_port}"
-    )
+    normalized_entry_origin = f"{entry_origin.scheme}://{entry_host.casefold()}{rendered_port}"
     if normalized_entry_origin not in origins:
         raise FormatError(
             "SOVA-LIVE-CAMPAIGN-SCOPE",
@@ -549,11 +546,14 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
     success_row: tuple[str, TriggerCandidate, Path, dict[str, Any]] | None = None
     reproduction_trace: Path | None = None
     comparison = None
-    with start_stdio_client(spec, StdioMCPClient) as client, MCPExecutorAdapter(
-        "microsoft-playwright-mcp",
-        client,
-        playwright_mappings(allowed_origins=origins),
-    ) as executor:
+    with (
+        start_stdio_client(spec, StdioMCPClient) as client,
+        MCPExecutorAdapter(
+            "microsoft-playwright-mcp",
+            client,
+            playwright_mappings(allowed_origins=origins),
+        ) as executor,
+    ):
         session, approval_sets = authorize_browser_scenarios(
             tuple((key, scenario) for key, _candidate_item, _capsule, scenario in rows),
             executor.capabilities(),

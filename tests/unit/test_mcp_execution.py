@@ -224,16 +224,12 @@ def test_playwright_adapter_rejects_observed_cross_origin_redirect(tmp_path: Pat
         ("browser_navigate", "browser_snapshot"),
         [
             MCPToolResult(
-                content=(
-                    {"type": "text", "text": "- Page URL: https://attacker.example/"},
-                ),
+                content=({"type": "text", "text": "- Page URL: https://attacker.example/"},),
                 structured_content=None,
                 is_error=False,
             ),
             MCPToolResult(
-                content=(
-                    {"type": "text", "text": "- Page URL: https://attacker.example/"},
-                ),
+                content=({"type": "text", "text": "- Page URL: https://attacker.example/"},),
                 structured_content=None,
                 is_error=False,
             ),

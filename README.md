@@ -579,6 +579,8 @@ sova mcp manifest
 
 # Run the deterministic local Arena and build verifiable community artifacts
 sova arena run ./arena.json ./arena-output
+# Or run provider-capable agents in the fully observed synthetic message Arena.
+sova arena agent-run ./agent-arena.json ./agent-arena-output --allow-provider-calls
 sova leaderboard build ./leaderboard.json ./leaderboard-output
 sova ctf build ./ctf.json ./ctf-catalog.json
 sova replay clip ./clip.json ./replay.y4m
@@ -797,12 +799,12 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Registry, `sync`, adapters, and `contribute` | Offline content-addressed registry, signed index, trust pinning, pull-only mirror cache, adapters, and local contribution staging implemented in [ADR-0024](./docs/decisions/0024-offline-content-addressed-community-registry.md) |
 | Local MCP | MCP `2025-11-25` stdio, safe tools, three exact-gated tools, out-of-band human approval, manifest pin, and self-check implemented in [ADR-0025](./docs/decisions/0025-local-mcp-out-of-band-authorization.md) |
 | Extension SDK, providers, targets, interoperability | Experimental fail-closed contracts and no-network compatibility kit implemented in [ADR-0026](./docs/decisions/0026-fail-closed-extension-and-provider-ecosystem.md); independent adoption and real-provider transferability remain unproven |
-| Probe, Arena, leaderboard, CTF, replay media | Experimental local evidence path implemented in [ADR-0027](./docs/decisions/0027-evidence-first-local-community-surfaces.md); arbitrary untrusted-agent Arena containment and public comparative results remain unproven |
+| Probe, Arena, leaderboard, CTF, replay media | Deterministic standard-profile Arena plus custom provider-capable multi-round challenger/defender/advisory-judge Arena implemented with signed observable evidence; arbitrary untrusted-code containment, standard real-model comparison, and public comparative results remain unproven |
 | Research/publication programme | Private source, opportunity, invention, and publication-readiness ledgers maintained; public novelty and submission remain human/external gates |
 | Onboarding and adoption | Account-free `init`, local `doctor`, reviewed data removal, installation/first-value/air-gap guides, and user pathways implemented |
 | Release and governance | Deterministic SBOM/checksum tools, public governance, compatibility policy, and release-candidate automation implemented; first signed public release remains a founder gate |
 | Standards and long horizon | Neutral conformance kit, schema/change governance, archival policy, and open-ended research branches implemented; independent adoption remains unproven |
-| Remaining validation | Authorized non-fixture targets, native software isolation, real-provider/swarm Arena execution, independent readers/adapters/reviewers, cross-provider comparisons, larger nondeterministic studies, and promoted release decisions |
+| Remaining validation | Authorized non-fixture targets, native software isolation, paid/credentialed real-provider Arena runs, independent readers/adapters/reviewers, cross-provider comparisons, larger nondeterministic studies, and promoted release decisions |
 
 The first engineering objective is now implemented as a bounded synthetic
 no-Atlas/no-MELRA vertical slice:

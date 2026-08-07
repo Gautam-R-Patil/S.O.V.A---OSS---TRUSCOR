@@ -29,6 +29,7 @@ _MAX_STRUCTURED_RESPONSE_BYTES = 1024 * 1024
 _MIN_MODEL_TURNS = 5
 _MAX_MODEL_TURNS = 100
 _MAX_TOTAL_TOKENS = 10_000_000
+_MAX_ROLE_NAME_CHARS = 128
 _ALLOWED_PROVIDERS = frozenset({"openai", "anthropic", "openrouter", "ollama"})
 _REQUIRED_ROLES = frozenset(
     {
@@ -58,14 +59,20 @@ class ProviderRoleModel:
 
     adapter: ProviderAdapter
     model: str
-    role: RoleKind
+    role: RoleKind | str
     temperature: float = 0.0
     max_output_tokens: int = 1024
     timeout_seconds: float = 30.0
 
+    def __post_init__(self) -> None:
+        role_name = self.role.value if isinstance(self.role, RoleKind) else self.role
+        if not role_name or len(role_name) > _MAX_ROLE_NAME_CHARS:
+            raise ProviderError("SOVA-PROVIDER-ROLE", "provider model role is invalid")
+
     @property
     def model_id(self) -> str:
-        return f"{self.adapter.provider}:{self.model}:{self.role.value}"
+        role_name = self.role.value if isinstance(self.role, RoleKind) else self.role
+        return f"{self.adapter.provider}:{self.model}:{role_name}"
 
     def respond(self, prompt: str) -> ProviderModelResponse:
         result = self.adapter.complete(
@@ -186,9 +193,10 @@ def provider_runtime_from_mapping(value: dict[str, Any]) -> ProviderRuntimeConfi
     """Parse a secret-free provider role map and reject unknown configuration."""
     if set(value) != {"artifactType", "schemaVersion", "routes", "budgets"}:
         raise ProviderError("SOVA-PROVIDER-CONFIG", "provider runtime fields are invalid")
-    if value.get("artifactType") != "sova.provider-runtime" or value.get(
-        "schemaVersion"
-    ) != "0.1.0":
+    if (
+        value.get("artifactType") != "sova.provider-runtime"
+        or value.get("schemaVersion") != "0.1.0"
+    ):
         raise ProviderError("SOVA-PROVIDER-CONFIG", "provider runtime version is unsupported")
     route_values = value.get("routes")
     budgets = value.get("budgets")
@@ -283,11 +291,29 @@ def provider_model_router(
     return ModelRouter(bindings)
 
 
+def provider_model_from_route(
+    route: ProviderRoute,
+    *,
+    role: str,
+    secret_resolver: SecretResolver,
+) -> ProviderRoleModel:
+    """Build one credential-late tool-free model for a named local participant."""
+    return ProviderRoleModel(
+        _adapter(route.provider, secret_resolver=secret_resolver),
+        route.model,
+        role,
+        route.temperature,
+        route.max_output_tokens,
+        route.timeout_seconds,
+    )
+
+
 __all__ = [
     "ProviderModelResponse",
     "ProviderRoleModel",
     "ProviderRoute",
     "ProviderRuntimeConfig",
+    "provider_model_from_route",
     "provider_model_router",
     "provider_runtime_from_mapping",
 ]

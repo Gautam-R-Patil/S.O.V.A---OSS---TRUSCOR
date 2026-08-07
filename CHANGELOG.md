@@ -29,6 +29,11 @@ have independent version ledgers.
   explorer, strategist, attacker, and advisory judge roles; strict JSON and
   model budgets; redacted role records; explicit provider-call permission; and
   unchanged proof-of-control plus exact browser-action approval boundaries.
+- A provider-capable `sova arena agent-run` path with separate challenger,
+  defender, and advisory-judge contexts; bounded multi-round message exchange;
+  capture-time-redacted prompt/model/inter-agent/environment/oracle sensors;
+  deterministic scoring; signed per-match traces and capsules; and mandatory
+  custom non-comparable profiles without participant tools.
 - Buildable `sova-oss` Python package and typed, tested `sova` command-line interface.
 - A fail-visible dependency-advisory register and source guard for the current
   `cryptography` PKCS#7 advisory, with an automatic removal condition when a

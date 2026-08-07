@@ -75,7 +75,8 @@ class ModelResponse(Protocol):
 
 
 class RoleModel(Protocol):
-    model_id: str
+    @property
+    def model_id(self) -> str: ...
 
     def respond(self, prompt: str) -> ModelResponse: ...
 

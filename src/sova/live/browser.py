@@ -532,11 +532,14 @@ def run_live_browser_assessment(  # noqa: PLR0913
             source="deterministic browser scenario",
         ),
     }
-    with start_stdio_client(spec, StdioMCPClient) as client, MCPExecutorAdapter(
-        "microsoft-playwright-mcp",
-        client,
-        playwright_mappings(allowed_origins=origins),
-    ) as executor:
+    with (
+        start_stdio_client(spec, StdioMCPClient) as client,
+        MCPExecutorAdapter(
+            "microsoft-playwright-mcp",
+            client,
+            playwright_mappings(allowed_origins=origins),
+        ) as executor,
+    ):
         primary_session, primary_approvals = _authorization_for_run(
             scenario,
             executor.capabilities(),
@@ -578,9 +581,7 @@ def run_live_browser_assessment(  # noqa: PLR0913
         )
     primary_verification = TraceReader(trace).verify(require_signature=True)
     reproduction_verification = TraceReader(reproduction).verify(require_signature=True)
-    comparison = compare_observable_outcomes(
-        trace, reproduction, kinds=("oracle.completed",)
-    )
+    comparison = compare_observable_outcomes(trace, reproduction, kinds=("oracle.completed",))
     evidence_capsule = destination / "evidence.sova"
     evidence_manifest = capsule_manifest_template(
         title="SOVA live-browser evidence capsule",

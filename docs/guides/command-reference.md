@@ -14,7 +14,7 @@ human text or HTML artifact is the command's purpose.
 | First value | `map`, `check`, `demo`, `safety backends`, `executors receipts` |
 | Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics benchmark`, `evidence`, `adjudicate`, `compose` |
 | Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse export`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `ci`, `self-check` |
-| Registry/community | `registry verify`, `sync`, `contribute`, `probe verify`, `arena run`, `leaderboard build`, `ctf build` |
+| Registry/community | `registry verify`, `sync`, `contribute`, `probe verify`, `arena run`, `arena agent-run`, `leaderboard build`, `ctf build` |
 | Local MCP | `mcp manifest`, `mcp init-control`, `mcp approve`, `mcp serve` |
 | Release and compatibility | `release sbom`, `release checksums`, `release verify-checksums`, `conformance export`, `conformance verify` |
 | Authorized targets | `target template`, `target validate`, `target plan`, `target fixture`, `target challenge`, `target prove`, `detonate owned-web-fixture`, `detonate browser`, `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser` |
@@ -33,3 +33,8 @@ operations. No command claims to capture hidden chain-of-thought.
 browser authority. It requires `--allow-provider-calls`; provider configuration
 is secret-free, model output is untrusted, and deterministic evidence controls
 the verdict.
+
+`arena agent-run` uses the same credential-late provider boundary for a local
+synthetic multi-agent message experiment. It grants participants no tools,
+requires an explicit provider-call flag, emits signed trace/capsule evidence,
+and always marks the run custom and non-comparable.

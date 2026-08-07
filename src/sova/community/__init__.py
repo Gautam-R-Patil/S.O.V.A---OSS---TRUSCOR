@@ -1,6 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Local-first probe, Arena, leaderboard, CTF, and replay-media surfaces."""
 
+from sova.community.agent_arena import (
+    AgentArenaArtifacts,
+    AgentArenaBudget,
+    AgentArenaCase,
+    AgentArenaMatch,
+    run_agent_arena,
+)
 from sova.community.arena import (
     STANDARD_ARENA_PROFILE,
     ArenaCase,
@@ -12,6 +19,7 @@ from sova.community.config import (
     build_ctf_document,
     build_leaderboard_document,
     render_replay_clip_document,
+    run_agent_arena_document,
     run_arena_document,
 )
 from sova.community.ctf import CTFScenario, build_ctf_catalog
@@ -21,6 +29,10 @@ from sova.community.probe import issue_probe_response, verify_probe_response
 
 __all__ = [
     "STANDARD_ARENA_PROFILE",
+    "AgentArenaArtifacts",
+    "AgentArenaBudget",
+    "AgentArenaCase",
+    "AgentArenaMatch",
     "ArenaCase",
     "ArenaMatch",
     "ArenaProfile",
@@ -35,6 +47,8 @@ __all__ = [
     "issue_probe_response",
     "render_replay_clip",
     "render_replay_clip_document",
+    "run_agent_arena",
+    "run_agent_arena_document",
     "run_arena_document",
     "run_local_arena",
     "verify_probe_response",

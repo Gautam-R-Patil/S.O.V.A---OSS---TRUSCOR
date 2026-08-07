@@ -389,9 +389,7 @@ class MCPExecutorAdapter:
         self._client.close()
 
 
-def playwright_mappings(
-    *, allowed_origins: tuple[str, ...] = ()
-) -> tuple[ToolMapping, ...]:
+def playwright_mappings(*, allowed_origins: tuple[str, ...] = ()) -> tuple[ToolMapping, ...]:
     """Pinned portable subset of Microsoft Playwright MCP actions."""
     snapshot = "browser_snapshot"
     location_validator = _page_origin_validator(allowed_origins)
