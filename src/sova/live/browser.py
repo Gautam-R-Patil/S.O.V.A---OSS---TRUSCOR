@@ -36,7 +36,7 @@ from sova.safety import (
     ControlProofMethod,
     EffectBudget,
     EffectClass,
-    OutOfBandApprovalAuthority,
+    InteractiveTerminalApprovalAuthority,
     Principal,
     PrincipalKind,
     Scope,
@@ -47,9 +47,9 @@ from sova.trace import TraceReader, generate_ed25519_keypair
 
 if TYPE_CHECKING:
     from sova.executors import Capability
-    from sova.safety import ActionIntent, ApprovalChallenge
+    from sova.safety import ActionIntent, ApprovalBatchChallenge
 
-ApprovalPrompt = Callable[["ApprovalChallenge", "ActionIntent"], str]
+ApprovalPrompt = Callable[["ApprovalBatchChallenge", tuple["ActionIntent", ...]], str]
 
 _LOOPBACK = frozenset({"localhost", "127.0.0.1", "::1"})
 
@@ -262,21 +262,35 @@ def _authorization_for_run(  # noqa: PLR0913
         ownership="self",
         required_containment_digest=containment_digest,
     )
-    approval_authority = OutOfBandApprovalAuthority(secrets.token_bytes(32))
+    approval_authority = InteractiveTerminalApprovalAuthority(secrets.token_bytes(32))
     approver = Principal("sova:principal:operator", PrincipalKind.HUMAN, "SOVA operator")
-    approvals: dict[str, ApprovalToken] = {}
+    pending: list[tuple[str, ActionIntent, ApprovalLevel]] = []
     for step, intent in zip(steps, intents, strict=True):
         level = _approval_level(intent)
         if level is None:
             continue
-        challenge = approval_authority.challenge(authority, intent, level=level, now=now)
-        exact_phrase = approval_prompt(challenge, intent)
-        approvals[step["id"]] = approval_authority.approve(
+        pending.append((step["id"], intent, level))
+    approvals: dict[str, ApprovalToken] = {}
+    if pending:
+        challenge = approval_authority.batch_challenge(
+            authority,
+            tuple((intent, level) for _step_id, intent, level in pending),
+            now=now,
+        )
+        exact_phrase = approval_prompt(
+            challenge,
+            tuple(intent for _step_id, intent, _level in pending),
+        )
+        tokens = approval_authority.approve_batch(
             challenge,
             approver=approver,
             exact_phrase=exact_phrase,
             reviewed_effects=True,
         )
+        approvals = {
+            step_id: token
+            for (step_id, _intent, _level), token in zip(pending, tokens, strict=True)
+        }
     return (
         AuthorizationSession(
             authority=authority,
@@ -570,8 +584,10 @@ def run_live_browser_assessment(  # noqa: PLR0913, PLR0915
         "allowedOrigins": list(origins),
         "authorization": {
             "targetControl": control_status,
-            "freshPerActionApproval": True,
+            "freshExactBatchApproval": True,
+            "approvedIntentCountPerRun": len(expanded_steps(scenario)),
             "scopeWidening": False,
+            "channel": "interactive-terminal",
         },
         "containment": {
             **posture,

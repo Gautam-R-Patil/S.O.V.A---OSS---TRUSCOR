@@ -3,6 +3,8 @@
 
 from sova.safety.authorization import (
     ActionIntent,
+    ApprovalBatchChallenge,
+    ApprovalBatchItem,
     ApprovalChallenge,
     ApprovalLevel,
     ApprovalToken,
@@ -15,6 +17,7 @@ from sova.safety.authorization import (
     ControlProofMethod,
     EffectBudget,
     EffectClass,
+    InteractiveTerminalApprovalAuthority,
     OutOfBandApprovalAuthority,
     Principal,
     PrincipalKind,
@@ -46,6 +49,8 @@ from sova.safety.privacy import (
 
 __all__ = [
     "ActionIntent",
+    "ApprovalBatchChallenge",
+    "ApprovalBatchItem",
     "ApprovalChallenge",
     "ApprovalLevel",
     "ApprovalToken",
@@ -67,6 +72,7 @@ __all__ = [
     "EffectBudget",
     "EffectClass",
     "EphemeralSecretStore",
+    "InteractiveTerminalApprovalAuthority",
     "IsolationKind",
     "NetworkMode",
     "OutOfBandApprovalAuthority",

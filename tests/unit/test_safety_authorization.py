@@ -22,6 +22,7 @@ from sova.safety import (
     ControlProofMethod,
     EffectBudget,
     EffectClass,
+    InteractiveTerminalApprovalAuthority,
     OutOfBandApprovalAuthority,
     Principal,
     PrincipalKind,
@@ -243,6 +244,102 @@ def test_mutation_requires_fresh_single_use_human_approval() -> None:
     assert first.allowed
     assert not second.allowed
     assert "approval-already-used" in second.reasons
+
+
+def test_interactive_batch_approval_binds_every_exact_intent_once() -> None:
+    approval_authority = InteractiveTerminalApprovalAuthority(b"i" * 32)
+    authority = _authority()
+    first_intent = _intent(effect=EffectClass.MUTATE)
+    second_intent = replace(
+        first_intent,
+        id="sova:intent:second",
+        path="/fixture/work/second.txt",
+    )
+    challenge = approval_authority.batch_challenge(
+        authority,
+        (
+            (first_intent, ApprovalLevel.NORMAL),
+            (second_intent, ApprovalLevel.DESTRUCTIVE),
+        ),
+        now=NOW,
+    )
+    tokens = approval_authority.approve_batch(
+        challenge,
+        approver=_principal(PrincipalKind.HUMAN, "reviewer"),
+        exact_phrase=challenge.exact_phrase,
+        reviewed_effects=True,
+    )
+
+    assert len(tokens) == 2
+    assert tokens[0].channel == "interactive-terminal"
+    assert tokens[0].intent_digest == first_intent.digest
+    assert tokens[1].intent_digest == second_intent.digest
+    allowed, reasons = approval_authority.consume(
+        tokens[0],
+        authority_id=authority.id,
+        intent_digest=first_intent.digest,
+        minimum_level=ApprovalLevel.NORMAL,
+        now=NOW,
+    )
+    assert allowed
+    assert reasons == ()
+    replayed, replay_reasons = approval_authority.consume(
+        tokens[0],
+        authority_id=authority.id,
+        intent_digest=first_intent.digest,
+        minimum_level=ApprovalLevel.NORMAL,
+        now=NOW,
+    )
+    assert not replayed
+    assert "approval-already-used" in replay_reasons
+
+
+def test_batch_approval_rejects_replay_substitution_and_nonhuman_approval() -> None:
+    approval_authority = InteractiveTerminalApprovalAuthority(b"j" * 32)
+    authority = _authority()
+    intent = _intent(effect=EffectClass.MUTATE)
+    challenge = approval_authority.batch_challenge(
+        authority,
+        ((intent, ApprovalLevel.DESTRUCTIVE),),
+        now=NOW,
+    )
+    with pytest.raises(FormatError, match="cannot approve"):
+        approval_authority.approve_batch(
+            challenge,
+            approver=_principal(PrincipalKind.AGENT, "self"),
+            exact_phrase=challenge.exact_phrase,
+            reviewed_effects=True,
+        )
+    with pytest.raises(FormatError, match="effect review"):
+        approval_authority.approve_batch(
+            challenge,
+            approver=_principal(PrincipalKind.HUMAN, "reviewer"),
+            exact_phrase=challenge.exact_phrase,
+            reviewed_effects=False,
+        )
+    tokens = approval_authority.approve_batch(
+        challenge,
+        approver=_principal(PrincipalKind.HUMAN, "reviewer"),
+        exact_phrase=challenge.exact_phrase,
+        reviewed_effects=True,
+    )
+    with pytest.raises(FormatError, match="already issued"):
+        approval_authority.approve_batch(
+            challenge,
+            approver=_principal(PrincipalKind.HUMAN, "reviewer"),
+            exact_phrase=challenge.exact_phrase,
+            reviewed_effects=True,
+        )
+    substituted = replace(intent, id="sova:intent:substituted")
+    allowed, reasons = approval_authority.consume(
+        tokens[0],
+        authority_id=authority.id,
+        intent_digest=substituted.digest,
+        minimum_level=ApprovalLevel.DESTRUCTIVE,
+        now=NOW,
+    )
+    assert not allowed
+    assert "approval-scope-mismatch" in reasons
 
 
 def test_offensive_intent_requires_destructive_approval_every_invocation() -> None:

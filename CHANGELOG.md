@@ -18,6 +18,9 @@ have independent version ledgers.
 - An external browser-target workflow with short-lived HTTPS well-known control
   challenges, certificate and exact-origin binding, redirect refusal,
   pre-dispatch URL checks, and final observed-origin drift detection.
+- Closed exact-batch terminal authorization that lets a person review a bounded
+  run once while preserving distinct signed, scope-bound, one-use tokens for
+  every individual action.
 - Buildable `sova-oss` Python package and typed, tested `sova` command-line interface.
 - A fail-visible dependency-advisory register and source guard for the current
   `cryptography` PKCS#7 advisory, with an automatic removal condition when a

@@ -141,6 +141,8 @@ def test_live_browser_coordinator_captures_reproduces_and_packages(
         "privateModelThoughtsCaptured": False,
         "universalSafety": False,
     }
+    assert report["authorization"]["freshExactBatchApproval"] is True
+    assert report["authorization"]["approvedIntentCountPerRun"] == 6
     assert report["containment"]["nativeSandboxClaim"] is False
 
 

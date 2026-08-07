@@ -915,17 +915,20 @@ def _detonate_owned_web_fixture(args: argparse.Namespace) -> int:
         "Chromium browser executable",
     )
 
-    def prompt(challenge: Any, intent: Any) -> str:
-        review = {
-            "target": intent.target,
-            "action": intent.action,
-            "effect": intent.effect.name.lower(),
-            "domain": intent.domain,
-            "offensive": intent.offensive,
-            "irreversible": intent.irreversible,
-            "requiredEvidence": sorted(intent.required_evidence),
-        }
-        sys.stderr.write(json.dumps(review, indent=2) + "\n")
+    def prompt(challenge: Any, intents: Any) -> str:
+        review = [
+            {
+                "target": intent.target,
+                "action": intent.action,
+                "effect": intent.effect.name.lower(),
+                "domain": intent.domain,
+                "offensive": intent.offensive,
+                "irreversible": intent.irreversible,
+                "requiredEvidence": sorted(intent.required_evidence),
+            }
+            for intent in intents
+        ]
+        sys.stderr.write(json.dumps({"approvedIntents": review}, indent=2) + "\n")
         sys.stderr.write(f"Type exactly: {challenge.exact_phrase}\n")
         return input("approval> ")
 
@@ -980,17 +983,22 @@ def _detonate_browser(args: argparse.Namespace) -> int:
         "Chromium browser executable",
     )
 
-    def prompt(challenge: Any, intent: Any) -> str:
+    def prompt(challenge: Any, intents: Any) -> str:
         sys.stderr.write(
             json.dumps(
                 {
-                    "target": intent.target,
-                    "action": intent.action,
-                    "effect": intent.effect.name.lower(),
-                    "domain": intent.domain,
-                    "offensive": intent.offensive,
-                    "irreversible": intent.irreversible,
-                    "requiredEvidence": sorted(intent.required_evidence),
+                    "approvedIntents": [
+                        {
+                            "target": intent.target,
+                            "action": intent.action,
+                            "effect": intent.effect.name.lower(),
+                            "domain": intent.domain,
+                            "offensive": intent.offensive,
+                            "irreversible": intent.irreversible,
+                            "requiredEvidence": sorted(intent.required_evidence),
+                        }
+                        for intent in intents
+                    ]
                 },
                 indent=2,
             )

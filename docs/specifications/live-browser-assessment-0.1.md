@@ -15,7 +15,7 @@ The accepted flow is:
 ```text
 owned loopback HTTP target
   -> exact target manifest and origin set
-  -> fresh per-action human approval
+  -> fresh exact-batch human review + one-use token per action
   -> pinned Playwright MCP 0.0.78
   -> ephemeral headless Chrome context
   -> portable .sova procedure
@@ -43,7 +43,9 @@ launch arguments, cache paths, and process transport remain in the adapter.
   bare HTTPS origin and an unexpired well-known proof.
 - Loopback control proof, exact action/tool/domain scope, effect and duration
   budgets, and a fresh approval token are checked before every action.
-- The CLI refuses non-interactive approval.
+- The CLI refuses non-interactive approval. One phrase authorizes only the
+  complete displayed intent set; each intent receives a distinct, signed,
+  one-use token and no new intent may be added after review.
 - Any redirect or explicit navigation outside the admitted origin is a failed
   run. Playwright's own origin filter is an additional control, not the trust
   boundary.

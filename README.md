@@ -607,7 +607,8 @@ sova target fixture website ./website-fixture
 sova target fixture software ./software-fixture
 
 # Exercise a real browser against SOVA's self-owned loopback website.
-# Every effect requires an exact interactive approval phrase.
+# Every run displays its closed action set and requires an exact approval phrase.
+# Each approved action then consumes a distinct signed one-use token.
 sova detonate owned-web-fixture ./live-browser-proof
 
 # For an external website you own, first edit a browser-agent target manifest.
@@ -767,7 +768,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `.sova` capsule and scenario schemas | Experimental `0.1.0` implemented with safe package tooling |
 | `.sova-trace` experimental contract | Experimental `0.1.0` implemented with streaming writer and offline verifier |
 | Scripted/local execution | Experimental executor contract and no-Atlas vertical slice implemented; local host execution is explicitly not a security sandbox |
-| Authorization and containment | Experimental per-action ACE kernel, single-use human approvals, effect budgets, proof-of-control validation, and backend admission implemented |
+| Authorization and containment | Experimental ACE kernel, closed exact-batch human review, per-action signed one-use tokens, effect budgets, proof-of-control validation, and backend admission implemented |
 | Synthetic detonation and sensors | Event-sourced fake world, inert canaries, sink-only collector, unified sensor coverage, deterministic oracles, and nine ground-truth target families implemented |
 | `sova map` | Air-gapped typed inventory, provenance-separated reach closures, map schema, and tool-definition drift implemented in [ADR-0013](./docs/decisions/0013-provenance-separated-capability-map.md) |
 | SOVA Runtime | Provider-neutral isolated roles, standard/custom profiles, evidence firewall, local minimized experience, opaque sessions, and verified executor fallback implemented in [ADR-0014](./docs/decisions/0014-evidence-firewalled-runtime.md) |

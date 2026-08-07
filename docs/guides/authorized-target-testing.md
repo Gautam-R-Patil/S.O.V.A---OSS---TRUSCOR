@@ -52,8 +52,10 @@ sova playback ./live-browser-proof/run.sova-trace
 
 SOVA launches a real HTTP server on loopback, starts pinned Playwright MCP with
 an ephemeral headless browser profile, limits admitted navigation to the exact
-origin, requests a fresh exact approval phrase for every action, executes a
-two-turn planted behavior, judges the final accessibility snapshot, repeats the
+origin, displays every intended action in a closed batch, requests one fresh
+exact approval phrase for that batch, issues a separate signed one-use token
+for every action, executes a two-turn planted behavior, judges the final
+accessibility snapshot, repeats the
 scenario with fresh authority, compares the observable oracle result, signs
 both traces, and embeds them in an evidence capsule.
 
@@ -80,7 +82,9 @@ sova detonate browser website-target.json scenario.sova website-proof-output \
 bounded HTTPS GET with normal certificate validation, accepts no redirect,
 requires the exact token and final URL, and emits an expiring proof. The
 detonation command binds that proof to the exact target host and allowed origin,
-then requests fresh action-level approval in a human-operated terminal.
+then requests a fresh exact-batch approval in a human-operated terminal. Every
+action is still independently scope checked and consumes its own one-use token;
+an action omitted from the reviewed batch cannot be substituted later.
 
 The proof establishes only short-lived control of that web origin. It does not
 authorize sibling domains, third-party integrations, user accounts, destructive

@@ -475,6 +475,24 @@ class ApprovalChallenge:
 
 
 @dataclass(frozen=True, slots=True)
+class ApprovalBatchItem:
+    intent_digest: str
+    level: ApprovalLevel
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovalBatchChallenge:
+    """One human review bound to a closed set of exact action intents."""
+
+    id: str
+    authority_id: str
+    items: tuple[ApprovalBatchItem, ...]
+    exact_phrase: str
+    expires_at: datetime
+    nonce: str
+
+
+@dataclass(frozen=True, slots=True)
 class ApprovalToken:
     id: str
     challenge_id: str
@@ -503,22 +521,20 @@ class ApprovalToken:
         }
 
 
-class OutOfBandApprovalAuthority:
-    """Local reference control channel using an externally held HMAC key.
+class _SignedApprovalAuthority:
+    """Shared signer for explicit human approval channels.
 
-    Production integrations may replace this with a hardware-backed or remote
-    signer.  The HMAC proves channel-key possession, not that a person actually
-    read the displayed challenge.
+    The HMAC proves channel-key possession, not that a person actually read the
+    displayed challenge. Channel-specific subclasses state where review occurs.
     """
 
-    def __init__(self, key: bytes, *, channel: str = "out-of-band") -> None:
+    def __init__(self, key: bytes, *, channel: str) -> None:
         if len(key) < _MINIMUM_APPROVAL_KEY_BYTES:
             raise FormatError("SOVA-AUTH-CHANNEL-KEY", "approval channel key needs 32 bytes")
-        if channel != "out-of-band":
-            raise FormatError("SOVA-AUTH-CHANNEL", "reference approvals must be out-of-band")
         self._key = key
         self.channel = channel
         self._used: set[str] = set()
+        self._approved_batches: set[str] = set()
         self._lock = threading.Lock()
 
     def challenge(
@@ -591,6 +607,103 @@ class OutOfBandApprovalAuthority:
             signature=signature,
         )
 
+    def batch_challenge(
+        self,
+        authority: AuthorityEnvelope,
+        items: tuple[tuple[ActionIntent, ApprovalLevel], ...],
+        *,
+        ttl: timedelta = timedelta(minutes=5),
+        now: datetime | None = None,
+    ) -> ApprovalBatchChallenge:
+        """Bind one review phrase to every exact intent in a bounded run."""
+        if not items:
+            raise FormatError("SOVA-AUTH-APPROVAL-BATCH", "approval batch cannot be empty")
+        current = now or _utc_now()
+        batch_items = tuple(ApprovalBatchItem(intent.digest, level) for intent, level in items)
+        digest = sha256_digest(
+            canonical_json_bytes(
+                [
+                    {"intentDigest": item.intent_digest, "level": item.level.name.lower()}
+                    for item in batch_items
+                ]
+            )
+        )
+        nonce = secrets.token_urlsafe(18)
+        challenge_id = "sova:approval-batch:" + secrets.token_hex(16)
+        level = max(item.level for item in batch_items)
+        phrase = f"APPROVE {level.name} BATCH {digest[7:19]} {nonce[:8]}"
+        return ApprovalBatchChallenge(
+            challenge_id,
+            authority.id,
+            batch_items,
+            phrase,
+            current + ttl,
+            nonce,
+        )
+
+    def approve_batch(
+        self,
+        challenge: ApprovalBatchChallenge,
+        *,
+        approver: Principal,
+        exact_phrase: str,
+        reviewed_effects: bool,
+    ) -> tuple[ApprovalToken, ...]:
+        """Issue individually consumable tokens after one exact batch review."""
+        if approver.kind != PrincipalKind.HUMAN:
+            raise FormatError("SOVA-AUTH-SELF-APPROVAL", "agents and services cannot approve")
+        if exact_phrase != challenge.exact_phrase:
+            raise FormatError("SOVA-AUTH-APPROVAL-PHRASE", "approval phrase did not match")
+        if any(item.level == ApprovalLevel.DESTRUCTIVE for item in challenge.items) and not (
+            reviewed_effects
+        ):
+            raise FormatError(
+                "SOVA-AUTH-DESTRUCTIVE-REVIEW",
+                "destructive approval requires explicit effect review",
+            )
+        with self._lock:
+            if challenge.id in self._approved_batches:
+                raise FormatError(
+                    "SOVA-AUTH-APPROVAL-BATCH-REPLAY",
+                    "approval batch was already issued",
+                )
+            self._approved_batches.add(challenge.id)
+        tokens: list[ApprovalToken] = []
+        for index, item in enumerate(challenge.items):
+            token_id = "sova:approval-token:" + secrets.token_hex(16)
+            token_challenge_id = f"{challenge.id}:{index}"
+            unsigned = {
+                "id": token_id,
+                "challengeId": token_challenge_id,
+                "authorityId": challenge.authority_id,
+                "intentDigest": item.intent_digest,
+                "level": item.level.name.lower(),
+                "approver": asdict(approver),
+                "channel": self.channel,
+                "expiresAt": _timestamp(challenge.expires_at),
+                "nonce": challenge.nonce,
+                "reviewedEffects": reviewed_effects,
+            }
+            signature = base64.urlsafe_b64encode(
+                hmac.digest(self._key, canonical_json_bytes(unsigned), hashlib.sha256)
+            ).decode("ascii")
+            tokens.append(
+                ApprovalToken(
+                    id=token_id,
+                    challenge_id=token_challenge_id,
+                    authority_id=challenge.authority_id,
+                    intent_digest=item.intent_digest,
+                    level=item.level,
+                    approver=approver,
+                    channel=self.channel,
+                    expires_at=challenge.expires_at,
+                    nonce=challenge.nonce,
+                    reviewed_effects=reviewed_effects,
+                    signature=signature,
+                )
+            )
+        return tuple(tokens)
+
     def consume(
         self,
         token: ApprovalToken,
@@ -610,7 +723,11 @@ class OutOfBandApprovalAuthority:
         if token.authority_id != authority_id or token.intent_digest != intent_digest:
             reasons.append("approval-scope-mismatch")
         if token.approver.kind != PrincipalKind.HUMAN or token.channel != self.channel:
-            reasons.append("approval-not-human-out-of-band")
+            reasons.append(
+                "approval-not-human-out-of-band"
+                if self.channel == "out-of-band"
+                else "approval-not-human-interactive-terminal"
+            )
         if token.level < minimum_level:
             reasons.append("approval-level-insufficient")
         if (now or _utc_now()) >= token.expires_at:
@@ -623,6 +740,22 @@ class OutOfBandApprovalAuthority:
             if not reasons:
                 self._used.add(token.id)
         return not reasons, tuple(reasons)
+
+
+class OutOfBandApprovalAuthority(_SignedApprovalAuthority):
+    """Reference control channel using an externally held HMAC key."""
+
+    def __init__(self, key: bytes, *, channel: str = "out-of-band") -> None:
+        if channel != "out-of-band":
+            raise FormatError("SOVA-AUTH-CHANNEL", "reference approvals must be out-of-band")
+        super().__init__(key, channel=channel)
+
+
+class InteractiveTerminalApprovalAuthority(_SignedApprovalAuthority):
+    """Same-process terminal review; explicit, but not an out-of-band channel."""
+
+    def __init__(self, key: bytes) -> None:
+        super().__init__(key, channel="interactive-terminal")
 
 
 @dataclass(frozen=True, slots=True)
@@ -686,7 +819,7 @@ def _approval_level(intent: ActionIntent) -> ApprovalLevel | None:
 class AuthorizationKernel:
     """Compute and consume one fail-closed authorization decision."""
 
-    def __init__(self, approval_authority: OutOfBandApprovalAuthority | None = None) -> None:
+    def __init__(self, approval_authority: _SignedApprovalAuthority | None = None) -> None:
         self.approval_authority = approval_authority
 
     def decide(  # noqa: PLR0912, PLR0913 - trust inputs and checks stay explicit
@@ -832,6 +965,8 @@ class AuthorizationSession:
 
 __all__ = [
     "ActionIntent",
+    "ApprovalBatchChallenge",
+    "ApprovalBatchItem",
     "ApprovalChallenge",
     "ApprovalLevel",
     "ApprovalToken",
@@ -845,6 +980,7 @@ __all__ = [
     "ControlProofMethod",
     "EffectBudget",
     "EffectClass",
+    "InteractiveTerminalApprovalAuthority",
     "OutOfBandApprovalAuthority",
     "Principal",
     "PrincipalKind",
