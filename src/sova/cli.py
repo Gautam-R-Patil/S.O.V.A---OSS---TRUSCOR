@@ -57,9 +57,11 @@ from sova.forensics import (
     CausalLayer,
     CounterfactualTrial,
     assess_counterfactuals,
+    browser_counterfactual_from_mapping,
     reconstruct_events,
     reconstruct_trace,
     run_attribution_ground_truth_fixture,
+    run_browser_counterfactual_study,
 )
 from sova.formats import (
     PackageReader,
@@ -580,6 +582,17 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         "benchmark", help="run the safe deterministic attribution acceptance fixture"
     )
     benchmark_parser.set_defaults(handler=_forensics_benchmark)
+    browser_cf_parser = forensics_commands.add_parser(
+        "browser-counterfactual",
+        help="run repeated message-removal interventions on a controlled browser target",
+    )
+    browser_cf_parser.add_argument("manifest", type=_path)
+    browser_cf_parser.add_argument("study", type=_path)
+    browser_cf_parser.add_argument("destination", type=_path)
+    browser_cf_parser.add_argument("--control-proof", type=_path)
+    browser_cf_parser.add_argument("--package-runner", type=_path)
+    browser_cf_parser.add_argument("--browser-executable", type=_path)
+    browser_cf_parser.set_defaults(handler=_forensics_browser_counterfactual)
 
     evidence_parser = commands.add_parser(
         "evidence", help="build a bounded, watermarked self-assessment evidence bundle"
@@ -1845,6 +1858,40 @@ def _forensics_attribute(args: argparse.Namespace) -> int:
 def _forensics_benchmark(_args: argparse.Namespace) -> int:
     result = run_attribution_ground_truth_fixture()
     sys.stdout.buffer.write(canonical_json_bytes(result.to_mapping()) + b"\n")
+    return 0
+
+
+def _forensics_browser_counterfactual(args: argparse.Namespace) -> int:
+    _require_live_campaign_terminal()
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    study = browser_counterfactual_from_mapping(_load_object(args.study))
+    proof = (
+        control_proof_from_mapping(_load_object(args.control_proof))
+        if args.control_proof is not None
+        else None
+    )
+    package_runner, browser = _campaign_executables(args)
+    artifacts = run_browser_counterfactual_study(
+        target,
+        study,
+        args.destination,
+        profile=standard_profile(),
+        package_runner=package_runner,
+        browser_executable=browser,
+        approval_prompt=_live_campaign_prompt,
+        control_proof=proof,
+    )
+    sys.stdout.buffer.write(
+        canonical_json_bytes(
+            {
+                "status": artifacts.status,
+                "report": str(artifacts.report),
+                "capsule": str(artifacts.capsule),
+                "traces": [str(path) for path in artifacts.traces],
+            }
+        )
+        + b"\n"
+    )
     return 0
 
 

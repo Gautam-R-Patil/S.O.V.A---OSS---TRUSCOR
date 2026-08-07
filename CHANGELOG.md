@@ -14,6 +14,9 @@ have independent version ledgers.
 - Authorization-gated dynamic `sova check` execution for controlled browser
   targets, with non-offensive campaign enforcement, signed evidence,
   controlled reproduction, and explicit not-observed/inconclusive semantics.
+- Repeated real-browser counterfactual pairs that remove one declared message,
+  verify signed baseline/intervention/reproduction evidence, reject fingerprint
+  drift, and package uncertainty-aware attribution in a `.sova` capsule.
 - An authorization-gated `sova detonate owned-web-fixture` path that drives a
   real loopback website through pinned Playwright MCP and Chrome, records signed
   primary/reproduction traces, compares observable outcomes, and packages a

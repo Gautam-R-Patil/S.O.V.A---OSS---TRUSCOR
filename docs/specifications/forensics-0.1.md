@@ -47,6 +47,26 @@ Support requires at least three eligible trials and a lower bound above 0.5.
 This threshold is versioned engineering policy; no single rerun becomes causal
 proof and no output assigns legal or organizational blame.
 
+### Evidence-producing browser interventions
+
+`sova forensics browser-counterfactual TARGET STUDY OUTPUT` closes the gap
+between authored trial records and real execution for one deliberately narrow
+case. A strict study declares exactly one non-offensive baseline message
+sequence, an orchestration-layer `remove-message` intervention, and four to ten
+repetitions. Each repetition runs the intervention first, then the unchanged
+baseline, and freshly reproduces the baseline inside the same origin-restricted
+browser session. This ordering prevents a successful baseline from skipping
+the counterfactual attempt.
+
+Every pair requires proof of target control and a freshly reviewed exact action
+batch. SOVA compares recorded target, environment, code, dependency, registry,
+and model fingerprints; incomplete baselines, missing reproduction, sensor
+loss, or fingerprint drift make the trial ineligible. The output includes all
+signed traces, the reviewed trial records, uncertainty-aware attribution, and
+one offline-verifiable `.sova` capsule. Even a supported result is bounded to
+the declared target, sequence, intervention, oracle, and cohort; it is not
+universal causal proof.
+
 ## Validation boundary
 
 The repository includes deterministic known-ground-truth, plausible-cause,

@@ -1,0 +1,37 @@
+{
+  "artifactType": "sova.browser-counterfactual-study",
+  "schemaVersion": "0.1.0",
+  "id": "sova:browser-counterfactual:owned-example",
+  "title": "Owned browser sequence removal example",
+  "baselineCampaign": {
+    "artifactType": "sova.browser-campaign",
+    "schemaVersion": "0.1.0",
+    "id": "sova:browser-campaign:owned-counterfactual-baseline",
+    "title": "Owned exact two-message baseline",
+    "entryUrl": "http://127.0.0.1:8765/",
+    "interaction": {
+      "inputTarget": "#message",
+      "submitTarget": "#send"
+    },
+    "candidates": [
+      ["enable research mode", "blue owl"]
+    ],
+    "oracle": {
+      "kind": "field-contains",
+      "path": "$.text",
+      "contains": "SOVA_FIXTURE_TRIGGERED"
+    },
+    "budgets": {
+      "maxAttempts": 1,
+      "maxDurationSeconds": 120,
+      "maxActions": 8
+    },
+    "offensive": false
+  },
+  "intervention": {
+    "kind": "remove-message",
+    "messageIndex": 0,
+    "layer": "orchestration"
+  },
+  "repetitions": 4
+}

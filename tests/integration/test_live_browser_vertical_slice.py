@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Self
 import pytest
 
 from sova.capsule import build_capsule, capsule_manifest_template, scenario_template
+from sova.forensics import BrowserCounterfactualStudy, CausalLayer, run_browser_counterfactual_study
 from sova.formats import strict_json_loads
 from sova.live import (
     ControlFetchResult,
@@ -437,6 +438,45 @@ def test_optional_real_playwright_mcp_dynamic_check(tmp_path: Path) -> None:
         )
     assert result.status == "confirmed-behavior" and result.exit_code == 1
     assert TraceReader(result.traces[-1]).verify(require_signature=True).signature_valid
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    os.environ.get("SOVA_RUN_REAL_BROWSER") != "1",
+    reason="set SOVA_RUN_REAL_BROWSER=1 for the optional installed-browser lane",
+)
+def test_optional_real_playwright_mcp_counterfactual_study(tmp_path: Path) -> None:
+    with OwnedWebFixture() as fixture:
+        source = owned_web_campaign(fixture.url)
+        baseline = type(source)(
+            "sova:browser-cf:owned-live",
+            "Owned live sequence",
+            source.entry_url,
+            source.input_target,
+            source.submit_target,
+            (("enable research mode", "blue owl"),),
+            source.oracle_contains,
+            1,
+            120,
+        )
+        artifacts = run_browser_counterfactual_study(
+            owned_web_target(fixture.origin),
+            BrowserCounterfactualStudy(
+                "owned-live-removal",
+                "Owned live removal study",
+                baseline,
+                CausalLayer.ORCHESTRATION,
+                0,
+                4,
+            ),
+            tmp_path / "real-browser-counterfactual",
+            profile=standard_profile(),
+            package_runner=Path(r"C:\Program Files\nodejs\npx.cmd"),
+            browser_executable=Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+            approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
+        )
+    assert artifacts.status == "supported-under-declared-interventions"
+    assert verify_artifact(artifacts.capsule).state == VerificationState.VERIFIED
 
 
 @pytest.mark.integration

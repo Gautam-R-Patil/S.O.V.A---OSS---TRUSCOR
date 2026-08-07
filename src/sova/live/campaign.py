@@ -35,7 +35,7 @@ from sova.search import (
     TriggerDimension,
     TriggerFamilyMetric,
 )
-from sova.trace import TraceReader, generate_ed25519_keypair
+from sova.trace import Redactor, TraceReader, generate_ed25519_keypair
 
 if TYPE_CHECKING:
     from sova.safety import ControlProof
@@ -48,6 +48,23 @@ _MAX_SELECTOR_CHARS = 256
 _MAX_CAMPAIGN_ACTIONS = 256
 _MAX_DURATION_SECONDS = 1_800
 _OBSERVED_MARKERS = ("READY", "NO_TRIGGER", "MODE_ACCEPTED", "SOVA_FIXTURE_TRIGGERED")
+
+
+def _reject_sensitive_campaign_input(
+    candidates: tuple[tuple[str, ...], ...],
+    oracle: str,
+) -> None:
+    _, sensitive = Redactor(context_id="sova-live-campaign-input").redact(
+        {
+            "candidates": [list(candidate) for candidate in candidates],
+            "oracle": oracle,
+        }
+    )
+    if sensitive:
+        raise FormatError(
+            "SOVA-LIVE-CAMPAIGN-SENSITIVE-INPUT",
+            "campaign contains credential-shaped candidate or oracle material",
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +110,7 @@ class BrowserCampaign:
                 "SOVA-LIVE-CAMPAIGN-CANDIDATES",
                 "candidate messages are empty or exceed campaign limits",
             )
+        _reject_sensitive_campaign_input(self.candidates, self.oracle_contains)
         if not self.oracle_contains or len(self.oracle_contains) > _MAX_MESSAGE_CHARS:
             raise FormatError("SOVA-LIVE-CAMPAIGN-ORACLE", "oracle contains value is invalid")
         if not 1 <= self.max_attempts <= len(self.candidates):
@@ -415,6 +433,7 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
     browser_executable: Path,
     approval_prompt: ApprovalPrompt,
     control_proof: ControlProof | None = None,
+    package_cache: Path | None = None,
 ) -> BrowserCampaignArtifacts:
     """Search a declared candidate set, reproduce success, and package proof."""
     origins, host, proof, control_status = verified_browser_control(target, control_proof)
@@ -475,6 +494,7 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
         workspace=destination,
         browser_executable=browser_executable,
         allowed_origins=origins,
+        package_cache=package_cache,
     )
     signing_key = generate_ed25519_keypair()
     code_digest = sha256_digest(

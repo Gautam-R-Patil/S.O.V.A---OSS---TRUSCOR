@@ -8,6 +8,12 @@ from sova.forensics.benchmark import (
     evaluate_attribution_benchmark,
     passive_frequency_ranking,
 )
+from sova.forensics.browser_counterfactual import (
+    BrowserCounterfactualArtifacts,
+    BrowserCounterfactualStudy,
+    browser_counterfactual_from_mapping,
+    run_browser_counterfactual_study,
+)
 from sova.forensics.fixtures import run_attribution_ground_truth_fixture
 from sova.forensics.model import (
     AttributionReport,
@@ -25,15 +31,19 @@ __all__ = [
     "AttributionBenchmarkResult",
     "AttributionReport",
     "AttributionState",
+    "BrowserCounterfactualArtifacts",
+    "BrowserCounterfactualStudy",
     "CausalLayer",
     "CounterfactualTrial",
     "HypothesisAssessment",
     "ReconstructionReport",
     "TimelineEntry",
     "assess_counterfactuals",
+    "browser_counterfactual_from_mapping",
     "evaluate_attribution_benchmark",
     "passive_frequency_ranking",
     "reconstruct_events",
     "reconstruct_trace",
     "run_attribution_ground_truth_fixture",
+    "run_browser_counterfactual_study",
 ]

@@ -27,6 +27,7 @@ def playwright_stdio_spec(
     workspace: Path,
     browser_executable: Path,
     allowed_origins: tuple[str, ...] = (),
+    package_cache: Path | None = None,
 ) -> StdioServerSpec:
     """Create a workspace-local isolated Playwright MCP launch.
 
@@ -40,7 +41,11 @@ def playwright_stdio_spec(
     target before dispatch and verifies the final observed page separately.
     """
     workspace = workspace.resolve()
-    npm_cache = workspace / ".cache" / "npm-playwright"
+    npm_cache = (
+        workspace / ".cache" / "npm-playwright"
+        if package_cache is None
+        else package_cache.resolve()
+    )
     browser_cache = workspace / ".cache" / "playwright-browsers"
     local_app_data = workspace / ".cache" / "playwright-local-app-data"
     output = workspace / ".sova" / "playwright-output"
