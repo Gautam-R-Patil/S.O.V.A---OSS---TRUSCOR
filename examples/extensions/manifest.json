@@ -1,0 +1,17 @@
+{
+  "apiVersion": "0.1",
+  "artifactType": "sova.extension-manifest",
+  "capabilities": [
+    "oracle.fixture"
+  ],
+  "distributionDigest": null,
+  "identifier": "example.safe-oracle",
+  "isolation": "subprocess",
+  "kind": "oracle",
+  "schemaVersion": "0.1.0",
+  "sideEffects": [
+    "reads.request"
+  ],
+  "trust": "untrusted",
+  "version": "1.0.0"
+}

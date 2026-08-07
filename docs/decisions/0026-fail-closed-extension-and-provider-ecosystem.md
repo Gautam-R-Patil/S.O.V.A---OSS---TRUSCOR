@@ -44,3 +44,14 @@ The compatibility kit proves a SOVA-authored external-process fixture and a
 real documented scenario format. It is not independent third-party adoption.
 Real-provider transferability remains a research HOLD until authorized repeated
 trials control model, prompt, tools, environment, and budget.
+
+## Operator-workflow amendment (2026-08-08)
+
+The extension contract is now reachable through `discover`, `prepare`, and
+`run` CLI operations. Preparation creates an exact-field, absolute-path,
+digest-pinned local launch record without code execution. Run requires an
+interactive human to approve the entire digest-bound launch, rechecks all pins,
+then captures a signed trace and redacted report. Protocol responses bind the
+manifest and operation. This makes execution reviewable and reproducible on the
+same machine; it does not convert an ordinary subprocess into containment,
+verify publisher identity, or make declared capabilities truthful.

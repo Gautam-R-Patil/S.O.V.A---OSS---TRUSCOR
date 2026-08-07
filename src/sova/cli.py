@@ -53,6 +53,14 @@ from sova.evidence import (
     prepare_disclosure_package,
     render_evidence_report,
 )
+from sova.extensions import (
+    ExtensionApproval,
+    ExtensionManifest,
+    discover_extension_metadata,
+    extension_launch_from_mapping,
+    prepare_extension_launch,
+    run_extension_workflow,
+)
 from sova.forensics import (
     CausalLayer,
     CounterfactualTrial,
@@ -864,6 +872,40 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     ctf_build.add_argument("destination", type=_path)
     ctf_build.set_defaults(handler=_ctf_build)
 
+    extension_parser = commands.add_parser(
+        "extension",
+        help="inspect metadata or run one digest-pinned local subprocess extension",
+    )
+    extension_commands = extension_parser.add_subparsers(dest="extension_command")
+    extension_discover = extension_commands.add_parser(
+        "discover",
+        help="list installed PyPA extension metadata without importing extension code",
+    )
+    extension_discover.set_defaults(handler=_extension_discover)
+    extension_prepare = extension_commands.add_parser(
+        "prepare",
+        help="create a digest-pinned launch document without executing extension code",
+    )
+    extension_prepare.add_argument("manifest", type=_path)
+    extension_prepare.add_argument("output", type=_path)
+    extension_prepare.add_argument(
+        "--operation", choices=("describe", "self-test", "invoke", "conform"), default="conform"
+    )
+    extension_prepare.add_argument("--executable", type=_path, required=True)
+    extension_prepare.add_argument("--working-directory", type=_path, required=True)
+    extension_prepare.add_argument("--argument", action="append", default=[])
+    extension_prepare.add_argument("--payload", type=_path)
+    extension_prepare.add_argument("--timeout", type=int, default=30)
+    extension_prepare.set_defaults(handler=_extension_prepare)
+    extension_run = extension_commands.add_parser(
+        "run",
+        help="interactively run one exact extension launch and capture signed evidence",
+    )
+    extension_run.add_argument("manifest", type=_path)
+    extension_run.add_argument("launch", type=_path)
+    extension_run.add_argument("destination", type=_path)
+    extension_run.set_defaults(handler=_extension_run)
+
     mcp_parser = commands.add_parser(
         "mcp", help="run or administer the local account-free SOVA MCP server"
     )
@@ -1606,6 +1648,62 @@ def _ctf_build(args: argparse.Namespace) -> int:
     )
     sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
     return 0
+
+
+def _extension_discover(_args: argparse.Namespace) -> int:
+    document = {
+        "artifactType": "sova.extension-discovery",
+        "schemaVersion": "0.1.0",
+        "extensions": [asdict(item) for item in discover_extension_metadata()],
+        "importsExtensionCode": False,
+        "establishesTrust": False,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(document) + b"\n")
+    return 0
+
+
+def _extension_approval_prompt(challenge: ExtensionApproval) -> str:
+    sys.stderr.write(json.dumps(challenge.summary, indent=2) + "\n")
+    sys.stderr.write(f"Type exactly: {challenge.exact_phrase}\n")
+    return input("approval> ")
+
+
+def _extension_prepare(args: argparse.Namespace) -> int:
+    if args.output.exists():
+        raise FormatError("SOVA-EXTENSION-OUTPUT", "launch output already exists")
+    manifest = ExtensionManifest.from_mapping(_load_object(args.manifest))
+    payload = {} if args.payload is None else _load_object(args.payload)
+    launch = prepare_extension_launch(
+        manifest,
+        operation=args.operation,
+        executable=args.executable,
+        arguments=tuple(args.argument),
+        working_directory=args.working_directory,
+        timeout_seconds=args.timeout,
+        payload=payload,
+    )
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_bytes(canonical_json_bytes(launch.to_mapping()) + b"\n")
+    sys.stdout.write(f"{launch.digest}  {args.output}\n")
+    return 0
+
+
+def _extension_run(args: argparse.Namespace) -> int:
+    if not sys.stdin.isatty():
+        raise FormatError(
+            "SOVA-EXTENSION-INTERACTIVE",
+            "extension execution requires a human-operated interactive terminal",
+        )
+    manifest = ExtensionManifest.from_mapping(_load_object(args.manifest))
+    launch = extension_launch_from_mapping(_load_object(args.launch))
+    artifacts = run_extension_workflow(
+        manifest,
+        launch,
+        args.destination,
+        approval_prompt=_extension_approval_prompt,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(artifacts.to_mapping()) + b"\n")
+    return 0 if artifacts.status == "pass" else 3
 
 
 def _compare(args: argparse.Namespace) -> int:

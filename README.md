@@ -425,8 +425,9 @@ The pre-alpha now includes:
   expiring, single-use human approval through a separate local control channel;
 - a digest-pinned MCP manifest and `sova check --self` drift check, with
   checksum and GitHub/Sigstore provenance generation for release candidates;
-- eight typed extension kinds, metadata-only PyPA discovery, and a bounded
-  subprocess JSONL compatibility path that is explicitly not a security sandbox;
+- eight typed extension kinds, metadata-only PyPA discovery, digest-pinned
+  interactive subprocess execution, signed evidence, and a bounded JSONL
+  compatibility path that is explicitly not a security sandbox;
 - credential-late OpenAI, Anthropic, OpenRouter, and loopback Ollama adapters,
   explicit role routing and model-swap envelopes, and no-network fake transports;
 - eight target-manifest kinds and a provenance-preserving Inspect AI Sample
@@ -591,6 +592,12 @@ sova arena agent-run ./agent-arena.json ./agent-arena-output --allow-provider-ca
 sova leaderboard build ./leaderboard.json ./leaderboard-output
 sova ctf build ./ctf.json ./ctf-catalog.json
 sova replay clip ./clip.json ./replay.y4m
+
+# Discover without importing code, prepare an exact local launch, then run it
+# only after reviewing and typing the digest-bound approval phrase
+sova extension discover
+sova extension prepare ./manifest.json ./launch.json --executable /absolute/python --working-directory /absolute/example --argument /absolute/example/safe_oracle.py
+sova extension run ./manifest.json ./launch.json ./extension-output
 
 # Verify a signed, nonce-bound probe response offline
 sova probe verify ./response.json --nonce REQUEST_NONCE --scope manifest --key-id sha256:...
@@ -815,7 +822,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `sova trace`, `diff`, `sentinel`, `ci`, and `self-check` | Deterministic local recorder, three-axis drift, local monitoring, reusable CI, SARIF/annotations, and protected-baseline integrity checks implemented in [ADR-0023](./docs/decisions/0023-multi-axis-behavior-drift-and-local-regression.md) |
 | Registry, `sync`, adapters, and `contribute` | Offline content-addressed registry, signed index, trust pinning, pull-only mirror cache, adapters, and local contribution staging implemented in [ADR-0024](./docs/decisions/0024-offline-content-addressed-community-registry.md) |
 | Local MCP | MCP `2025-11-25` stdio, safe tools, three exact-gated tools, out-of-band human approval, manifest pin, and self-check implemented in [ADR-0025](./docs/decisions/0025-local-mcp-out-of-band-authorization.md) |
-| Extension SDK, providers, targets, interoperability | Experimental fail-closed contracts and no-network compatibility kit implemented in [ADR-0026](./docs/decisions/0026-fail-closed-extension-and-provider-ecosystem.md); independent adoption and real-provider transferability remain unproven |
+| Extension SDK, providers, targets, interoperability | Experimental fail-closed contracts, import-free discovery, machine-local digest-pinned preparation, exact human-approved subprocess execution with signed evidence, and no-network compatibility kit implemented in [ADR-0026](./docs/decisions/0026-fail-closed-extension-and-provider-ecosystem.md); host execution is not a sandbox, and independent adoption plus real-provider transferability remain unproven |
 | Probe, Arena, leaderboard, CTF, replay media | Deterministic standard-profile Arena plus custom provider-capable multi-round challenger/defender/advisory-judge Arena implemented with signed observable evidence; arbitrary untrusted-code containment, standard real-model comparison, and public comparative results remain unproven |
 | Research/publication programme | Private source, opportunity, invention, and publication-readiness ledgers maintained; public novelty and submission remain human/external gates |
 | Onboarding and adoption | Account-free `init`, local `doctor`, reviewed data removal, installation/first-value/air-gap guides, and user pathways implemented |

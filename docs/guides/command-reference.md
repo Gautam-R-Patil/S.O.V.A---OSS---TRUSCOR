@@ -15,6 +15,7 @@ human text or HTML artifact is the command's purpose.
 | Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics browser-counterfactual`, `forensics benchmark`, `evidence`, `case build`, `adjudicate`, `compose` |
 | Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse agent-run`, `rehearse export`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `ci`, `self-check` |
 | Registry/community | `registry verify`, `sync`, `contribute`, `probe verify`, `arena run`, `arena agent-run`, `leaderboard build`, `ctf build` |
+| Extensions | `extension discover`, `extension prepare`, `extension run` |
 | Local MCP | `mcp manifest`, `mcp init-control`, `mcp approve`, `mcp serve` |
 | Release and compatibility | `release sbom`, `release checksums`, `release verify-checksums`, `conformance export`, `conformance verify` |
 | Authorized targets | `target template`, `target validate`, `target plan`, `target fixture`, `target challenge`, `target prove`, `detonate owned-web-fixture`, `detonate owned-software-fixture`, `detonate browser`, `detonate software`, `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser` |
@@ -63,3 +64,11 @@ disposable workspace; all service effects remain inert substitutes.
 exact complete signed trace, then creates a local forensic, replay, evidence,
 monitoring, and contribution-preview workspace. It performs no target action,
 network request, upload, or automatic disclosure approval.
+
+`sova extension discover` reads entry-point metadata without importing plugin
+code. `extension prepare` creates a local launch document pinned to absolute
+executable and regular-file hashes without execution. `extension run` requires
+an exact interactive approval over the full launch, rechecks every pin, uses no
+shell, and records signed evidence. It executes an ordinary process with the
+operator's host authority; it is not a security sandbox. See the
+[safe extension example](../../examples/extensions/README.md).

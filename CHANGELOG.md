@@ -162,6 +162,10 @@ have independent version ledgers.
   subprocess conformance runner, provider-neutral OpenAI/Anthropic/OpenRouter/
   Ollama adapters with injected no-network tests, eight target declarations,
   and an inert provenance-preserving Inspect AI bridge.
+- A human-operated extension workflow with strict manifests, absolute paths,
+  executable and script digest pins, post-approval drift checks, protocol-bound
+  responses, capture-time redaction, signed traces, and explicit non-sandbox
+  limitations, plus an executable safe example.
 - Signed nonce-bound probe evidence, a deterministic trace-per-attempt local
   Arena, signature-pinned static leaderboard, inert CTF catalog, and bounded
   redaction-first replay clip renderer with strict public CLI documents.
@@ -176,7 +180,7 @@ have independent version ledgers.
   observable execution, trace capture, capsule packaging, controlled
   reproduction, comparison, and offline verification without contacting a
   live target.
-- A machine-audited 79-command CLI surface whose registered handlers must all
+- A machine-audited 83-command CLI surface whose registered handlers must all
   execute in mandatory offline CI.
 
 ### Fixed

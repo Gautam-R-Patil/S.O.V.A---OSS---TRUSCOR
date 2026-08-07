@@ -93,20 +93,55 @@ class ExtensionManifest:
 
     @classmethod
     def from_mapping(cls, value: dict[str, Any]) -> ExtensionManifest:
+        expected_fields = {
+            "artifactType",
+            "schemaVersion",
+            "identifier",
+            "version",
+            "apiVersion",
+            "kind",
+            "capabilities",
+            "sideEffects",
+            "isolation",
+            "trust",
+            "distributionDigest",
+        }
+        if set(value) != expected_fields:
+            raise FormatError(
+                "SOVA-EXTENSION-MANIFEST",
+                "extension manifest is malformed: fields are invalid",
+            )
+        if (
+            value.get("artifactType") != "sova.extension-manifest"
+            or value.get("schemaVersion") != "0.1.0"
+        ):
+            raise FormatError(
+                "SOVA-EXTENSION-MANIFEST", "extension manifest version is unsupported"
+            )
+        capabilities = value["capabilities"]
+        side_effects = value["sideEffects"]
+        if not isinstance(capabilities, list) or not isinstance(side_effects, list):
+            raise FormatError(
+                "SOVA-EXTENSION-MANIFEST",
+                "extension capabilities and side effects must be arrays",
+            )
+        if any(not isinstance(item, str) for item in (*capabilities, *side_effects)):
+            raise FormatError(
+                "SOVA-EXTENSION-MANIFEST",
+                "extension declarations must contain strings",
+            )
         try:
             return cls(
-                identifier=str(value["identifier"]),
-                version=str(value["version"]),
-                api_version=str(value["apiVersion"]),
-                kind=ExtensionKind(str(value["kind"])),
-                capabilities=tuple(str(item) for item in value.get("capabilities", [])),
-                side_effects=tuple(str(item) for item in value.get("sideEffects", [])),
-                isolation=str(value.get("isolation", "subprocess")),
-                trust=str(value.get("trust", "untrusted")),
+                identifier=value["identifier"],
+                version=value["version"],
+                api_version=value["apiVersion"],
+                kind=ExtensionKind(value["kind"]),
+                capabilities=tuple(capabilities),
+                side_effects=tuple(side_effects),
+                isolation=value["isolation"],
+                trust=value["trust"],
                 distribution_digest=(
-                    None
-                    if value.get("distributionDigest") is None
-                    else str(value["distributionDigest"])
+                    None if value["distributionDigest"] is None else value["distributionDigest"]
                 ),
             )
         except (KeyError, TypeError, ValueError) as error:

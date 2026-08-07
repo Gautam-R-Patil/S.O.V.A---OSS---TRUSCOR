@@ -55,6 +55,14 @@ class ExtensionRunResult:
     response: dict[str, Any]
     stderr_truncated: bool
 
+    def to_mapping(self) -> dict[str, Any]:
+        return {
+            "manifestDigest": self.manifest_digest,
+            "operation": self.operation,
+            "response": self.response,
+            "stderrTruncated": self.stderr_truncated,
+        }
+
 
 class SubprocessExtensionRunner:
     """Run one explicitly allowed executable; this is isolation, not a security sandbox."""
@@ -177,6 +185,15 @@ class SubprocessExtensionRunner:
             raise FormatError("SOVA-EXTENSION-PROTOCOL", "extension response must be an object")
         if response.get("manifestDigest") != self.manifest.digest:
             raise FormatError("SOVA-EXTENSION-SUBSTITUTION", "extension manifest binding failed")
+        if (
+            response.get("protocol") != "sova.extension-jsonl/0.1"
+            or response.get("operation") != operation
+            or not isinstance(response.get("accepted"), bool)
+        ):
+            raise FormatError(
+                "SOVA-EXTENSION-PROTOCOL",
+                "extension response protocol, operation, or acceptance is invalid",
+            )
         return ExtensionRunResult(
             self.manifest.digest,
             operation,

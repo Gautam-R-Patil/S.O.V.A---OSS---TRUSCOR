@@ -16,6 +16,39 @@ allowlisted subprocess with a sanitized environment, no shell, a maximum
 60-second call, and a 2 MiB response. This is **not** a security sandbox.
 Untrusted or verified-publisher code cannot select in-process isolation.
 
+### Operator workflow
+
+The public workflow has three distinct operations:
+
+1. `sova extension discover` reads installed PyPA entry-point metadata without
+   importing extension code and explicitly establishes no trust.
+2. `sova extension prepare` parses an exact-field manifest, resolves an
+   absolute executable and working directory, hashes the executable, hashes
+   every command argument that resolves to an existing regular file, rejects
+   symbolic files and inline interpreter code, and writes a machine-local
+   `sova.extension-launch` document without starting a process.
+3. `sova extension run` requires a human-operated terminal, displays the
+   complete manifest, command, payload, resolved files, hashes, effects, and
+   non-sandbox warning, and accepts only the exact digest-derived phrase. It
+   rechecks every file after approval and immediately before process creation.
+
+Launch documents are deliberately machine-local. Absolute paths and exact
+SHA-256 pins prevent PATH or current-directory substitution; they do not make
+the selected code trustworthy. A response must bind the protocol, manifest
+digest, requested operation, and boolean acceptance. Credential-shaped request
+payloads are rejected, and credential-shaped response fields are redacted
+before signed evidence and the local report are written.
+
+`conform` performs `describe` and `self-test` in separate fresh processes. A
+successful run produces a DSSE-compatible Ed25519-signed `.sova-trace` and a
+canonical report. The signature proves only integrity under the included-key
+verification model. Manifest capabilities and side effects remain publisher
+assertions; the subprocess receives no SOVA authorization, target authority,
+or inherited approval.
+
+The safe worked example is in
+[`examples/extensions`](../../examples/extensions/README.md).
+
 ## Providers
 
 The common observable envelope supports messages, model, temperature, output
@@ -65,7 +98,8 @@ Upstream format: [Inspect sample datasets](https://inspect.aisi.org.uk/datasets.
 
 ## Research state
 
-The no-network test lane validates adapters with injected transports. It does
+The no-network test lane validates adapters with injected transports and runs
+the external-process operator workflow against a real local process. It does
 not establish provider equivalence or vulnerability transfer. P5 remains HOLD
 until authorized real-model trials run identical artifacts across multiple
 providers with controlled tools, prompts, environments, budgets, repeated
