@@ -19,6 +19,14 @@ from sova.providers.core import (
     compare_model_results,
     run_model_swap,
 )
+from sova.providers.runtime import (
+    ProviderModelResponse,
+    ProviderRoleModel,
+    ProviderRoute,
+    ProviderRuntimeConfig,
+    provider_model_router,
+    provider_runtime_from_mapping,
+)
 
 __all__ = [
     "AnthropicAdapter",
@@ -33,8 +41,14 @@ __all__ = [
     "OpenRouterAdapter",
     "ProviderAdapter",
     "ProviderError",
+    "ProviderModelResponse",
+    "ProviderRoleModel",
     "ProviderRoleRouter",
+    "ProviderRoute",
+    "ProviderRuntimeConfig",
     "UrllibTransport",
     "compare_model_results",
+    "provider_model_router",
+    "provider_runtime_from_mapping",
     "run_model_swap",
 ]

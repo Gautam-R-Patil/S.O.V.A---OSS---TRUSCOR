@@ -1,3 +1,5 @@
+<!-- status: experiment -->
+
 # Live browser validation - 2026-08-07
 
 ## Result

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 from dataclasses import asdict
@@ -73,6 +74,7 @@ from sova.live import (
     collect_website_control_proof,
     control_proof_from_mapping,
     create_website_control_challenge,
+    run_agent_browser_campaign,
     run_browser_campaign,
     run_live_browser_assessment,
     run_owned_web_campaign,
@@ -99,6 +101,7 @@ from sova.monitoring import (
     verify_integrity_manifest,
 )
 from sova.onboarding import delete_instance_data, diagnose_instance, initialize_instance
+from sova.providers import provider_model_router, provider_runtime_from_mapping
 from sova.registry import prepare_contribution, sync_registry, verify_registry
 from sova.rehearsal import (
     export_approved_changes,
@@ -523,6 +526,26 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     hunt_browser.add_argument("--package-runner", type=_path)
     hunt_browser.add_argument("--browser-executable", type=_path)
     hunt_browser.set_defaults(handler=_hunt_browser)
+    hunt_agent_browser = hunt_commands.add_parser(
+        "agent-browser",
+        help=(
+            "use isolated provider roles to propose a bounded campaign, then require "
+            "exact human review before running it on an authorized website"
+        ),
+    )
+    hunt_agent_browser.add_argument("manifest", type=_path)
+    hunt_agent_browser.add_argument("campaign", type=_path)
+    hunt_agent_browser.add_argument("provider_runtime", type=_path)
+    hunt_agent_browser.add_argument("destination", type=_path)
+    hunt_agent_browser.add_argument("--control-proof", type=_path)
+    hunt_agent_browser.add_argument("--package-runner", type=_path)
+    hunt_agent_browser.add_argument("--browser-executable", type=_path)
+    hunt_agent_browser.add_argument(
+        "--allow-provider-calls",
+        action="store_true",
+        help="explicitly permit configured model-provider calls, which may incur cost",
+    )
+    hunt_agent_browser.set_defaults(handler=_hunt_agent_browser)
 
     hunt_demo_parser = commands.add_parser(
         "hunt-demo",
@@ -1159,6 +1182,45 @@ def _hunt_browser(args: argparse.Namespace) -> int:
         control_proof=proof,
     )
     sys.stdout.buffer.write(canonical_json_bytes(_campaign_output(artifacts)) + b"\n")
+    return 0 if artifacts.status == "pass" else 2
+
+
+def _hunt_agent_browser(args: argparse.Namespace) -> int:
+    if not args.allow_provider_calls:
+        raise FormatError(
+            "SOVA-PROVIDER-CALLS-NOT-ALLOWED",
+            "agent browser planning requires the explicit --allow-provider-calls flag",
+        )
+    _require_live_campaign_terminal()
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    campaign = browser_campaign_from_mapping(_load_object(args.campaign))
+    runtime = provider_runtime_from_mapping(_load_object(args.provider_runtime))
+    proof = (
+        control_proof_from_mapping(_load_object(args.control_proof))
+        if args.control_proof is not None
+        else None
+    )
+    package_runner, browser = _campaign_executables(args)
+    artifacts = run_agent_browser_campaign(
+        target,
+        campaign,
+        args.destination,
+        router=provider_model_router(runtime, secret_resolver=os.getenv),
+        max_model_turns=runtime.max_model_turns,
+        max_total_tokens=runtime.max_total_tokens,
+        package_runner=package_runner,
+        browser_executable=browser,
+        approval_prompt=_live_campaign_prompt,
+        control_proof=proof,
+    )
+    output = _campaign_output(artifacts.browser)
+    output.update(
+        {
+            "agentReport": str(artifacts.report),
+            "agentOrchestrationTrace": str(artifacts.orchestration_trace),
+        }
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
     return 0 if artifacts.status == "pass" else 2
 
 

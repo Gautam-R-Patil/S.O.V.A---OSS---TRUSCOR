@@ -143,6 +143,11 @@ class ModelRequest:
             raise ProviderError("SOVA-PROVIDER-TEMPERATURE", "temperature is outside 0..2")
         if not 1 <= self.max_output_tokens <= _MAX_OUTPUT_TOKENS:
             raise ProviderError("SOVA-PROVIDER-TOKENS", "output token budget is invalid")
+        if not 0 < self.timeout_seconds <= _MAX_TIMEOUT_SECONDS:
+            raise ProviderError(
+                "SOVA-PROVIDER-TIMEOUT",
+                "provider timeout must be within 60 seconds",
+            )
         for message in self.messages:
             if set(message) != {"role", "content"} or message["role"] not in {
                 "system",

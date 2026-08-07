@@ -25,6 +25,10 @@ have independent version ledgers.
   candidate set, records snapshot/console/network sensors, detects observable
   near misses, performs fresh controlled reproduction, and emits signed traces
   plus an offline-verifiable discovery capsule.
+- A provider-assisted `sova hunt agent-browser` path with isolated recon,
+  explorer, strategist, attacker, and advisory judge roles; strict JSON and
+  model budgets; redacted role records; explicit provider-call permission; and
+  unchanged proof-of-control plus exact browser-action approval boundaries.
 - Buildable `sova-oss` Python package and typed, tested `sova` command-line interface.
 - A fail-visible dependency-advisory register and source guard for the current
   `cryptography` PKCS#7 advisory, with an automatic removal condition when a

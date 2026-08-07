@@ -22,6 +22,7 @@ from sova.executors import (
     SideEffect,
 )
 from sova.formats.errors import FormatError
+from sova.live.startup import start_stdio_client
 from sova.mcp import (
     CapabilityExecutionBroker,
     MCPExecutorAdapter,
@@ -122,6 +123,41 @@ def test_stdio_client_reports_server_corruption_after_restart_boundary(tmp_path:
     with StdioMCPClient(spec) as client, pytest.raises(FormatError) as error:
         client.list_tools()
     assert error.value.issue.code == "SOVA-FORMAT-INVALID-JSON"
+
+
+def test_stdio_startup_retries_only_one_pre_action_timeout(tmp_path: Path) -> None:
+    spec = StdioServerSpec(
+        "fixture",
+        ("fixture",),
+        tmp_path,
+        {},
+        "0.1.0",
+        "fixture",
+        "Apache-2.0",
+    )
+    client = object()
+    calls = 0
+
+    def transient(_spec: StdioServerSpec) -> object:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise FormatError("SOVA-MCP-TIMEOUT", "synthetic startup timeout")
+        return client
+
+    assert start_stdio_client(spec, transient) is client
+    assert calls == 2
+
+    calls = 0
+
+    def malformed(_spec: StdioServerSpec) -> object:
+        nonlocal calls
+        calls += 1
+        raise FormatError("SOVA-MCP-READ", "synthetic protocol failure")
+
+    with pytest.raises(FormatError, match="protocol failure"):
+        start_stdio_client(spec, malformed)
+    assert calls == 1
 
 
 def test_playwright_adapter_discovers_subset_normalizes_and_post_observes(
@@ -243,6 +279,7 @@ def test_pinned_open_source_launch_specs_are_fail_closed(tmp_path: Path) -> None
     assert "--isolated" in playwright.argv
     assert "--headless" in playwright.argv
     assert "--block-service-workers" in playwright.argv
+    assert playwright.startup_timeout_seconds == 30
     assert playwright.environment["PLAYWRIGHT_BROWSERS_PATH"].startswith(str(tmp_path))
 
     windows = windows_mcp_stdio_spec(

@@ -90,6 +90,7 @@ def playwright_stdio_spec(
         PLAYWRIGHT_MCP_RECEIPT.source,
         PLAYWRIGHT_MCP_RECEIPT.license,
         PLAYWRIGHT_MCP_RECEIPT.package_digest,
+        startup_timeout_seconds=30.0,
     )
 
 

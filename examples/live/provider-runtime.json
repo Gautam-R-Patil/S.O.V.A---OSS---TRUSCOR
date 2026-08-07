@@ -1,0 +1,45 @@
+{
+  "artifactType": "sova.provider-runtime",
+  "schemaVersion": "0.1.0",
+  "routes": {
+    "recon": {
+      "provider": "openai",
+      "model": "replace-with-authorized-model",
+      "temperature": "0.0",
+      "maxOutputTokens": 1024,
+      "timeoutSeconds": "30.0"
+    },
+    "explorer": {
+      "provider": "openai",
+      "model": "replace-with-authorized-model",
+      "temperature": "0.0",
+      "maxOutputTokens": 1024,
+      "timeoutSeconds": "30.0"
+    },
+    "strategist": {
+      "provider": "openai",
+      "model": "replace-with-authorized-model",
+      "temperature": "0.0",
+      "maxOutputTokens": 1024,
+      "timeoutSeconds": "30.0"
+    },
+    "attacker": {
+      "provider": "openai",
+      "model": "replace-with-authorized-model",
+      "temperature": "0.0",
+      "maxOutputTokens": 2048,
+      "timeoutSeconds": "30.0"
+    },
+    "judge": {
+      "provider": "openai",
+      "model": "replace-with-authorized-model",
+      "temperature": "0.0",
+      "maxOutputTokens": 1024,
+      "timeoutSeconds": "30.0"
+    }
+  },
+  "budgets": {
+    "maxModelTurns": 5,
+    "maxTotalTokens": 20000
+  }
+}

@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Authorization-gated live assessment workflows."""
 
+from sova.live.agent_campaign import (
+    AgentBrowserCampaignArtifacts,
+    run_agent_browser_campaign,
+)
 from sova.live.browser import (
     LiveBrowserArtifacts,
     build_owned_web_capsule,
@@ -28,6 +32,7 @@ from sova.live.control import (
 from sova.live.fixture_web import OwnedWebFixture
 
 __all__ = [
+    "AgentBrowserCampaignArtifacts",
     "BrowserCampaign",
     "BrowserCampaignArtifacts",
     "ControlFetchResult",
@@ -43,6 +48,7 @@ __all__ = [
     "create_website_control_challenge",
     "owned_web_campaign",
     "owned_web_target",
+    "run_agent_browser_campaign",
     "run_browser_campaign",
     "run_live_browser_assessment",
     "run_owned_web_campaign",

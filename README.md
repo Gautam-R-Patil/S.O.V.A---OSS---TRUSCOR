@@ -624,6 +624,12 @@ sova hunt owned-web-fixture ./live-browser-hunt
 sova hunt browser ./website-target.json ./browser-campaign.json ./website-hunt \
   --control-proof ./website-proof.json
 
+# Optionally let tool-isolated model roles propose the bounded candidate set.
+# Provider calls and the resulting exact browser-action batch are authorized separately.
+sova hunt agent-browser ./website-target.json ./browser-campaign.json \
+  ./provider-runtime.json ./website-agent-hunt \
+  --control-proof ./website-proof.json --allow-provider-calls
+
 # Live offensive MCP operations require a separately issued approval
 sova mcp init-control ./control.key
 
@@ -780,7 +786,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | SOVA Runtime | Provider-neutral isolated roles, standard/custom profiles, evidence firewall, local minimized experience, opaque sessions, and verified executor fallback implemented in [ADR-0014](./docs/decisions/0014-evidence-firewalled-runtime.md) |
 | `sova check` | Bundled bounded synthetic target and honest confirmed/inconclusive exit states implemented in [ADR-0015](./docs/decisions/0015-bounded-check-and-no-melra-proof.md); general live-target check orchestration remains in progress |
 | `sova detonate` | Real Playwright/Chrome execution, signed trace, evidence capsule, inert playback compatibility, and controlled reproduction pass on the self-owned loopback fixture; operator-owned external HTTPS sites have a well-known control-proof and exact-approval path, while native software remains in progress |
-| `sova hunt` | Bounded operator-authored candidate search executes in real Playwright/Chrome, records snapshot/console/network observations, detects near misses, reproduces the winning recipe under fresh approval, and emits signed traces plus an offline-verifiable discovery capsule; model-assisted candidate generation remains in progress |
+| `sova hunt` | Bounded operator-authored or provider-assisted candidate search executes in real Playwright/Chrome, records snapshot/console/network observations, detects near misses, reproduces the winning recipe under fresh approval, and emits signed traces plus an offline-verifiable discovery capsule; deterministic tests verify isolated roles, while a real external-provider acceptance run remains optional and unclaimed |
 | MELRA adapter | Public `0.3.0-alpha.0` boundary reviewed; adapter and conformance remain Topic 13 |
 | Sleeper demonstration | Implemented with named narrow baselines, two-dimensional search, signed discovery/reproduction traces, `.sova`, independent offline verification, and reset evidence |
 | `sova forensics` | Evidence-linked partial-order reconstruction and paired-intervention attribution implemented in [ADR-0019](./docs/decisions/0019-evidence-linked-counterfactual-forensics.md); real-system accuracy remains unproven |

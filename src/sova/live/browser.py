@@ -24,6 +24,7 @@ from sova.formats import (
 )
 from sova.formats.errors import FormatError
 from sova.live.fixture_web import OwnedWebFixture
+from sova.live.startup import start_stdio_client
 from sova.mcp import MCPExecutorAdapter, StdioMCPClient, playwright_mappings, playwright_stdio_spec
 from sova.reproduction import compare_observable_outcomes
 from sova.safety import (
@@ -531,7 +532,7 @@ def run_live_browser_assessment(  # noqa: PLR0913
             source="deterministic browser scenario",
         ),
     }
-    with StdioMCPClient(spec) as client, MCPExecutorAdapter(
+    with start_stdio_client(spec, StdioMCPClient) as client, MCPExecutorAdapter(
         "microsoft-playwright-mcp",
         client,
         playwright_mappings(allowed_origins=origins),

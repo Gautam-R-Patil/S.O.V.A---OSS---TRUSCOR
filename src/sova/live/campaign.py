@@ -23,6 +23,7 @@ from sova.live.browser import (
     verified_browser_control,
 )
 from sova.live.fixture_web import OwnedWebFixture
+from sova.live.startup import start_stdio_client
 from sova.mcp import MCPExecutorAdapter, StdioMCPClient, playwright_mappings, playwright_stdio_spec
 from sova.reproduction import compare_observable_outcomes
 from sova.search import (
@@ -548,7 +549,7 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
     success_row: tuple[str, TriggerCandidate, Path, dict[str, Any]] | None = None
     reproduction_trace: Path | None = None
     comparison = None
-    with StdioMCPClient(spec) as client, MCPExecutorAdapter(
+    with start_stdio_client(spec, StdioMCPClient) as client, MCPExecutorAdapter(
         "microsoft-playwright-mcp",
         client,
         playwright_mappings(allowed_origins=origins),

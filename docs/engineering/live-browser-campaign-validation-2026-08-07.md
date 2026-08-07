@@ -1,3 +1,5 @@
+<!-- status: experiment -->
+
 # Live browser campaign validation — 2026-08-07
 
 ## Scope
@@ -17,13 +19,17 @@ $env:SOVA_RUN_REAL_BROWSER='1'
 .\.venv\Scripts\python.exe -m pytest -q tests/integration/test_live_browser_vertical_slice.py
 ```
 
-Result: `5 passed in 48.76s`.
+Current result after provider-role integration and startup recovery:
+`7 passed in 68.31s`.
 
 The test started SOVA's real loopback HTTP fixture, launched pinned
 `@playwright/mcp@0.0.78` with installed Google Chrome, exercised the known
-detonation and four-candidate hunt paths, observed the planted two-turn
-behavior, reran the winning sequence under fresh authorization, and verified
-the emitted evidence.
+detonation, four-candidate hunt, and provider-shaped isolated-role hunt paths,
+observed the planted two-turn behavior, reran the winning sequence under fresh
+authorization, and verified the emitted evidence. The role lane used
+deterministic `ScriptedModel` inputs, demonstrating real browser execution
+without making or paying for an external provider call. A real external-
+provider result remains explicitly unclaimed.
 
 ## Repository validation
 

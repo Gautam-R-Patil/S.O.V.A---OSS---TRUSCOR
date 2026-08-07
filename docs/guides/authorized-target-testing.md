@@ -121,6 +121,26 @@ Version 0.1 searches only the reviewed finite candidate set. It does not
 generate unreviewed actions at runtime, bypass CAPTCHA, create unsolicited
 accounts, or infer permission from a login session.
 
+## Let isolated model roles propose the candidate set
+
+Copy and edit the secret-free
+[`examples/live/provider-runtime.json`](../../examples/live/provider-runtime.json),
+then run:
+
+```console
+sova hunt agent-browser website-target.json browser-campaign.json \
+  provider-runtime.json website-agent-hunt --control-proof website-proof.json \
+  --allow-provider-calls
+```
+
+This flag authorizes only the configured provider requests. It does not approve
+browser actions. SOVA first asks the recon, explorer, strategist, and attacker
+roles for strict bounded JSON, derives an exact finite campaign, and then shows
+the entire action batch for separate human approval. The judge sees a bounded
+evidence summary and cannot override the deterministic oracle. Provider output
+content is omitted from the orchestration report; identity, digests, usage, and
+fallback failures remain auditable.
+
 ## What can be validated without a live browser
 
 `sova target fixture website DEST` and `sova target fixture software DEST`

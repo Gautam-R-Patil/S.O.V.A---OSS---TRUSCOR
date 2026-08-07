@@ -155,6 +155,13 @@ class ModelRouter:
     def has_role(self, role: RoleKind) -> bool:
         return role in self._bindings
 
+    def model_ids(self) -> dict[RoleKind, tuple[str, ...]]:
+        """Return an immutable-by-value description of configured role bindings."""
+        return {
+            role: tuple(model.model_id for model in models)
+            for role, models in self._bindings.items()
+        }
+
     def invoke(
         self,
         role: RoleKind,
