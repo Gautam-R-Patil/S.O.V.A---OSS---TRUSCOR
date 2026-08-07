@@ -129,7 +129,7 @@ from sova.search import run_trigger_search_demo
 from sova.targets import TargetKind, target_manifest_from_mapping, validate_target_manifest
 from sova.trace import TraceReader, recover_trace
 from sova.trace.otel import export_event
-from sova.workflows import run_check, run_complete_demo
+from sova.workflows import run_browser_check, run_check, run_complete_demo
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -475,6 +475,14 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         type=_path,
         help="canonical JSON customization; marks the run non-standard",
     )
+    check_parser.add_argument(
+        "--browser-campaign",
+        type=_path,
+        help="execute a non-offensive campaign on a controlled browser target manifest",
+    )
+    check_parser.add_argument("--control-proof", type=_path)
+    check_parser.add_argument("--package-runner", type=_path)
+    check_parser.add_argument("--browser-executable", type=_path)
     check_parser.set_defaults(handler=_check)
 
     map_parser = commands.add_parser(
@@ -1559,13 +1567,53 @@ def _check(args: argparse.Namespace) -> int:
         raise FormatError(
             "SOVA-CHECK-ARGS", "check requires target and destination unless --self is used"
         )
-    result = run_check(
-        args.target,
-        args.destination,
-        profile=_run_profile(args.custom_profile),
+    live_options = (
+        args.control_proof,
+        args.package_runner,
+        args.browser_executable,
     )
-    sys.stdout.buffer.write(canonical_json_bytes(result.to_mapping()) + b"\n")
-    return result.exit_code
+    if args.browser_campaign is None and any(value is not None for value in live_options):
+        raise FormatError(
+            "SOVA-CHECK-BROWSER-ARGS",
+            "browser execution options require --browser-campaign",
+        )
+    if args.browser_campaign is None:
+        local_result = run_check(
+            args.target,
+            args.destination,
+            profile=_run_profile(args.custom_profile),
+        )
+        result_mapping = local_result.to_mapping()
+        result_exit_code = local_result.exit_code
+    else:
+        if args.custom_profile is not None:
+            raise FormatError(
+                "SOVA-CHECK-BROWSER-PROFILE",
+                "live browser check currently requires the pinned standard profile",
+            )
+        _require_live_campaign_terminal()
+        target = target_manifest_from_mapping(_load_object(Path(args.target)))
+        campaign = browser_campaign_from_mapping(_load_object(args.browser_campaign))
+        proof = (
+            control_proof_from_mapping(_load_object(args.control_proof))
+            if args.control_proof is not None
+            else None
+        )
+        package_runner, browser = _campaign_executables(args)
+        browser_result = run_browser_check(
+            target,
+            campaign,
+            args.destination,
+            profile=standard_profile(),
+            package_runner=package_runner,
+            browser_executable=browser,
+            approval_prompt=_live_campaign_prompt,
+            control_proof=proof,
+        )
+        result_mapping = browser_result.to_mapping()
+        result_exit_code = browser_result.exit_code
+    sys.stdout.buffer.write(canonical_json_bytes(result_mapping) + b"\n")
+    return result_exit_code
 
 
 def _mcp_manifest(_args: argparse.Namespace) -> int:

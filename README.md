@@ -515,6 +515,8 @@ sova map ./my-agent --output ./my-agent.sova-map.json
 
 # Exit 1 means the bundled planted behavior was confirmed
 sova check synthetic-sleeper ./sova-check
+# Or check an owned/controlled browser target with a finite non-offensive campaign:
+sova check target.json ./browser-check --browser-campaign campaign.json
 
 # Run the complete zero-configuration proof
 sova demo sleeper ./sova-demo
@@ -786,7 +788,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Synthetic detonation and sensors | Event-sourced fake world, inert canaries, sink-only collector, unified sensor coverage, deterministic oracles, and nine ground-truth target families implemented |
 | `sova map` | Air-gapped typed inventory, provenance-separated reach closures, map schema, and tool-definition drift implemented in [ADR-0013](./docs/decisions/0013-provenance-separated-capability-map.md) |
 | SOVA Runtime | Provider-neutral isolated roles, standard/custom profiles, evidence firewall, local minimized experience, opaque sessions, and verified executor fallback implemented in [ADR-0014](./docs/decisions/0014-evidence-firewalled-runtime.md) |
-| `sova check` | Bundled bounded synthetic target and honest confirmed/inconclusive exit states implemented in [ADR-0015](./docs/decisions/0015-bounded-check-and-no-melra-proof.md); general live-target check orchestration remains in progress |
+| `sova check` | Bundled synthetic and authorized live-browser checks with finite candidate sets, exact human approval, signed traces, controlled reproduction, and honest confirmed/not-observed/inconclusive states |
 | `sova detonate` | Real Playwright/Chrome execution, signed trace, evidence capsule, inert playback compatibility, and controlled reproduction pass on the self-owned loopback fixture; operator-owned external HTTPS sites have a well-known control-proof and exact-approval path, while native software remains in progress |
 | `sova hunt` | Bounded operator-authored or provider-assisted candidate search executes in real Playwright/Chrome, records snapshot/console/network observations, detects near misses, reproduces the winning recipe under fresh approval, and emits signed traces plus an offline-verifiable discovery capsule; deterministic tests verify isolated roles, while a real external-provider acceptance run remains optional and unclaimed |
 | MELRA adapter | Public `0.3.0-alpha.0` boundary reviewed; adapter and conformance remain Topic 13 |

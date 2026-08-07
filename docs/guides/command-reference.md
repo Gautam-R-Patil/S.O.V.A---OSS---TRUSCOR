@@ -26,6 +26,12 @@ Other `detonate` and `probe` operations remain exact-gated local MCP tools;
 every offensive MCP invocation requires an expiring, single-use approval
 through the separate local control channel.
 
+`sova check target.json OUTPUT --browser-campaign campaign.json` uses the same
+proof-of-control and exact-batch approval boundary for a non-offensive dynamic
+check. It verifies every emitted trace signature before returning
+`confirmed-behavior`, `not-observed`, or `inconclusive`; `not-observed` means
+only that the finite declared candidate set was exhausted.
+
 Trace playback, controlled re-execution, and semantic reproduction are distinct
 operations. No command claims to capture hidden chain-of-thought.
 

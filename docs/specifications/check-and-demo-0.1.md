@@ -50,6 +50,27 @@ floor, artifact paths, explicit limitations, and a trigger-hunting next step.
 Partial and failed output directories are preserved rather than silently
 deleted, supporting flakiness and failure review.
 
+### Authorized live-browser check
+
+`sova check target.json OUTPUT --browser-campaign campaign.json` executes a
+non-offensive, finite candidate set through the pinned Playwright MCP adapter.
+Loopback targets receive an automatic control proof; an external HTTPS target
+requires a current `sova target prove` artifact. The operator must use a real
+interactive terminal, review the complete action batch, and type the exact
+one-time approval phrase before the browser starts acting.
+
+The command refuses offensive campaigns and custom profiles. It returns `1`
+only when the observable behavior is found and a fresh signed reproduction is
+equivalent, `0` when the complete declared candidate set is exhausted without
+observation, and `3` when the run stops inconclusively. A `0` result is never a
+universal safe or clean claim. All attempt traces are signature-verified
+offline before `check-report.json` is written.
+
+Cold startup uses a bounded 120-second allowance because an empty per-run npm
+cache may need to fetch the pinned MCP package. A startup timeout can be retried
+once only before any target action; tool calls retain shorter deadlines and are
+never automatically retried after an action may have occurred.
+
 ## Threat and trust boundaries
 
 - Synthetic authorization, credentials, canaries, and sink-only endpoints are
@@ -63,3 +84,5 @@ deleted, supporting flakiness and failure review.
 - SOVA output is operator-controlled self-assessment, never TRUSCOR attestation
   or a financial/compliance certificate.
 - MELRA/Atlas is not installed, invoked, or trusted by this workflow.
+- The live browser is origin-restricted and ephemeral, but is not described as
+  a VM security sandbox.

@@ -90,7 +90,10 @@ def playwright_stdio_spec(
         PLAYWRIGHT_MCP_RECEIPT.source,
         PLAYWRIGHT_MCP_RECEIPT.license,
         PLAYWRIGHT_MCP_RECEIPT.package_digest,
-        startup_timeout_seconds=30.0,
+        # A clean per-run npm cache may need one bounded package fetch before
+        # the pinned server can initialize. Tool calls retain their shorter
+        # independent deadlines and are never retried after target activity.
+        startup_timeout_seconds=120.0,
     )
 
 

@@ -28,9 +28,10 @@ from sova.live import (
 from sova.mcp import MCPTool, MCPToolResult
 from sova.models import ScriptedModel, ScriptedTurn
 from sova.replay import VerificationState, verify_artifact
-from sova.runtime import ModelRouter, RoleKind, RoleModel
+from sova.runtime import ModelRouter, RoleKind, RoleModel, standard_profile
 from sova.targets import TargetKind, TargetManifest
 from sova.trace import TraceReader
+from sova.workflows import run_browser_check
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -416,6 +417,26 @@ def test_optional_real_playwright_mcp_trigger_hunt(tmp_path: Path) -> None:
     )
     assert artifacts.status == "pass"
     assert len(artifacts.traces) == 4
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    os.environ.get("SOVA_RUN_REAL_BROWSER") != "1",
+    reason="set SOVA_RUN_REAL_BROWSER=1 for the optional installed-browser lane",
+)
+def test_optional_real_playwright_mcp_dynamic_check(tmp_path: Path) -> None:
+    with OwnedWebFixture() as fixture:
+        result = run_browser_check(
+            owned_web_target(fixture.origin),
+            owned_web_campaign(fixture.url),
+            tmp_path / "real-browser-check",
+            profile=standard_profile(),
+            package_runner=Path(r"C:\Program Files\nodejs\npx.cmd"),
+            browser_executable=Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+            approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
+        )
+    assert result.status == "confirmed-behavior" and result.exit_code == 1
+    assert TraceReader(result.traces[-1]).verify(require_signature=True).signature_valid
 
 
 @pytest.mark.integration

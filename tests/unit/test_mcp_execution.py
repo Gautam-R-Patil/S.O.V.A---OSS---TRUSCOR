@@ -275,7 +275,7 @@ def test_pinned_open_source_launch_specs_are_fail_closed(tmp_path: Path) -> None
     assert "--isolated" in playwright.argv
     assert "--headless" in playwright.argv
     assert "--block-service-workers" in playwright.argv
-    assert playwright.startup_timeout_seconds == 30
+    assert playwright.startup_timeout_seconds == 120
     assert playwright.environment["PLAYWRIGHT_BROWSERS_PATH"].startswith(str(tmp_path))
 
     windows = windows_mcp_stdio_spec(
