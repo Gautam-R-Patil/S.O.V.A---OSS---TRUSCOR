@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Self
 from urllib.parse import urlsplit
@@ -24,7 +25,7 @@ from sova.formats import canonical_json_bytes, sha256_digest, strict_json_loads
 from sova.formats.errors import FormatError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable
 
     from sova.mcp.protocol import MCPClient, MCPToolResult
 
@@ -68,6 +69,7 @@ class ToolMapping:
     argument_builder: Callable[[Mapping[str, Any]], dict[str, Any]]
     post_observe_tool: str | None = None
     post_observe_arguments: Mapping[str, Any] | None = None
+    result_validator: Callable[[MCPToolResult, MCPToolResult | None], None] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +141,48 @@ def _navigate_builder(
         return {"url": value}
 
     return build
+
+
+def _observed_page_urls(result: MCPToolResult | None) -> tuple[str, ...]:
+    if result is None:
+        return ()
+    values: list[str] = []
+    for item in result.content:
+        text = item.get("text")
+        if not isinstance(text, str):
+            continue
+        values.extend(
+            line.removeprefix("- Page URL:").strip()
+            for line in text.splitlines()
+            if line.startswith("- Page URL:") and line.removeprefix("- Page URL:").strip()
+        )
+    structured = result.structured_content
+    if isinstance(structured, Mapping) and isinstance(structured.get("url"), str):
+        values.append(structured["url"])
+    return tuple(values)
+
+
+def _page_origin_validator(
+    allowed_origins: tuple[str, ...],
+) -> Callable[[MCPToolResult, MCPToolResult | None], None]:
+    allowed = frozenset(_origin(value) for value in allowed_origins)
+
+    def validate(result: MCPToolResult, observation: MCPToolResult | None) -> None:
+        observed = (*_observed_page_urls(result), *_observed_page_urls(observation))
+        if not observed:
+            raise FormatError(
+                "SOVA-MCP-BROWSER-LOCATION",
+                "browser action supplied no independently observable final page URL",
+            )
+        outside = sorted({_origin(url) for url in observed} - allowed) if allowed else []
+        if outside:
+            raise FormatError(
+                "SOVA-MCP-BROWSER-ORIGIN-DRIFT",
+                "browser ended outside the admitted origin set",
+                details={"observedOrigins": outside, "allowedOrigins": sorted(allowed)},
+            )
+
+    return validate
 
 
 def _normalize_result(
@@ -311,6 +355,8 @@ class MCPExecutorAdapter:
                 verification = (
                     "post-action-observation" if not observation.is_error else "observation-failed"
                 )
+            if mapping.result_validator is not None and not result.is_error:
+                mapping.result_validator(result, observation)
             return _normalize_result(
                 request,
                 result,
@@ -348,6 +394,7 @@ def playwright_mappings(
 ) -> tuple[ToolMapping, ...]:
     """Pinned portable subset of Microsoft Playwright MCP actions."""
     snapshot = "browser_snapshot"
+    location_validator = _page_origin_validator(allowed_origins)
     return (
         ToolMapping(
             action="browser.snapshot",
@@ -357,6 +404,7 @@ def playwright_mappings(
             idempotent=True,
             evidence=("aria-snapshot",),
             argument_builder=_identity,
+            result_validator=location_validator,
         ),
         ToolMapping(
             action="browser.navigate",
@@ -367,6 +415,7 @@ def playwright_mappings(
             evidence=("url", "snapshot"),
             argument_builder=_navigate_builder(allowed_origins),
             post_observe_tool=snapshot,
+            result_validator=location_validator,
         ),
         ToolMapping(
             action="browser.click",
@@ -377,6 +426,7 @@ def playwright_mappings(
             evidence=("snapshot",),
             argument_builder=_selected("element", "target", "doubleClick"),
             post_observe_tool=snapshot,
+            result_validator=location_validator,
         ),
         ToolMapping(
             action="browser.type",
@@ -387,6 +437,7 @@ def playwright_mappings(
             evidence=("snapshot",),
             argument_builder=_selected("element", "target", "text", "submit", "slowly"),
             post_observe_tool=snapshot,
+            result_validator=location_validator,
         ),
         ToolMapping(
             action="browser.wait",
@@ -397,6 +448,7 @@ def playwright_mappings(
             evidence=("snapshot",),
             argument_builder=_selected("time", "text", "textGone"),
             post_observe_tool=snapshot,
+            result_validator=location_validator,
         ),
         ToolMapping(
             action="browser.tabs",

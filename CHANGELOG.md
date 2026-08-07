@@ -15,6 +15,9 @@ have independent version ledgers.
   real loopback website through pinned Playwright MCP and Chrome, records signed
   primary/reproduction traces, compares observable outcomes, and packages a
   `.sova` evidence capsule.
+- An external browser-target workflow with short-lived HTTPS well-known control
+  challenges, certificate and exact-origin binding, redirect refusal,
+  pre-dispatch URL checks, and final observed-origin drift detection.
 - Buildable `sova-oss` Python package and typed, tested `sova` command-line interface.
 - A fail-visible dependency-advisory register and source guard for the current
   `cryptography` PKCS#7 advisory, with an automatic removal condition when a

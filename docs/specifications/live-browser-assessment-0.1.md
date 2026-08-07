@@ -5,9 +5,10 @@
 ## Scope
 
 This specification defines the first non-scripted SOVA website execution path.
-It is intentionally limited to SOVA's self-owned loopback target while the
-external control-proof, account, privacy, and stronger-isolation workflows are
-completed.
+It supports SOVA's self-owned loopback target and one exact operator-owned HTTPS
+origin after short-lived well-known control verification. Account, privacy,
+scenario, oracle, and stronger-isolation decisions remain explicit operator
+gates.
 
 The accepted flow is:
 
@@ -38,7 +39,8 @@ launch arguments, cache paths, and process transport remain in the adapter.
 ## Authorization and target control
 
 - A URL or login is never authorization.
-- This implementation accepts only `localhost`, `127.0.0.1`, or `::1`.
+- Loopback fixtures use the built-in proof. External runs require exactly one
+  bare HTTPS origin and an unexpired well-known proof.
 - Loopback control proof, exact action/tool/domain scope, effect and duration
   budgets, and a fresh approval token are checked before every action.
 - The CLI refuses non-interactive approval.
@@ -46,9 +48,11 @@ launch arguments, cache paths, and process transport remain in the adapter.
   run. Playwright's own origin filter is an additional control, not the trust
   boundary.
 
-External websites require a separately verified well-known, DNS, or signed
-scope proof plus target-specific data/account policy. That workflow is not
-silently approximated by the loopback runner.
+The implemented external proof is one bounded HTTPS GET with ordinary
+certificate validation, no redirects, a 16 KiB body limit, an exact final URL,
+and an exact challenge token. DNS and signed-scope proof collectors are not yet
+implemented. Target-specific data/account policy is never inferred from proof
+of origin control.
 
 ## Capture and verification
 

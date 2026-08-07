@@ -183,6 +183,45 @@ def test_playwright_adapter_enforces_exact_navigation_origin(tmp_path: Path) -> 
     assert client.calls == []
 
 
+def test_playwright_adapter_rejects_observed_cross_origin_redirect(tmp_path: Path) -> None:
+    client = FakeMCPClient(
+        ("browser_navigate", "browser_snapshot"),
+        [
+            MCPToolResult(
+                content=(
+                    {"type": "text", "text": "- Page URL: https://attacker.example/"},
+                ),
+                structured_content=None,
+                is_error=False,
+            ),
+            MCPToolResult(
+                content=(
+                    {"type": "text", "text": "- Page URL: https://attacker.example/"},
+                ),
+                structured_content=None,
+                is_error=False,
+            ),
+        ],
+    )
+    adapter = MCPExecutorAdapter(
+        "playwright",
+        client,
+        playwright_mappings(allowed_origins=("https://owned.example",)),
+    )
+    outcome = adapter.execute(
+        ActionRequest(
+            "navigate",
+            "browser.navigate",
+            {"url": "https://owned.example/start"},
+            5,
+        ),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.FAILED
+    assert outcome.error_code == "SOVA-MCP-BROWSER-ORIGIN-DRIFT"
+
+
 def test_windows_mapping_excludes_dangerous_host_tools() -> None:
     mapping_tools = {item.tool for item in windows_mcp_mappings()}
     assert not mapping_tools & {"PowerShell", "Registry", "FileSystem", "Process", "Clipboard"}

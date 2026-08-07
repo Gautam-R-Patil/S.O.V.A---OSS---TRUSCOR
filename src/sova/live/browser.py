@@ -40,6 +40,7 @@ from sova.safety import (
     Principal,
     PrincipalKind,
     Scope,
+    validate_control_proof,
 )
 from sova.targets import TargetKind, TargetManifest, validate_target_manifest
 from sova.trace import TraceReader, generate_ed25519_keypair
@@ -204,11 +205,12 @@ def _approval_level(intent: ActionIntent) -> ApprovalLevel | None:
     return None
 
 
-def _authorization_for_run(
+def _authorization_for_run(  # noqa: PLR0913
     scenario: dict[str, Any],
     capabilities: tuple[Capability, ...],
     *,
     host: str,
+    proof: ControlProof,
     containment_digest: str,
     approval_prompt: ApprovalPrompt,
 ) -> tuple[AuthorizationSession, dict[str, ApprovalToken]]:
@@ -259,15 +261,6 @@ def _authorization_for_run(
         single_use=True,
         ownership="self",
         required_containment_digest=containment_digest,
-    )
-    proof = ControlProof(
-        ControlProofMethod.LOOPBACK,
-        host,
-        "sova-control:" + secrets.token_urlsafe(18),
-        {"loopback": True},
-        now - timedelta(seconds=1),
-        now + timedelta(minutes=10),
-        "sova.loopback-control-verifier/0.1",
     )
     approval_authority = OutOfBandApprovalAuthority(secrets.token_bytes(32))
     approver = Principal("sova:principal:operator", PrincipalKind.HUMAN, "SOVA operator")
@@ -328,7 +321,7 @@ def _fingerprint(
     }
 
 
-def run_live_browser_assessment(  # noqa: PLR0913
+def run_live_browser_assessment(  # noqa: PLR0913, PLR0915
     target: TargetManifest,
     source_capsule: Path,
     destination: Path,
@@ -336,20 +329,66 @@ def run_live_browser_assessment(  # noqa: PLR0913
     package_runner: Path,
     browser_executable: Path,
     approval_prompt: ApprovalPrompt,
+    control_proof: ControlProof | None = None,
 ) -> LiveBrowserArtifacts:
-    """Run and reproduce a capsule on a real, explicitly authorized loopback website."""
+    """Run and reproduce a capsule on a real, explicitly authorized website."""
     conformance = validate_target_manifest(target)
     if not conformance["accepted"]:
         raise FormatError("SOVA-LIVE-TARGET", "target manifest failed conformance")
     origins = _target_origins(target)
     hosts = {_origin(item)[1].casefold() for item in origins}
-    if len(hosts) != 1 or not hosts <= _LOOPBACK:
+    if len(hosts) != 1:
         raise FormatError(
             "SOVA-LIVE-CONTROL-PROOF",
-            "the first live runner accepts only self-owned loopback targets; external targets "
-            "require a separately verified control-proof workflow",
+            "one assessment may bind only one exact website host",
         )
     host = next(iter(hosts))
+    now = datetime.now(UTC)
+    if host in _LOOPBACK:
+        if control_proof is not None:
+            raise FormatError(
+                "SOVA-LIVE-CONTROL-PROOF",
+                "loopback uses an automatically verified loopback proof",
+            )
+        proof = ControlProof(
+            ControlProofMethod.LOOPBACK,
+            host,
+            "sova-control:" + secrets.token_urlsafe(18),
+            {"loopback": True},
+            now - timedelta(seconds=1),
+            now + timedelta(minutes=10),
+            "sova.loopback-control-verifier/0.1",
+        )
+        control_status = "verified-loopback"
+    else:
+        if any(urlsplit(origin).scheme != "https" for origin in origins):
+            raise FormatError(
+                "SOVA-LIVE-CONTROL-PROOF",
+                "external website assessment requires an HTTPS target origin",
+            )
+        if control_proof is None:
+            raise FormatError(
+                "SOVA-LIVE-CONTROL-PROOF",
+                "external website assessment requires a current verified control proof",
+            )
+        allowed, reasons = validate_control_proof(control_proof, target=host, now=now)
+        proof_url = control_proof.evidence.get("proofUrl")
+        proof_origin_bound = isinstance(proof_url, str) and any(
+            proof_url.startswith(origin + "/.well-known/sova-control/")
+            for origin in origins
+        )
+        if (
+            not allowed
+            or control_proof.method != ControlProofMethod.WELL_KNOWN
+            or not proof_origin_bound
+        ):
+            raise FormatError(
+                "SOVA-LIVE-CONTROL-PROOF",
+                "external website control proof is invalid",
+                details={"reasons": list(reasons)},
+            )
+        proof = control_proof
+        control_status = "verified-well-known"
     scenario = _capsule_scenario(source_capsule)
     destination = destination.resolve()
     if destination.exists() and any(destination.iterdir()):
@@ -449,6 +488,7 @@ def run_live_browser_assessment(  # noqa: PLR0913
             scenario,
             executor.capabilities(),
             host=host,
+            proof=proof,
             containment_digest=containment_digest,
             approval_prompt=approval_prompt,
         )
@@ -467,6 +507,7 @@ def run_live_browser_assessment(  # noqa: PLR0913
             scenario,
             executor.capabilities(),
             host=host,
+            proof=proof,
             containment_digest=containment_digest,
             approval_prompt=approval_prompt,
         )
@@ -528,7 +569,7 @@ def run_live_browser_assessment(  # noqa: PLR0913
         "targetDigest": target.digest,
         "allowedOrigins": list(origins),
         "authorization": {
-            "targetControl": "verified-loopback",
+            "targetControl": control_status,
             "freshPerActionApproval": True,
             "scopeWidening": False,
         },

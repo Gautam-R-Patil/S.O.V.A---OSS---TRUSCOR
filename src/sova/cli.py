@@ -67,7 +67,14 @@ from sova.formats import (
     validate_document,
 )
 from sova.formats.errors import FormatError
-from sova.live import run_owned_web_vertical_slice
+from sova.live import (
+    challenge_from_mapping,
+    collect_website_control_proof,
+    control_proof_from_mapping,
+    create_website_control_challenge,
+    run_live_browser_assessment,
+    run_owned_web_vertical_slice,
+)
 from sova.local_mcp import (
     LocalApprovalStore,
     LocalToolContext,
@@ -231,6 +238,19 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     target_fixture.add_argument("kind", choices=("website", "software"))
     target_fixture.add_argument("destination", type=_path)
     target_fixture.set_defaults(handler=_target_fixture)
+    target_challenge = target_commands.add_parser(
+        "challenge", help="create a short-lived external website control challenge"
+    )
+    target_challenge.add_argument("manifest", type=_path)
+    target_challenge.add_argument("destination", type=_path)
+    target_challenge.set_defaults(handler=_target_challenge)
+    target_prove = target_commands.add_parser(
+        "prove", help="verify a hosted website-control challenge without redirects"
+    )
+    target_prove.add_argument("manifest", type=_path)
+    target_prove.add_argument("challenge", type=_path)
+    target_prove.add_argument("destination", type=_path)
+    target_prove.set_defaults(handler=_target_prove)
 
     detonate_parser = commands.add_parser(
         "detonate",
@@ -245,6 +265,17 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     detonate_fixture.add_argument("--package-runner", type=_path)
     detonate_fixture.add_argument("--browser-executable", type=_path)
     detonate_fixture.set_defaults(handler=_detonate_owned_web_fixture)
+    detonate_browser = detonate_commands.add_parser(
+        "browser",
+        help="execute one capsule on one exactly authorized browser target",
+    )
+    detonate_browser.add_argument("manifest", type=_path)
+    detonate_browser.add_argument("capsule", type=_path)
+    detonate_browser.add_argument("destination", type=_path)
+    detonate_browser.add_argument("--control-proof", type=_path)
+    detonate_browser.add_argument("--package-runner", type=_path)
+    detonate_browser.add_argument("--browser-executable", type=_path)
+    detonate_browser.set_defaults(handler=_detonate_browser)
 
     inspect_parser = commands.add_parser("inspect", help="render an inert capsule summary")
     inspect_parser.add_argument("path", type=_path)
@@ -815,6 +846,29 @@ def _target_fixture(args: argparse.Namespace) -> int:
     return 0 if report["status"] == "pass" else 1
 
 
+def _target_challenge(args: argparse.Namespace) -> int:
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    challenge = create_website_control_challenge(target)
+    args.destination.write_bytes(canonical_json_bytes(challenge.to_mapping()) + b"\n")
+    sys.stdout.buffer.write(canonical_json_bytes(challenge.to_mapping()) + b"\n")
+    return 0
+
+
+def _target_prove(args: argparse.Namespace) -> int:
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    challenge = challenge_from_mapping(_load_object(args.challenge))
+    expected_origin = target.configuration.get("allowedOrigins")
+    if expected_origin != [challenge.origin]:
+        raise FormatError(
+            "SOVA-CONTROL-TARGET-MISMATCH",
+            "challenge does not match the target manifest's exact origin",
+        )
+    proof = collect_website_control_proof(challenge)
+    args.destination.write_bytes(canonical_json_bytes(proof.to_mapping()) + b"\n")
+    sys.stdout.buffer.write(canonical_json_bytes(proof.to_mapping()) + b"\n")
+    return 0
+
+
 def _inspect(args: argparse.Namespace) -> int:
     sys.stdout.write(render_capsule(args.path))
     return 0
@@ -894,6 +948,77 @@ def _detonate_owned_web_fixture(args: argparse.Namespace) -> int:
             sort_keys=True,
         )
         + "\n"
+    )
+    return 0 if artifacts.status == "pass" else 1
+
+
+def _detonate_browser(args: argparse.Namespace) -> int:
+    if not sys.stdin.isatty():
+        raise FormatError(
+            "SOVA-LIVE-INTERACTIVE-APPROVAL",
+            "live detonation requires a human-operated interactive terminal",
+        )
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    proof = (
+        control_proof_from_mapping(_load_object(args.control_proof))
+        if args.control_proof is not None
+        else None
+    )
+    package_runner = _detected_path(
+        args.package_runner,
+        ("npx.cmd", "npx"),
+        "Node package runner",
+    )
+    browser = _detected_path(
+        args.browser_executable,
+        (
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            "chrome.exe",
+            "msedge.exe",
+        ),
+        "Chromium browser executable",
+    )
+
+    def prompt(challenge: Any, intent: Any) -> str:
+        sys.stderr.write(
+            json.dumps(
+                {
+                    "target": intent.target,
+                    "action": intent.action,
+                    "effect": intent.effect.name.lower(),
+                    "domain": intent.domain,
+                    "offensive": intent.offensive,
+                    "irreversible": intent.irreversible,
+                    "requiredEvidence": sorted(intent.required_evidence),
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        sys.stderr.write(f"Type exactly: {challenge.exact_phrase}\n")
+        return input("approval> ")
+
+    artifacts = run_live_browser_assessment(
+        target,
+        args.capsule,
+        args.destination,
+        package_runner=package_runner,
+        browser_executable=browser,
+        approval_prompt=prompt,
+        control_proof=proof,
+    )
+    sys.stdout.buffer.write(
+        canonical_json_bytes(
+            {
+                "status": artifacts.status,
+                "trace": str(artifacts.trace),
+                "reproductionTrace": str(artifacts.reproduction_trace),
+                "evidenceCapsule": str(artifacts.evidence_capsule),
+                "report": str(artifacts.report),
+            }
+        )
+        + b"\n"
     )
     return 0 if artifacts.status == "pass" else 1
 

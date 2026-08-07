@@ -9,15 +9,20 @@ from typing import TYPE_CHECKING, Any, Self
 
 import pytest
 
+from sova.capsule import build_capsule, capsule_manifest_template, scenario_template
 from sova.formats import strict_json_loads
 from sova.live import (
+    ControlFetchResult,
     build_owned_web_capsule,
+    collect_website_control_proof,
+    create_website_control_challenge,
     owned_web_target,
     run_live_browser_assessment,
     run_owned_web_vertical_slice,
 )
 from sova.mcp import MCPTool, MCPToolResult
 from sova.replay import VerificationState, verify_artifact
+from sova.targets import TargetKind, TargetManifest
 from sova.trace import TraceReader
 
 if TYPE_CHECKING:
@@ -40,6 +45,11 @@ class _DeterministicBrowserMCP:
         self.armed = False
         self.triggered = False
         self.current = ""
+        argv = getattr(_spec, "argv", ())
+        try:
+            self.origin = str(argv[argv.index("--allowed-origins") + 1]).split(";", 1)[0]
+        except (AttributeError, ValueError, IndexError):
+            self.origin = "http://127.0.0.1:9187"
 
     def __enter__(self) -> Self:
         return self
@@ -58,7 +68,7 @@ class _DeterministicBrowserMCP:
             if self.armed
             else "READY"
         )
-        return f"### Page\n- Page URL: http://127.0.0.1:9187/\n### Snapshot\n- status: {status}"
+        return f"### Page\n- Page URL: {self.origin}/\n### Snapshot\n- status: {status}"
 
     def call_tool(
         self,
@@ -132,6 +142,86 @@ def test_live_browser_coordinator_captures_reproduces_and_packages(
         "universalSafety": False,
     }
     assert report["containment"]["nativeSandboxClaim"] is False
+
+
+class _ControlFetcher:
+    def __init__(self, url: str, token: str) -> None:
+        self.url = url
+        self.token = token
+
+    def fetch(self, url: str, *, timeout_seconds: float) -> ControlFetchResult:
+        assert url == self.url
+        assert timeout_seconds == 10
+        return ControlFetchResult(200, url, self.token.encode(), redirected=False)
+
+
+@pytest.mark.integration
+def test_external_https_runner_requires_and_consumes_bound_control_proof(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    origin = "https://owned.example"
+    target = TargetManifest(
+        "sova:target:owned-external",
+        TargetKind.BROWSER_AGENT,
+        "1.0.0",
+        ("browser.observe", "browser.navigate"),
+        "operator-owned external fixture",
+        {"allowedOrigins": [origin], "browserProfile": "ephemeral"},
+    )
+    scenario = scenario_template(title="External fixture", purpose="Observe owned page")
+    scenario["procedure"]["steps"] = [
+        {
+            "id": "navigate",
+            "action": "browser.navigate",
+            "inputs": {"url": origin + "/"},
+            "onFailure": "stop",
+            "requires": ["browser.navigate/0.1"],
+        },
+        {
+            "id": "snapshot",
+            "action": "browser.snapshot",
+            "inputs": {},
+            "onFailure": "stop",
+            "requires": ["browser.snapshot/0.1"],
+        },
+    ]
+    scenario["oracles"] = [{"kind": "field-contains", "path": "$.text", "contains": "READY"}]
+    scenario["safety"]["budgets"] = {"maxSteps": 2, "maxStepSeconds": 10}
+    manifest = capsule_manifest_template(
+        title="External fixture capsule",
+        summary="Safe control-proof acceptance fixture",
+        author="SOVA tests",
+    )
+    manifest["license"] = "Apache-2.0"
+    manifest["safety"]["impact"] = "none"
+    capsule = tmp_path / "external.sova"
+    build_capsule(capsule, manifest, scenario=scenario)
+    challenge = create_website_control_challenge(target)
+    proof = collect_website_control_proof(
+        challenge,
+        fetcher=_ControlFetcher(challenge.proof_url, challenge.token),
+    )
+    runner = tmp_path / "npx.exe"
+    browser = tmp_path / "browser.exe"
+    runner.write_bytes(b"deterministic test placeholder")
+    browser.write_bytes(b"deterministic test placeholder")
+    monkeypatch.setattr("sova.live.browser.StdioMCPClient", _DeterministicBrowserMCP)
+
+    artifacts = run_live_browser_assessment(
+        target,
+        capsule,
+        tmp_path / "external-result",
+        package_runner=runner,
+        browser_executable=browser,
+        approval_prompt=lambda item, _intent: item.exact_phrase,
+        control_proof=proof,
+    )
+
+    report = strict_json_loads(artifacts.report.read_bytes())
+    assert isinstance(report, dict)
+    assert artifacts.status == "pass"
+    assert report["authorization"]["targetControl"] == "verified-well-known"
 
 
 @pytest.mark.integration

@@ -8,12 +8,28 @@ from sova.live.browser import (
     run_live_browser_assessment,
     run_owned_web_vertical_slice,
 )
+from sova.live.control import (
+    ControlFetchResult,
+    UrllibControlFetcher,
+    WebsiteControlChallenge,
+    challenge_from_mapping,
+    collect_website_control_proof,
+    control_proof_from_mapping,
+    create_website_control_challenge,
+)
 from sova.live.fixture_web import OwnedWebFixture
 
 __all__ = [
+    "ControlFetchResult",
     "LiveBrowserArtifacts",
     "OwnedWebFixture",
+    "UrllibControlFetcher",
+    "WebsiteControlChallenge",
     "build_owned_web_capsule",
+    "challenge_from_mapping",
+    "collect_website_control_proof",
+    "control_proof_from_mapping",
+    "create_website_control_challenge",
     "owned_web_target",
     "run_live_browser_assessment",
     "run_owned_web_vertical_slice",

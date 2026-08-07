@@ -50,9 +50,10 @@
 > replay, bounded trigger search, evidence-linked causal forensics, onboarding,
 > release integrity, neutral conformance vectors, authorized-target planning,
 > and shared domain primitives. The built-in loopback fixture now exercises a
-> real browser through the pinned Playwright MCP adapter; arbitrary external
-> targets still require separately verified control, exact authorization,
-> stronger isolation where appropriate, and target-specific evidence oracles.
+> real browser through the pinned Playwright MCP adapter. Operator-owned HTTPS
+> targets can use the short-lived well-known control-proof workflow plus exact
+> interactive authorization; target-specific procedures, accounts, privacy
+> review, and evidence oracles remain the operator's responsibility.
 
 ## Implemented foundation, mapping, runtime, capsules, traces, and ecosystem boundaries
 
@@ -609,6 +610,13 @@ sova target fixture software ./software-fixture
 # Every effect requires an exact interactive approval phrase.
 sova detonate owned-web-fixture ./live-browser-proof
 
+# For an external website you own, first edit a browser-agent target manifest.
+sova target challenge ./website-target.json ./website-challenge.json
+# Host the emitted token at its exact proofUrl, then verify it without redirects.
+sova target prove ./website-target.json ./website-challenge.json ./website-proof.json
+sova detonate browser ./website-target.json ./scenario.sova ./website-proof \
+  --control-proof ./website-proof.json
+
 # Live offensive MCP operations require a separately issued approval
 sova mcp init-control ./control.key
 
@@ -764,7 +772,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `sova map` | Air-gapped typed inventory, provenance-separated reach closures, map schema, and tool-definition drift implemented in [ADR-0013](./docs/decisions/0013-provenance-separated-capability-map.md) |
 | SOVA Runtime | Provider-neutral isolated roles, standard/custom profiles, evidence firewall, local minimized experience, opaque sessions, and verified executor fallback implemented in [ADR-0014](./docs/decisions/0014-evidence-firewalled-runtime.md) |
 | `sova check` | Bundled bounded synthetic target and honest confirmed/inconclusive exit states implemented in [ADR-0015](./docs/decisions/0015-bounded-check-and-no-melra-proof.md); general live-target check orchestration remains in progress |
-| `sova detonate` | Real Playwright/Chrome execution, signed trace, evidence capsule, inert playback compatibility, and controlled reproduction pass on the self-owned loopback fixture; arbitrary external targets and native software remain gated/in progress |
+| `sova detonate` | Real Playwright/Chrome execution, signed trace, evidence capsule, inert playback compatibility, and controlled reproduction pass on the self-owned loopback fixture; operator-owned external HTTPS sites have a well-known control-proof and exact-approval path, while native software remains in progress |
 | MELRA adapter | Public `0.3.0-alpha.0` boundary reviewed; adapter and conformance remain Topic 13 |
 | Sleeper demonstration | Implemented with named narrow baselines, two-dimensional search, signed discovery/reproduction traces, `.sova`, independent offline verification, and reset evidence |
 | `sova forensics` | Evidence-linked partial-order reconstruction and paired-intervention attribution implemented in [ADR-0019](./docs/decisions/0019-evidence-linked-counterfactual-forensics.md); real-system accuracy remains unproven |

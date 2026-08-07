@@ -63,12 +63,38 @@ that arbitrary web applications are supported. Playwright's origin filter is
 defense in depth and does not replace SOVA's pre-dispatch origin check or
 post-run evidence review.
 
+## Run a capsule against an external website you own
+
+Edit a `browser-agent` target manifest so it contains exactly one bare HTTPS
+origin and no credentials. Then:
+
+```console
+sova target challenge website-target.json website-challenge.json
+# Publish the exact token at the proofUrl shown in website-challenge.json.
+sova target prove website-target.json website-challenge.json website-proof.json
+sova detonate browser website-target.json scenario.sova website-proof-output \
+  --control-proof website-proof.json
+```
+
+`target challenge` makes no network request. `target prove` performs one
+bounded HTTPS GET with normal certificate validation, accepts no redirect,
+requires the exact token and final URL, and emits an expiring proof. The
+detonation command binds that proof to the exact target host and allowed origin,
+then requests fresh action-level approval in a human-operated terminal.
+
+The proof establishes only short-lived control of that web origin. It does not
+authorize sibling domains, third-party integrations, user accounts, destructive
+actions, CAPTCHA bypass, unsolicited account creation, or data collection.
+Review the `.sova` procedure, accounts, fixtures, stop conditions, retention,
+and disclosure policy before approving it. Remove the hosted challenge token
+after proof collection.
+
 ## What can be validated without a live browser
 
 `sova target fixture website DEST` and `sova target fixture software DEST`
 exercise target → plan → scenario → observable execution → signed trace →
 capsule → controlled reproduction → offline verification using deterministic
-self-owned scripted fixtures. The command above is the real-browser acceptance
-lane. Testing an operator-owned external website remains blocked until its
-control proof, target-specific scenario, data policy, accounts, and oracles are
-reviewed and admitted.
+self-owned scripted fixtures. The first command above is the real-browser
+acceptance lane. The external path is available only after the control proof,
+target-specific scenario, data policy, accounts, and oracles are reviewed and
+admitted.
