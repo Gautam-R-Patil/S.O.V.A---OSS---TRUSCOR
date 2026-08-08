@@ -195,7 +195,10 @@ def run_complete_demo(destination: Path, *, profile: RunProfile) -> CompleteDemo
                 "Only the bundled two-dimensional deterministic search space was exercised."
             ),
             "safeOrCleanClaim": False,
-            "nextStep": "Use future Topic 14 trigger hunting for broader dormancy testing.",
+            "nextStep": (
+                "Use `sova hunt owned-web-fixture` for real-browser bounded trigger search, "
+                "or author an authorized target kit for an owned website."
+            ),
         },
         "verification": {
             "discoverySignatureValid": discovery_verify.signature_valid,

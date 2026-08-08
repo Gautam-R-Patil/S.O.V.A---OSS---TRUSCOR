@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 from sova.capsule import DomainProfile, build_capsule, capsule_manifest_template, scenario_template
 from sova.executors import (
@@ -139,6 +140,128 @@ def build_assessment_plan(manifest: TargetManifest) -> dict[str, Any]:
         ],
     }
     return {**document, "planDigest": sha256_digest(canonical_json_bytes(document))}
+
+
+def create_browser_test_kit(origin: str, destination: Path) -> dict[str, Any]:
+    """Write an inert, secret-free starter kit for one operator-controlled website."""
+    parsed = urlsplit(origin)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or parsed.hostname is None
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise FormatError(
+            "SOVA-TARGET-KIT-ORIGIN",
+            "origin must be one bare HTTP(S) origin without credentials, path, query, or fragment",
+        )
+    host = parsed.hostname.casefold()
+    loopback = host in {"localhost", "127.0.0.1", "::1"}
+    if parsed.scheme != "https" and not loopback:
+        raise FormatError(
+            "SOVA-TARGET-KIT-TLS",
+            "external website kits require HTTPS; HTTP is accepted only for loopback",
+        )
+    try:
+        port = parsed.port or (80 if parsed.scheme == "http" else 443)
+    except ValueError as error:
+        raise FormatError("SOVA-TARGET-KIT-ORIGIN", "origin port is invalid") from error
+    default_port = 80 if parsed.scheme == "http" else 443
+    rendered_host = f"[{host}]" if ":" in host else host
+    normalized = f"{parsed.scheme}://{rendered_host}{'' if port == default_port else f':{port}'}"
+
+    destination = destination.resolve()
+    if destination.exists() and any(destination.iterdir()):
+        raise FormatError("SOVA-TARGET-KIT-EXISTS", "browser test kit destination is not empty")
+    destination.mkdir(parents=True, exist_ok=True)
+    suffix = sha256_digest(normalized.encode("utf-8"))[-12:]
+    target = TargetManifest(
+        f"sova:target:browser-kit-{suffix}",
+        TargetKind.BROWSER_AGENT,
+        "replace-with-exact-target-version",
+        ("browser.observe", "browser.navigate", "browser.interact"),
+        "replace-with-self-owned-or-explicitly-authorized-scope-reference",
+        {"allowedOrigins": [normalized], "browserProfile": "ephemeral-by-default"},
+    )
+    # Import locally so the target contract does not depend on a live executor at import time.
+    from sova.live.campaign import BrowserCampaign  # noqa: PLC0415
+
+    campaign = BrowserCampaign(
+        f"sova:browser-campaign:kit-{suffix}",
+        "Replace with the bounded behavior question",
+        normalized + "/",
+        "#replace-with-input-selector",
+        "#replace-with-submit-selector",
+        (("safe baseline",), ("safe alternate",), ("safe first turn", "safe second turn")),
+        "REPLACE_WITH_OBSERVABLE_MARKER",
+        3,
+        300,
+        offensive=False,
+    )
+    target_path = destination / "target.json"
+    campaign_path = destination / "campaign.json"
+    plan_path = destination / "assessment-plan.json"
+    instructions_path = destination / "README.md"
+    target_path.write_bytes(canonical_json_bytes(target.to_mapping()) + b"\n")
+    campaign_path.write_bytes(canonical_json_bytes(campaign.to_mapping()) + b"\n")
+    plan_path.write_bytes(canonical_json_bytes(build_assessment_plan(target)) + b"\n")
+    control_step = (
+        "Loopback control is verified locally; do not pass a control-proof file."
+        if loopback
+        else (
+            "Run `sova target challenge target.json challenge.json`, host the exact token at "
+            "the emitted HTTPS proof URL, then run `sova target prove target.json "
+            "challenge.json control-proof.json`."
+        )
+    )
+    instructions_path.write_text(
+        "# Authorized SOVA browser test kit\n\n"
+        f"Target origin: `{normalized}`\n\n"
+        "This directory is an inert authoring kit. It does not prove ownership, connect to the "
+        "target, or authorize execution.\n\n"
+        "1. Replace the target version and authorization-scope reference in `target.json`.\n"
+        "2. Replace selectors, finite candidate sequences, and the observable oracle marker in "
+        "`campaign.json`; keep `offensive` false unless separately reviewed.\n"
+        "3. Run `sova target validate target.json` and review `assessment-plan.json`.\n"
+        f"4. {control_step}\n"
+        "5. Use an isolated test account and data set. In a human-operated terminal, run "
+        "`sova check standard --target target.json --destination result "
+        "--browser-campaign campaign.json` and add `--control-proof control-proof.json` for an "
+        "external origin.\n\n"
+        "SOVA does not bypass CAPTCHA, acquire credentials, create unsolicited accounts, infer "
+        "permission from a login, or prove universal safety. Browser execution is not a VM "
+        "sandbox. Screenshots are reduced to digest/size evidence by the MCP adapter; raw pixels "
+        "are not written into the trace.\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    report = {
+        "artifactType": "sova.browser-test-kit-report",
+        "schemaVersion": "0.1.0",
+        "origin": normalized,
+        "loopback": loopback,
+        "targetDigest": target.digest,
+        "campaignDigest": campaign.digest,
+        "files": [
+            "README.md",
+            "assessment-plan.json",
+            "campaign.json",
+            "kit-report.json",
+            "target.json",
+        ],
+        "readyForExecution": False,
+        "networkUsed": False,
+        "authorizationEstablished": False,
+        "limitations": [
+            "The operator must customize and review the finite scenario before execution.",
+            "A target URL or login session is not proof of authorization.",
+        ],
+    }
+    (destination / "kit-report.json").write_bytes(canonical_json_bytes(report) + b"\n")
+    return report
 
 
 def _fixture_target(kind: str) -> TargetManifest:
@@ -413,6 +536,7 @@ def run_reference_assessment(kind: str, destination: Path) -> AssessmentFixtureA
 __all__ = [
     "AssessmentFixtureArtifacts",
     "build_assessment_plan",
+    "create_browser_test_kit",
     "run_reference_assessment",
     "target_template",
 ]

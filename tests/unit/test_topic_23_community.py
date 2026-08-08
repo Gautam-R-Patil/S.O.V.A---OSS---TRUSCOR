@@ -20,6 +20,7 @@ from sova.community import (
     ReplayFrame,
     build_ctf_catalog,
     build_static_leaderboard,
+    issue_probe_document,
     issue_probe_response,
     render_replay_clip,
     run_local_arena,
@@ -96,6 +97,39 @@ def test_probe_signature_freshness_scope_revocation_and_evidence_separation() ->
             expected_scope=("mcp.initialize", "mcp.tools.list"),
             now=now,
         )
+
+
+def test_probe_issuance_document_is_strict_secret_free_and_offline() -> None:
+    now = datetime(2026, 8, 7, 12, tzinfo=UTC)
+    request = {
+        "artifactType": "sova.probe-issuance",
+        "schemaVersion": "0.1.0",
+        "subject": "component:fixture/1",
+        "nonce": "operator-nonce-123",
+        "scope": ["mcp.tools.list", "mcp.initialize"],
+        "assertions": [{"claim": "supports-tools"}],
+        "observations": [{"event": "initialize-observed", "evidenceDigest": "sha256:" + "1" * 64}],
+        "conformanceStatus": "passed",
+        "ttlSeconds": 300,
+    }
+    document = issue_probe_document(request, now=now)
+    result = verify_probe_response(
+        document,
+        expected_nonce="operator-nonce-123",
+        expected_scope=("mcp.initialize", "mcp.tools.list"),
+        now=now + timedelta(minutes=1),
+        required_key_id=document["publicKey"]["keyid"],
+    )
+    assert result["verified"] is True
+    assert document["trustPolicy"] == "included-key-integrity-only"
+
+    for mutation, message in (
+        ({**request, "unknown": True}, "missing or unknown"),
+        ({**request, "ttlSeconds": True}, "ttlSeconds"),
+        ({**request, "observations": [{"api_key": "sk-not-allowed-123456"}]}, "credential"),
+    ):
+        with pytest.raises(FormatError, match=message):
+            issue_probe_document(mutation, now=now)
 
 
 def test_probe_through_mcp_requires_exact_out_of_band_approval(tmp_path: Path) -> None:

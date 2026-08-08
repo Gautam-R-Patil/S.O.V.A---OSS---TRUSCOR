@@ -11,6 +11,23 @@ have independent version ledgers.
 
 ### Added
 
+- An inert `sova target browser-kit` authoring workflow that normalizes one
+  controlled origin, generates a strict target/campaign/assessment-plan bundle,
+  explains external proof-of-control and human approval, and performs no
+  network access or authorization inference.
+- Digest-and-size screenshot sensor evidence in owned and bounded browser
+  campaigns; raw screenshot pixels remain outside durable SOVA traces.
+- Offline `sova probe issue` and `sova probe verify` round trips with strict
+  secret-free issuance requests, ephemeral Ed25519 signatures, nonce/scope/TTL
+  binding, and explicit included-key-integrity-only trust semantics.
+- A direct `sova trace command` front door with shell-free exact executable
+  resolution, credential-shaped argument refusal, canonical digest-bound TTY
+  review, restricted environment inheritance, signed evidence, and an explicit
+  ordinary-host-authority limitation.
+- Fully applicable environment, target, code, dependency, registry, and model
+  fingerprint states plus pinned methodology/taxonomy in the bundled sleeper
+  demo, allowing its installed-wheel output to enter the strict case workspace
+  without weakening verification.
 - A provider-assisted `sova rehearse agent-run` path with bounded sanitized
   workspace disclosure, exact pre-call and pre-execution approvals, a tool-free
   strict-JSON planner, fail-closed budgets, signed planning/execution traces,

@@ -14,6 +14,12 @@ containment/substitution, execution, independent observation, oracles, trace,
 capsule, and offline verification. It is neither proof of ownership nor an
 execution request.
 
+`sova target browser-kit ORIGIN DEST` writes the target manifest, a strict
+finite browser-campaign template, the inert plan, and operator instructions as
+one authoring workspace. It normalizes the exact origin, rejects external HTTP,
+uses no network, establishes no authorization, and keeps the generated
+campaign visibly unready until its placeholders and scope are reviewed.
+
 The deterministic website/software fixtures exercise the complete measurement
 pipeline twice and compare observable outcomes. They deliberately label
 `liveTargetExecuted=false`; live execution requires an exact target, explicit

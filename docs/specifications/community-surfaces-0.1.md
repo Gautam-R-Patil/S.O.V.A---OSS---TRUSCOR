@@ -9,6 +9,12 @@ scope, issued/expiry window (maximum 15 minutes), conformance state,
 third-party assertions, SOVA observations, and optional revocation-list digest.
 States are `passed`, `failed`, `unsupported`, and `inconclusive`.
 
+`sova probe issue` accepts an exact-field, secret-screened local request and
+creates a short-lived response with a fresh ephemeral Ed25519 key. It performs
+no network request and never upgrades included-key integrity into identity or
+independent assurance. A verifier may pin the emitted key identifier through a
+separate trusted channel.
+
 Verification checks the DSSE signature, payload type, key identifier, nonce,
 scope, freshness, optional pinned key, and a locally supplied revoked-key set.
 The included public key provides integrity only. Without a pinned key,
@@ -78,6 +84,7 @@ Naming a real component requires explicit disclosure clearance.
 The public CLI accepts strict JSON documents and rejects unknown fields:
 
 ```console
+sova probe issue issuance.json response.json
 sova probe verify response.json --nonce REQUEST_NONCE --scope manifest --key-id sha256:...
 sova arena run arena.json arena-output
 sova arena agent-run agent-arena.json agent-arena-output --allow-provider-calls

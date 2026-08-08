@@ -8,9 +8,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from sova.assessment import build_assessment_plan, run_reference_assessment, target_template
+from sova.assessment import (
+    build_assessment_plan,
+    create_browser_test_kit,
+    run_reference_assessment,
+    target_template,
+)
 from sova.cli import main
 from sova.formats.errors import FormatError
+from sova.live import browser_campaign_from_mapping
 from sova.replay import verify_artifact
 from sova.targets import TargetKind, target_manifest_from_mapping
 
@@ -103,3 +109,33 @@ def test_target_cli_template_plan_and_fixture(
     assert json.loads(plan.read_text(encoding="utf-8"))["executionPerformed"] is False
     assert main(["target", "fixture", "website", str(tmp_path / "fixture")]) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "pass"
+
+
+def test_browser_kit_is_inert_complete_and_fail_closed(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    destination = tmp_path / "kit"
+    assert main(["target", "browser-kit", "https://owned.example", str(destination)]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["networkUsed"] is False
+    assert report["authorizationEstablished"] is False
+    assert report["readyForExecution"] is False
+    assert sorted(path.name for path in destination.iterdir()) == sorted(report["files"])
+    target = target_manifest_from_mapping(
+        json.loads((destination / "target.json").read_text(encoding="utf-8"))
+    )
+    campaign = browser_campaign_from_mapping(
+        json.loads((destination / "campaign.json").read_text(encoding="utf-8"))
+    )
+    assert target.configuration["allowedOrigins"] == ["https://owned.example"]
+    assert campaign.entry_url == "https://owned.example/"
+    assert campaign.total_actions == 23
+    assert "does not prove ownership" in (destination / "README.md").read_text(encoding="utf-8")
+
+    with pytest.raises(FormatError, match="require HTTPS"):
+        create_browser_test_kit("http://third-party.example", tmp_path / "unsafe")
+    with pytest.raises(FormatError, match="bare HTTP"):
+        create_browser_test_kit("https://owned.example/path", tmp_path / "path")
+    with pytest.raises(FormatError, match="not empty"):
+        create_browser_test_kit("https://owned.example", destination)

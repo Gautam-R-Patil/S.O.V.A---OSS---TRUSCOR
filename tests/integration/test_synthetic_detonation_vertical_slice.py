@@ -12,6 +12,7 @@ from sova.capsule import lint_capsule, render_capsule
 from sova.cli import main
 from sova.detonation import run_sleeper_demo
 from sova.formats.errors import FormatError
+from sova.replay import VerificationState, verify_artifact
 from sova.runtime import standard_profile
 from sova.trace import TraceReader
 from sova.workflows import run_complete_demo
@@ -25,6 +26,10 @@ def test_synthetic_sleeper_vertical_slice_is_inspectable_and_offline_verifiable(
     assert artifacts.oracle_status == "pass"
     assert artifacts.evidence_closure == "sufficient"
     assert artifacts.cleanup_verified
+    assert (
+        verify_artifact(artifacts.trace, require_signature=True).state == VerificationState.VERIFIED
+    )
+    assert verify_artifact(artifacts.capsule).state == VerificationState.VERIFIED
     assert not lint_capsule(artifacts.capsule)
     assert "SOVA synthetic sleeper detonation" in render_capsule(artifacts.capsule)
 
@@ -73,5 +78,23 @@ def test_demo_cli_outputs_paths_and_refuses_overwrite(
     assert rendered["oracleStatus"] == "pass"
     assert rendered["reproduced"] is True
     assert Path(rendered["reproductionTrace"]).is_file()
+    case = tmp_path / "case"
+    assert (
+        main(
+            [
+                "case",
+                "build",
+                rendered["trace"],
+                rendered["capsule"],
+                str(case),
+                "--title",
+                "Bundled synthetic behavior case",
+            ]
+        )
+        == 0
+    )
+    assert (case / "case.json").is_file()
+    assert (case / "replay" / "timeline.html").is_file()
+    capsys.readouterr()
     with pytest.raises(FormatError, match="not empty"):
         run_complete_demo(destination, profile=standard_profile())

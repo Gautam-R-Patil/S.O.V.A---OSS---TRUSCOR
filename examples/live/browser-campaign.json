@@ -22,7 +22,7 @@
   "budgets": {
     "maxAttempts": 4,
     "maxDurationSeconds": 300,
-    "maxActions": 28
+    "maxActions": 32
   },
   "offensive": false
 }

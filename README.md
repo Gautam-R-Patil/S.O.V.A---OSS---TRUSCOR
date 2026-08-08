@@ -298,7 +298,8 @@ Hosted model execution is not reliably bit-for-bit deterministic. SOVA therefore
 2. **Controlled re-execution** — rerun under pinned or equivalent conditions.
 3. **Semantic reproduction** — test whether the same material security outcome recurs.
 
-Instead of hiding nondeterminism, SOVA plans to report repeated trials, condition drift, and a reproduction rate.
+Instead of hiding nondeterminism, SOVA records repeated trials, condition drift,
+and reproduction-rate evidence when those inputs are supplied.
 
 ## Capability map
 
@@ -439,9 +440,11 @@ The pre-alpha now includes:
 These are implemented engineering capabilities, not a claim that the current
 generic search algorithm is novel or superior on real systems.
 
-## Capability surface and remaining expansion
+## Implemented capability surface
 
-The implemented core above is the base. The remaining product expansion is:
+The following capability families are implemented experimentally at `0.1`.
+Their validated depth differs by backend; the project-status table below names
+the real-runtime evidence and every remaining external boundary.
 
 ### Discover
 
@@ -564,6 +567,7 @@ sova rehearse agent-run ./provider-request.json ./provider-runtime.json ./rehear
 sova rehearse export ./report.json ./rehearsal ./accepted --approve sha256:CHANGE_ID
 
 # Freeze and compare behavior, then run local/CI gates
+sova trace command ./run.sova-trace --working-directory ./owned-workspace -- /absolute/executable ARG
 sova trace snapshot ./baseline.json --output ./baseline.snapshot.json
 sova trace snapshot ./current.json --output ./current.snapshot.json
 sova diff ./baseline.snapshot.json ./current.snapshot.json
@@ -599,7 +603,8 @@ sova extension discover
 sova extension prepare ./manifest.json ./launch.json --executable /absolute/python --working-directory /absolute/example --argument /absolute/example/safe_oracle.py
 sova extension run ./manifest.json ./launch.json ./extension-output
 
-# Verify a signed, nonce-bound probe response offline
+# Issue and verify a signed, nonce-bound probe response offline
+sova probe issue ./probe-issuance.json ./response.json
 sova probe verify ./response.json --nonce REQUEST_NONCE --scope manifest --key-id sha256:...
 
 # Initialize and diagnose account-free local state
@@ -614,6 +619,7 @@ sova conformance export ./sova-conformance-0.1.zip
 sova conformance verify ./sova-conformance-0.1.zip
 
 # Plan an authorized website/software assessment without connecting to it
+sova target browser-kit https://owned.example ./owned-browser-kit
 sova target template browser-agent ./website-target.json
 sova target validate ./website-target.json
 sova target plan ./website-target.json ./website-plan.json
@@ -644,7 +650,8 @@ sova detonate browser ./website-target.json ./scenario.sova ./website-proof \
   --control-proof ./website-proof.json
 
 # Search multiple reviewed interactions through a real browser, capture
-# snapshot/console/network sensors, reproduce success, and package discovery.sova.
+# snapshot/screenshot-digest/console/network sensors, reproduce success, and
+# package discovery.sova.
 sova hunt owned-web-fixture ./live-browser-hunt
 sova hunt browser ./website-target.json ./browser-campaign.json ./website-hunt \
   --control-proof ./website-proof.json

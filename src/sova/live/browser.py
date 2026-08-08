@@ -124,6 +124,7 @@ def build_owned_web_capsule(url: str, destination: Path) -> None:
         ("browser.type", {"target": "#message", "text": "blue owl"}),
         ("browser.click", {"target": "#send", "element": "Send button"}),
         ("browser.snapshot", {}),
+        ("browser.screenshot", {}),
     ]
     scenario["procedure"]["steps"] = [
         {
@@ -157,6 +158,7 @@ def build_owned_web_capsule(url: str, destination: Path) -> None:
         "tool.completed",
         "oracle.completed",
         "run.lifecycle",
+        "browser.screenshot-digest",
     ]
     scenario["safety"] = {
         "budgets": {"maxSteps": len(actions), "maxStepSeconds": 20},
@@ -168,6 +170,8 @@ def build_owned_web_capsule(url: str, destination: Path) -> None:
         "The fixture proves live browser execution, not universal website compatibility.",
         "The browser process is restricted by origin and profile policy but is not a VM sandbox.",
         "Only observable browser state is recorded; private model thoughts are never claimed.",
+        "Screenshot pixels remain in the executor response only; SOVA records digest and "
+        "size evidence.",
     ]
     scenario["extensions"] = {"x-sova-owned-fixture": {"origin": origin}}
     manifest = capsule_manifest_template(

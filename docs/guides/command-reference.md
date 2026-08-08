@@ -13,12 +13,17 @@ human text or HTML artifact is the command's purpose.
 | Trace/replay | `playback`, `replay modes`, `replay timeline`, `replay study`, `replay clip`, `query`, `compare`, `export`, `recover-trace` |
 | First value | `map`, `check`, `demo`, `safety backends`, `executors receipts` |
 | Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics browser-counterfactual`, `forensics benchmark`, `evidence`, `case build`, `adjudicate`, `compose` |
-| Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse agent-run`, `rehearse export`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `ci`, `self-check` |
-| Registry/community | `registry verify`, `sync`, `contribute`, `probe verify`, `arena run`, `arena agent-run`, `leaderboard build`, `ctf build` |
+| Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse agent-run`, `rehearse export`, `trace command`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `ci`, `self-check` |
+| Registry/community | `registry verify`, `sync`, `contribute`, `probe issue`, `probe verify`, `arena run`, `arena agent-run`, `leaderboard build`, `ctf build` |
 | Extensions | `extension discover`, `extension prepare`, `extension run` |
 | Local MCP | `mcp manifest`, `mcp init-control`, `mcp approve`, `mcp serve` |
 | Release and compatibility | `release sbom`, `release checksums`, `release verify-checksums`, `conformance export`, `conformance verify` |
-| Authorized targets | `target template`, `target validate`, `target plan`, `target fixture`, `target challenge`, `target prove`, `detonate owned-web-fixture`, `detonate owned-software-fixture`, `detonate browser`, `detonate software`, `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser` |
+| Authorized targets | `target browser-kit`, `target template`, `target validate`, `target plan`, `target fixture`, `target challenge`, `target prove`, `detonate owned-web-fixture`, `detonate owned-software-fixture`, `detonate browser`, `detonate software`, `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser` |
+
+`sova target browser-kit ORIGIN DESTINATION` writes an inert, secret-free
+browser assessment starter kit. It accepts HTTPS or loopback HTTP, performs no
+network request, establishes no authorization, and deliberately requires the
+operator to replace scenario placeholders before a live run.
 
 The CLI browser detonation accepts the built-in loopback fixture or one external
 HTTPS origin with a current well-known control proof. It requires a
@@ -26,6 +31,12 @@ human-operated terminal and an exact fresh approval phrase for every action.
 Other `detonate` and `probe` operations remain exact-gated local MCP tools;
 every offensive MCP invocation requires an expiring, single-use approval
 through the separate local control channel.
+
+`sova probe issue REQUEST RESPONSE` signs a strict local observation document
+with an ephemeral Ed25519 key. `probe verify` checks signature, nonce, exact
+scope, TTL, optional key pinning, and local revocation entirely offline. The
+included key proves document integrity only; neither command establishes the
+subject's identity, trustworthiness, or independent certification.
 
 The software detonation commands accept only finite `process.exec` scenarios
 against credential-stripped disposable copies and one exact trusted
@@ -43,6 +54,13 @@ only that the finite declared candidate set was exhausted.
 
 Trace playback, controlled re-execution, and semantic reproduction are distinct
 operations. No command claims to capture hidden chain-of-thought.
+
+`sova trace command TRACE --working-directory DIR -- EXECUTABLE ARG...` is the
+interactive front door for one local shell-free command. It resolves and
+allowlists the exact executable, rejects credential-shaped arguments, shows a
+canonical review document, and requires its digest-bound phrase in a TTY before
+execution. It inherits only the restricted local-executor environment and signs
+the result, but it still runs with ordinary host authority and is not a sandbox.
 
 `hunt agent-browser` adds tool-isolated provider roles before the same reviewed
 browser authority. It requires `--allow-provider-calls`; provider configuration

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 from dataclasses import asdict
@@ -14,7 +15,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sova import __version__
-from sova.assessment import build_assessment_plan, run_reference_assessment, target_template
+from sova.assessment import (
+    build_assessment_plan,
+    create_browser_test_kit,
+    run_reference_assessment,
+    target_template,
+)
 from sova.capsule import (
     analyze_migration,
     build_capsule,
@@ -27,6 +33,7 @@ from sova.capsule import (
 from sova.community import (
     build_ctf_document,
     build_leaderboard_document,
+    issue_probe_document,
     render_replay_clip_document,
     run_agent_arena_document,
     run_arena_document,
@@ -141,7 +148,7 @@ from sova.safety import (
 )
 from sova.search import run_trigger_search_demo
 from sova.targets import TargetKind, target_manifest_from_mapping, validate_target_manifest
-from sova.trace import TraceReader, recover_trace
+from sova.trace import Redactor, TraceReader, recover_trace
 from sova.trace.otel import export_event
 from sova.workflows import build_case_workspace, run_browser_check, run_check, run_complete_demo
 
@@ -272,6 +279,13 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     target_prove.add_argument("challenge", type=_path)
     target_prove.add_argument("destination", type=_path)
     target_prove.set_defaults(handler=_target_prove)
+    target_browser_kit = target_commands.add_parser(
+        "browser-kit",
+        help="write an inert authorized-browser target, campaign, plan, and instructions",
+    )
+    target_browser_kit.add_argument("origin")
+    target_browser_kit.add_argument("destination", type=_path)
+    target_browser_kit.set_defaults(handler=_target_browser_kit)
 
     detonate_parser = commands.add_parser(
         "detonate",
@@ -745,6 +759,20 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     trace_run.add_argument("specification", type=_path)
     trace_run.add_argument("destination", type=_path)
     trace_run.set_defaults(handler=_trace_run)
+    trace_command = trace_commands.add_parser(
+        "command",
+        help="record one exact shell-free local command after interactive human approval",
+    )
+    trace_command.add_argument("destination", type=_path)
+    trace_command.add_argument("--working-directory", type=_path, required=True)
+    trace_command.add_argument("--timeout-seconds", type=float, default=60.0)
+    trace_command.add_argument(
+        "--capture-profile",
+        choices=("lite", "standard", "forensic", "interpretability"),
+        default="standard",
+    )
+    trace_command.add_argument("argv", nargs="+")
+    trace_command.set_defaults(handler=_trace_command)
     trace_snapshot = trace_commands.add_parser(
         "snapshot", help="canonicalize declared behavior, environment, and methodology axes"
     )
@@ -821,6 +849,12 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         "probe", help="verify signed, nonce-bound local probe evidence"
     )
     probe_commands = probe_parser.add_subparsers(dest="probe_command")
+    probe_issue = probe_commands.add_parser(
+        "issue", help="sign one secret-free local probe response with an ephemeral key"
+    )
+    probe_issue.add_argument("request", type=_path)
+    probe_issue.add_argument("destination", type=_path)
+    probe_issue.set_defaults(handler=_probe_issue)
     probe_verify = probe_commands.add_parser(
         "verify", help="verify a signed probe response offline"
     )
@@ -1045,6 +1079,12 @@ def _target_prove(args: argparse.Namespace) -> int:
     proof = collect_website_control_proof(challenge)
     args.destination.write_bytes(canonical_json_bytes(proof.to_mapping()) + b"\n")
     sys.stdout.buffer.write(canonical_json_bytes(proof.to_mapping()) + b"\n")
+    return 0
+
+
+def _target_browser_kit(args: argparse.Namespace) -> int:
+    report = create_browser_test_kit(str(args.origin), args.destination)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
     return 0
 
 
@@ -1597,6 +1637,26 @@ def _probe_verify(args: argparse.Namespace) -> int:
         revoked_key_ids=tuple(args.revoked_key_id),
     )
     sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _probe_issue(args: argparse.Namespace) -> int:
+    response = issue_probe_document(_load_object(args.request), now=datetime.now(UTC))
+    args.destination.write_bytes(canonical_json_bytes(response) + b"\n")
+    sys.stdout.buffer.write(
+        canonical_json_bytes(
+            {
+                "artifactType": "sova.probe-issuance-report",
+                "schemaVersion": "0.1.0",
+                "response": str(args.destination.resolve()),
+                "keyId": response["publicKey"]["keyid"],
+                "trustPolicy": response["trustPolicy"],
+                "identityTrustEstablished": False,
+                "networkUsed": False,
+            }
+        )
+        + b"\n"
+    )
     return 0
 
 
@@ -2436,6 +2496,87 @@ def _rehearse_export(args: argparse.Namespace) -> int:
 
 def _trace_run(args: argparse.Namespace) -> int:
     result = record_local_process(_load_object(args.specification), args.destination)
+    sys.stdout.buffer.write(canonical_json_bytes(result) + b"\n")
+    return 0 if result["processStatus"] == "succeeded" else 3
+
+
+_SENSITIVE_COMMAND_ARGUMENT = re.compile(
+    r"^--?(?:api[-_]?key|authorization|cookie|credential|password|secret|session|token)(?:=|$)",
+    re.IGNORECASE,
+)
+
+
+def _trace_command(args: argparse.Namespace) -> int:
+    if not sys.stdin.isatty():
+        raise FormatError(
+            "SOVA-TRACE-INTERACTIVE-APPROVAL",
+            "direct command capture requires a human-operated interactive terminal",
+        )
+    argv = tuple(str(item) for item in args.argv)
+    if argv and argv[0] == "--":
+        argv = argv[1:]
+    if not argv:
+        raise FormatError("SOVA-TRACE-ARGV", "provide an executable after `--`")
+    if any(_SENSITIVE_COMMAND_ARGUMENT.search(item) for item in argv):
+        raise FormatError(
+            "SOVA-TRACE-SENSITIVE-ARGV",
+            "direct command arguments cannot contain credential-bearing option names",
+        )
+    _, sensitive = Redactor(context_id="sova-trace-command-review").redact({"argv": list(argv)})
+    if sensitive:
+        raise FormatError(
+            "SOVA-TRACE-SENSITIVE-ARGV",
+            "direct command arguments cannot contain credential-shaped values",
+        )
+    discovered = shutil.which(argv[0])
+    executable = (Path(discovered) if discovered else Path(argv[0])).resolve()
+    if not executable.is_file():
+        raise FormatError("SOVA-TRACE-EXECUTABLE", "command executable does not exist")
+    cwd = args.working_directory.resolve()
+    if not cwd.is_dir():
+        raise FormatError("SOVA-TRACE-CWD", "working directory does not exist")
+    review = {
+        "executable": str(executable),
+        "argv": [str(executable), *argv[1:]],
+        "workingDirectory": str(cwd),
+        "timeoutSeconds": str(args.timeout_seconds),
+        "captureProfile": str(args.capture_profile),
+        "shell": False,
+        "nativeSandbox": False,
+    }
+    review_digest = sha256_digest(canonical_json_bytes(review))
+    exact_phrase = f"APPROVE TRACE {review_digest[-16:]}"
+    sys.stderr.write(canonical_json_bytes(review).decode("utf-8") + "\n")
+    sys.stderr.write(
+        "This command runs with restricted environment inheritance but ordinary host authority; "
+        "it is not a security sandbox.\n"
+    )
+    supplied = input(f"Type exactly `{exact_phrase}`: ")
+    if supplied != exact_phrase:
+        raise FormatError("SOVA-TRACE-APPROVAL", "direct command approval phrase did not match")
+    result = record_local_process(
+        {
+            "argv": review["argv"],
+            "workingDirectory": str(cwd),
+            "timeoutSeconds": args.timeout_seconds,
+            "captureProfile": args.capture_profile,
+            "authorizationConfirmed": True,
+            "executableAllowlist": [str(executable)],
+            "observedEvents": [
+                {
+                    "kind": "authorization.decision",
+                    "payload": {
+                        "decision": "allowed",
+                        "method": "exact-interactive-command-review",
+                        "reviewDigest": review_digest,
+                    },
+                }
+            ],
+        },
+        args.destination,
+    )
+    result["directCommandFrontDoor"] = True
+    result["reviewDigest"] = review_digest
     sys.stdout.buffer.write(canonical_json_bytes(result) + b"\n")
     return 0 if result["processStatus"] == "succeeded" else 3
 

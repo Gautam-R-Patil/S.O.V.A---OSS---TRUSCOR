@@ -126,7 +126,7 @@ class BrowserCampaign:
 
     @property
     def total_actions(self) -> int:
-        return sum(4 + 2 * len(candidate) for candidate in self.selected_candidates)
+        return sum(5 + 2 * len(candidate) for candidate in self.selected_candidates)
 
     @property
     def digest(self) -> str:
@@ -327,6 +327,13 @@ def _build_candidate_capsule(
                 "inputs": {},
                 "onFailure": "stop",
                 "requires": ["browser.snapshot/0.1"],
+            },
+            {
+                "id": "screenshot",
+                "action": "browser.screenshot",
+                "inputs": {},
+                "onFailure": "continue",
+                "requires": ["browser.screenshot/0.1"],
             },
             {
                 "id": "console",

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from sova.formats import canonical_json_bytes, sha256_digest, strict_json_loads
 from sova.formats.errors import FormatError
-from sova.trace import sign_dsse_payload, verify_dsse_payload
+from sova.trace import Redactor, generate_ed25519_keypair, sign_dsse_payload, verify_dsse_payload
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -54,6 +54,8 @@ def issue_probe_response(  # noqa: PLR0913 - explicit security bindings are inte
     """Issue an offline-verifiable response; issuance does not establish subject trust."""
     if not subject or not nonce or not scope:
         raise FormatError("SOVA-PROBE-REQUEST", "subject, nonce, and scope are required")
+    if any(not isinstance(item, dict) for item in (*assertions, *observations)):
+        raise FormatError("SOVA-PROBE-EVIDENCE", "probe evidence entries must be objects")
     if not timedelta(0) < ttl <= _MAX_TTL:
         raise FormatError("SOVA-PROBE-TTL", "probe response TTL must be within 15 minutes")
     if conformance_status not in {
@@ -97,6 +99,67 @@ def issue_probe_response(  # noqa: PLR0913 - explicit security bindings are inte
         },
         "trustPolicy": "included-key-integrity-only",
     }
+
+
+def issue_probe_document(value: dict[str, Any], *, now: datetime) -> dict[str, Any]:
+    """Strictly parse a secret-free issuance request and sign it with an ephemeral key."""
+    required = {
+        "artifactType",
+        "schemaVersion",
+        "subject",
+        "nonce",
+        "scope",
+        "assertions",
+        "observations",
+        "conformanceStatus",
+        "ttlSeconds",
+    }
+    if set(value) != required:
+        raise FormatError(
+            "SOVA-PROBE-ISSUANCE-FIELDS",
+            "probe issuance request has missing or unknown fields",
+            details={"fields": sorted(value)},
+        )
+    if value.get("artifactType") != "sova.probe-issuance" or value.get("schemaVersion") != "0.1.0":
+        raise FormatError("SOVA-PROBE-ISSUANCE-VERSION", "probe issuance version is unsupported")
+    subject = value.get("subject")
+    nonce = value.get("nonce")
+    scope = value.get("scope")
+    assertions = value.get("assertions")
+    observations = value.get("observations")
+    status = value.get("conformanceStatus")
+    ttl_seconds = value.get("ttlSeconds")
+    if not isinstance(subject, str) or not isinstance(nonce, str):
+        raise FormatError("SOVA-PROBE-REQUEST", "subject and nonce must be strings")
+    if not isinstance(scope, list) or not scope or any(not isinstance(item, str) for item in scope):
+        raise FormatError("SOVA-PROBE-REQUEST", "scope must be a non-empty string array")
+    if not isinstance(assertions, list) or any(not isinstance(item, dict) for item in assertions):
+        raise FormatError("SOVA-PROBE-EVIDENCE", "assertions must be an object array")
+    if not isinstance(observations, list) or any(
+        not isinstance(item, dict) for item in observations
+    ):
+        raise FormatError("SOVA-PROBE-EVIDENCE", "observations must be an object array")
+    if not isinstance(status, str):
+        raise FormatError("SOVA-PROBE-STATUS", "conformanceStatus must be a string")
+    if isinstance(ttl_seconds, bool) or not isinstance(ttl_seconds, int):
+        raise FormatError("SOVA-PROBE-TTL", "ttlSeconds must be an integer")
+    _, sensitive = Redactor(context_id="sova-probe-issuance").redact(value)
+    if sensitive:
+        raise FormatError(
+            "SOVA-PROBE-SENSITIVE",
+            "probe issuance requests cannot contain credential-shaped material",
+        )
+    return issue_probe_response(
+        generate_ed25519_keypair(),
+        subject=subject,
+        nonce=nonce,
+        scope=tuple(scope),
+        assertions=tuple(assertions),
+        observations=tuple(observations),
+        conformance_status=status,
+        now=now,
+        ttl=timedelta(seconds=ttl_seconds),
+    )
 
 
 def verify_probe_response(  # noqa: PLR0913 - explicit verifier expectations are intentional

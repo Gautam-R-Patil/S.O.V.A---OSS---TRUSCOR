@@ -25,7 +25,7 @@ from sova.community.config import (
 from sova.community.ctf import CTFScenario, build_ctf_catalog
 from sova.community.leaderboard import LeaderboardSubmission, build_static_leaderboard
 from sova.community.media import ReplayClipSpec, ReplayFrame, render_replay_clip
-from sova.community.probe import issue_probe_response, verify_probe_response
+from sova.community.probe import issue_probe_document, issue_probe_response, verify_probe_response
 
 __all__ = [
     "STANDARD_ARENA_PROFILE",
@@ -44,6 +44,7 @@ __all__ = [
     "build_ctf_document",
     "build_leaderboard_document",
     "build_static_leaderboard",
+    "issue_probe_document",
     "issue_probe_response",
     "render_replay_clip",
     "render_replay_clip_document",

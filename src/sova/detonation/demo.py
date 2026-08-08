@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
+from sova import __version__
 from sova.capsule import DomainProfile, build_capsule, capsule_manifest_template
 from sova.detonation.backends import SyntheticDetonationBackend
 from sova.detonation.sensors import SensorHealth, SensorKind, SensorMesh
@@ -136,6 +137,24 @@ def _manifest() -> dict[str, Any]:
     ]
     manifest["requiredFeatures"] = ["scenario.core/0.1", "detonation.synthetic/0.1"]
     manifest["optionalFeatures"] = ["sensor.evidence-closure/0.1"]
+    manifest["methodology"] = {
+        "id": "SOVA-SYNTHETIC-SLEEPER",
+        "version": "0.1.0",
+        "digest": sha256_digest(canonical_json_bytes(_scenario())),
+    }
+    manifest["taxonomy"] = {
+        "id": "sova.synthetic-trigger-family",
+        "version": "0.1.0",
+        "digest": sha256_digest(
+            canonical_json_bytes(
+                {
+                    "class": "environment-gated",
+                    "dimensions": ["message", "environment"],
+                    "target": "sova:target:sleeper",
+                }
+            )
+        ),
+    }
     return manifest
 
 
@@ -267,6 +286,80 @@ def run_sleeper_demo(destination: Path) -> DemoArtifacts:  # noqa: PLR0915
         raise FormatError("SOVA-DEMO-SEARCH", "bounded search did not find the planted trigger")
 
     signing_key = generate_ed25519_keypair()
+    code_digest = sha256_digest(
+        canonical_json_bytes(
+            {
+                "sovaVersion": __version__,
+                "scenario": _scenario(),
+                "backendDigest": descriptor.digest,
+            }
+        )
+    )
+    dependencies = [
+        {"name": "python", "version": platform.python_version()},
+        {"name": "sova-oss", "version": __version__},
+    ]
+    environment = {
+        "platform": "sova-synthetic-world/0.1",
+        "python": platform.python_version(),
+        "codeDigest": code_digest,
+        "model": None,
+        "dependencies": dependencies,
+    }
+
+    def fingerprint(
+        value: str | None,
+        *,
+        status: str,
+        method: str,
+        source: str,
+    ) -> dict[str, Any]:
+        return {
+            "value": value,
+            "status": status,
+            "method": method,
+            "source": source,
+            "version": "0.1.0",
+        }
+
+    fingerprints = {
+        "environment": fingerprint(
+            sha256_digest(canonical_json_bytes(environment)),
+            status="recorded",
+            method="canonical-synthetic-environment-digest",
+            source="sova.detonation.demo",
+        ),
+        "target": fingerprint(
+            sha256_digest(canonical_json_bytes({"id": target.id, "kind": target.kind.value})),
+            status="recorded",
+            method="canonical-ground-truth-target-digest",
+            source="sova.detonation.targets",
+        ),
+        "code": fingerprint(
+            code_digest,
+            status="recorded",
+            method="version-scenario-and-backend-digest",
+            source="sova.detonation.demo",
+        ),
+        "dependencies": fingerprint(
+            sha256_digest(canonical_json_bytes(dependencies)),
+            status="recorded",
+            method="canonical-dependency-digest",
+            source="local runtime",
+        ),
+        "registry": fingerprint(
+            None,
+            status="not-applicable",
+            method="no-registry-used",
+            source="bundled synthetic demo",
+        ),
+        "model": fingerprint(
+            None,
+            status="not-applicable",
+            method="no-model-used",
+            source="deterministic synthetic target",
+        ),
+    }
     writer = TraceWriter(
         trace_path,
         authorization={
@@ -274,13 +367,8 @@ def run_sleeper_demo(destination: Path) -> DemoArtifacts:  # noqa: PLR0915
             "scopeDigest": authorization.scope_digest,
             "decidedBy": "sova.authorization-kernel/0.1",
         },
-        environment={
-            "platform": "sova-synthetic-world/0.1",
-            "python": platform.python_version(),
-            "codeDigest": None,
-            "model": None,
-            "dependencies": [],
-        },
+        environment=environment,
+        fingerprints=fingerprints,
         executor={
             "id": descriptor.id,
             "name": descriptor.name,

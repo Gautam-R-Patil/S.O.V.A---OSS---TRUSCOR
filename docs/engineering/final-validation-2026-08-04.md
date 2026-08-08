@@ -2,6 +2,9 @@
 
 # SOVA OSS whole-repository validation report
 
+> Historical snapshot. The current implementation evidence is in the
+> [2026-08-08 founder-vision validation](./final-validation-2026-08-08.md).
+
 Validated on 2026-08-04 against Python 3.11 on Windows. This is an
 evidence-backed pre-alpha engineering report, not a safety certificate,
 independent audit, patent opinion, peer review, or claim of universal target

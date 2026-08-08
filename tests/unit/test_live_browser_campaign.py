@@ -20,7 +20,7 @@ def test_campaign_round_trip_preserves_exact_action_budget() -> None:
     parsed = browser_campaign_from_mapping(source.to_mapping())
 
     assert parsed == source
-    assert parsed.total_actions == 28
+    assert parsed.total_actions == 32
     assert parsed.digest == source.digest
 
 

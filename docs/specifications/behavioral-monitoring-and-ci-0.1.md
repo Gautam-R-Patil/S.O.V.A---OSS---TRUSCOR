@@ -12,6 +12,13 @@ registered observable events stream into a signed trace. Capture profiles are
 `lite`, `standard`, `forensic`, and `interpretability`; they retain the privacy
 semantics of `.sova-trace` 0.1.
 
+`sova trace command TRACE --working-directory DIR -- EXECUTABLE ARG...` builds
+the same strict specification only after a human-operated terminal reviews a
+canonical digest of the resolved executable, full secret-screened argument
+vector, working directory, timeout, and capture profile. It refuses secret-like
+option names and values, invokes no shell, and adds a digest-bound authorization
+event. This convenience front door does not strengthen host isolation.
+
 The recorder separately measures process elapsed time, total recorder elapsed
 time, and their non-negative difference as instrumentation-path time. The ratio
 is a per-run engineering measurement, not a causal or cross-machine benchmark.

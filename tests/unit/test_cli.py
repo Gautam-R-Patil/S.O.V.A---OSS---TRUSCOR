@@ -8,6 +8,7 @@ import importlib.metadata
 import json
 import runpy
 import sys
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -250,6 +251,103 @@ def test_clean_lint_branch(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -
     capsys.readouterr()
     assert main(["lint", str(capsule)]) == 0
     assert capsys.readouterr().out == "CLEAN\n"
+
+
+def test_probe_issue_and_verify_cli_round_trip(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    request = tmp_path / "probe-request.json"
+    response = tmp_path / "probe-response.json"
+    request.write_text(
+        json.dumps(
+            {
+                "artifactType": "sova.probe-issuance",
+                "schemaVersion": "0.1.0",
+                "subject": "component:fixture/1",
+                "nonce": "nonce-123",
+                "scope": ["fixture.observe"],
+                "assertions": [],
+                "observations": [{"event": "fixture-observed"}],
+                "conformanceStatus": "passed",
+                "ttlSeconds": 300,
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert main(["probe", "issue", str(request), str(response)]) == 0
+    issuance = json.loads(capsys.readouterr().out)
+    assert issuance["identityTrustEstablished"] is False
+    assert issuance["networkUsed"] is False
+    assert (
+        main(
+            [
+                "probe",
+                "verify",
+                str(response),
+                "--nonce",
+                "nonce-123",
+                "--scope",
+                "fixture.observe",
+                "--key-id",
+                issuance["keyId"],
+            ]
+        )
+        == 0
+    )
+    assert json.loads(capsys.readouterr().out)["verified"] is True
+
+
+def test_direct_trace_command_requires_and_binds_exact_human_review(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fixture = tmp_path / "fixture.py"
+    fixture.write_text("print('SOVA_DIRECT_TRACE_OK')\n", encoding="utf-8")
+    trace = tmp_path / "direct.sova-trace"
+    arguments = [
+        "trace",
+        "command",
+        str(trace),
+        "--working-directory",
+        str(tmp_path),
+        "--",
+        sys.executable,
+        str(fixture),
+    ]
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: False))
+    assert main(arguments) == 2
+    assert "human-operated" in capsys.readouterr().err
+
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr("builtins.input", lambda prompt: prompt.split("`")[1])
+    assert main(arguments) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["directCommandFrontDoor"] is True
+    assert report["processStatus"] == "succeeded"
+    assert report["signed"] is True
+    assert trace.is_file()
+
+    secret_trace = tmp_path / "secret.sova-trace"
+    assert (
+        main(
+            [
+                "trace",
+                "command",
+                str(secret_trace),
+                "--working-directory",
+                str(tmp_path),
+                "--",
+                sys.executable,
+                str(fixture),
+                "--password",
+                "not-recorded",
+            ]
+        )
+        == 2
+    )
+    assert "credential-bearing" in capsys.readouterr().err
 
 
 def test_map_command_emits_or_writes_a_distinct_local_report(

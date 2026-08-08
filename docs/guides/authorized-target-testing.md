@@ -7,6 +7,20 @@ login, or command line is not proof of authorization.
 
 ## Prepare the portable target contract
 
+The quickest safe starting point for a browser target is an inert kit:
+
+```console
+sova target browser-kit https://owned.example ./owned-browser-kit
+```
+
+The command writes `target.json`, `campaign.json`, an assessment plan, and exact
+operator instructions. It does not contact the origin, prove control, authorize
+execution, or make the template ready to run. Replace the target version,
+authorization reference, UI selectors, finite candidates, and observable oracle
+before validation. External HTTP is refused; HTTP is allowed only for loopback.
+
+For other target kinds, use the lower-level templates:
+
 ```console
 sova target template browser-agent website-target.json
 sova target template local-process software-target.json
@@ -56,8 +70,14 @@ origin, displays every intended action in a closed batch, requests one fresh
 exact approval phrase for that batch, issues a separate signed one-use token
 for every action, executes a two-turn planted behavior, judges the final
 accessibility snapshot, repeats the
-scenario with fresh authority, compares the observable oracle result, signs
+scenario with fresh authority, compares the observable oracle result, captures
+accessibility, console, network, and screenshot digest/size sensor evidence, signs
 both traces, and embeds them in an evidence capsule.
+
+Raw screenshot pixels are not written into the trace. The adapter validates the
+bounded binary response, computes SHA-256 and byte-size evidence, then discards
+the pixels. This minimizes disclosure risk; it is not visual redaction and does
+not prove that an executor did not retain its own copy.
 
 This proves the live browser/evidence path on SOVA's own target. It is not a VM
 sandbox, a production-site test, a jailbreak-superiority result, or evidence

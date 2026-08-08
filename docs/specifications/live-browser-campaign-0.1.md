@@ -50,6 +50,7 @@ fresh approval before controlled reproduction.
 Each attempt reloads the entry URL, performs its ordered messages, and records:
 
 - accessibility snapshots and post-action observations;
+- screenshot digest, media type, and byte-size evidence without durable raw pixels;
 - browser console messages exposed by Playwright MCP;
 - browser network requests exposed by Playwright MCP;
 - authorization decisions and normalized tool outcomes;
@@ -71,5 +72,7 @@ so the capsule passes offline structural verification.
 - A miss means only that the bounded candidate set did not satisfy the oracle.
 - Console and network capture is limited to observable data returned by the
   executor.
+- Screenshot hashing minimizes durable disclosure but is not pixel redaction;
+  SOVA cannot prove that an external executor retained no copy.
 - An ephemeral origin-restricted browser is not a VM security sandbox.
 - SOVA does not capture private model thoughts or hidden chain-of-thought.

@@ -1,0 +1,18 @@
+{
+  "artifactType": "sova.probe-issuance",
+  "schemaVersion": "0.1.0",
+  "subject": "component:replace-with-exact-version",
+  "nonce": "replace-with-fresh-verifier-nonce",
+  "scope": [
+    "replace-with-exact-observed-capability"
+  ],
+  "assertions": [],
+  "observations": [
+    {
+      "event": "replace-with-sova-observation",
+      "evidenceDigest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "conformanceStatus": "inconclusive",
+  "ttlSeconds": 300
+}

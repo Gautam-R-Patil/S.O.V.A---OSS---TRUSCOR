@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import base64
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
@@ -49,6 +50,7 @@ class _DeterministicBrowserMCP:
             "browser_snapshot",
             "browser_type",
             "browser_click",
+            "browser_take_screenshot",
             "browser_console_messages",
             "browser_network_requests",
         )
@@ -101,11 +103,18 @@ class _DeterministicBrowserMCP:
             elif self.current == "enable research mode":
                 self.armed = True
             self.current = ""
-        return MCPToolResult(
-            ({"type": "text", "text": self._snapshot()},),
-            None,
-            is_error=False,
+        content: tuple[dict[str, Any], ...] = (
+            (
+                {
+                    "type": "image",
+                    "data": base64.b64encode(b"fixture pixels").decode(),
+                    "mimeType": "image/png",
+                },
+            )
+            if name == "browser_take_screenshot"
+            else ({"type": "text", "text": self._snapshot()},)
         )
+        return MCPToolResult(content, None, is_error=False)
 
     def close(self) -> None:
         return
@@ -150,7 +159,7 @@ def test_live_browser_coordinator_captures_reproduces_and_packages(
         "universalSafety": False,
     }
     assert report["authorization"]["freshExactBatchApproval"] is True
-    assert report["authorization"]["approvedIntentCountPerRun"] == 6
+    assert report["authorization"]["approvedIntentCountPerRun"] == 7
     assert report["containment"]["nativeSandboxClaim"] is False
 
 
