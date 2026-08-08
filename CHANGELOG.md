@@ -24,6 +24,8 @@ have independent version ledgers.
   resolution, credential-shaped argument refusal, canonical digest-bound TTY
   review, restricted environment inheritance, signed evidence, and an explicit
   ordinary-host-authority limitation.
+- Cross-platform extension launch hardening that rejects inline code flags for
+  version-suffixed Python, PyPy, and Node executables plus common POSIX shells.
 - Fully applicable environment, target, code, dependency, registry, and model
   fingerprint states plus pinned methodology/taxonomy in the bundled sleeper
   demo, allowing its installed-wheel output to enter the strict case workspace

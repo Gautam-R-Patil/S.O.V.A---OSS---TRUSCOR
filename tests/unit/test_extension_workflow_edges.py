@@ -18,6 +18,7 @@ from sova.extensions import (
     extension_launch_from_mapping,
     prepare_extension_launch,
     run_extension_workflow,
+    workflow,
 )
 from sova.formats import sha256_digest
 from sova.formats.errors import FormatError
@@ -262,6 +263,23 @@ def test_extension_workflow_rejects_executable_drift_and_inline_code(tmp_path: P
             tmp_path / "inline",
             approval_prompt=_approve,
         )
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    (
+        ("python3.11", frozenset({"-c", "-m"})),
+        ("pypy3.10", frozenset({"-c", "-m"})),
+        ("node20", frozenset({"-e", "--eval"})),
+        ("bash", frozenset({"-c"})),
+        ("safe-oracle", frozenset()),
+    ),
+)
+def test_inline_interpreter_detection_is_portable(
+    name: str,
+    expected: frozenset[str],
+) -> None:
+    assert workflow._inline_flags_for_executable(Path("/usr/bin") / name) == expected
 
 
 def test_extension_payload_rejects_secret_shaped_content(tmp_path: Path) -> None:

@@ -188,7 +188,8 @@ def test_workspace_snapshot_reports_delta_symlinks_and_budgets(
         assert software._snapshot_workspace(workspace).complete is False
     monkeypatch.setattr(software, "_MAX_SNAPSHOT_FILES", 0)
     limited = software._snapshot_workspace(workspace)
-    assert not limited.complete and "budget" in limited.limitations[0]
+    assert not limited.complete
+    assert any("budget" in limitation for limitation in limited.limitations)
 
 
 def test_observed_executor_converts_incomplete_sensor_to_partial(

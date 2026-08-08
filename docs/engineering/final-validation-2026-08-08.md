@@ -37,11 +37,11 @@ not persisted in traces.
 
 | Control | Result |
 |---|---|
-| Mandatory offline tests | 975 passed, 6 optional skips, 0 failed |
-| Branch-aware coverage | 95.07% over 15,640 statements and 4,428 branches |
+| Mandatory offline tests | 980 passed, 6 optional skips, 0 failed |
+| Branch-aware coverage | 95.08% over 15,657 statements and 4,436 branches |
 | CLI audit | all 86 leaf handlers executed; no unexecuted command |
 | Real browser group | 9 passed, including 5 actual Playwright/Chrome cases |
-| Formatting and lint | 412 files formatted; Ruff passed |
+| Formatting and lint | 413 files formatted; Ruff passed |
 | Static typing | strict mypy passed across 278 files |
 | Generated contracts | glossary and taxonomy checks passed |
 | Repository policy | passed |
@@ -98,6 +98,10 @@ preview without executing a target or using a network.
   without placing raw image content in durable traces.
 - The bundled demo now enters the same strict case pipeline as live browser
   findings rather than relying on a weaker partial-verification exception.
+- Extension execution now recognizes version-suffixed Python, PyPy, and Node
+  binaries plus common POSIX shells before rejecting inline-code flags; the
+  release matrix also verifies sensor-warning behavior without depending on
+  operating-system-specific warning order.
 
 ## External-only blockers
 

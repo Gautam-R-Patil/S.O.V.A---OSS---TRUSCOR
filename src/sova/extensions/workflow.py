@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hmac
+import re
 from collections.abc import Callable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass
@@ -38,6 +39,26 @@ _INTERPRETER_INLINE_FLAGS = {
     "python3": frozenset({"-c", "-m"}),
     "sh": frozenset({"-c"}),
 }
+_VERSIONED_PYTHON = re.compile(r"(?:python|pypy)\d*(?:\.\d+)*", re.IGNORECASE)
+_VERSIONED_NODE = re.compile(r"(?:node|nodejs)\d*(?:\.\d+)*", re.IGNORECASE)
+_POSIX_SHELLS = frozenset({"ash", "bash", "dash", "fish", "ksh", "sh", "zsh"})
+
+
+def _inline_flags_for_executable(executable: Path) -> frozenset[str]:
+    """Return forbidden inline-code flags for a resolved interpreter executable."""
+
+    name = executable.name.casefold()
+    configured = _INTERPRETER_INLINE_FLAGS.get(name)
+    if configured is not None:
+        return configured
+    portable_name = name.removesuffix(".exe")
+    if _VERSIONED_PYTHON.fullmatch(portable_name):
+        return frozenset({"-c", "-m"})
+    if _VERSIONED_NODE.fullmatch(portable_name):
+        return frozenset({"-e", "--eval"})
+    if portable_name in _POSIX_SHELLS:
+        return frozenset({"-c"})
+    return frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,7 +255,7 @@ def _verify_launch_files(launch: ExtensionLaunch) -> dict[int, dict[str, Any]]:
         raise FormatError("SOVA-EXTENSION-EXECUTABLE", "extension executable is unsafe")
     if sha256_digest(executable.read_bytes()) != launch.executable_digest:
         raise FormatError("SOVA-EXTENSION-EXECUTABLE", "extension executable digest changed")
-    inline_flags = _INTERPRETER_INLINE_FLAGS.get(executable.name.casefold(), frozenset())
+    inline_flags = _inline_flags_for_executable(executable)
     if any(argument.casefold() in inline_flags for argument in launch.command[1:]):
         raise FormatError(
             "SOVA-EXTENSION-INLINE-CODE",
