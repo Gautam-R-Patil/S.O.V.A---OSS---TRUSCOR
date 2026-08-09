@@ -51,18 +51,41 @@ _PAGE = b"""<!doctype html>
 """
 
 
+def _session_page(status: str) -> bytes:
+    return (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        f'<title>{status}</title></head><body><main><p role="status">{status}</p>'
+        "</main></body></html>"
+    ).encode()
+
+
 class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
-        if self.path.split("?", 1)[0] != "/":
+        path = self.path.split("?", 1)[0]
+        if path == "/session/set":
+            body = _session_page("SOVA_SESSION_MARKER_SET")
+            self.send_response(200)
+            self.send_header(
+                "Set-Cookie",
+                "sova_owned_session=active; Path=/; Max-Age=3600; HttpOnly; SameSite=Strict",
+            )
+        elif path == "/session/check":
+            cookies = self.headers.get("Cookie", "")
+            present = "sova_owned_session=active" in cookies.split("; ")
+            body = _session_page("SOVA_SESSION_PRESENT" if present else "SOVA_SESSION_ABSENT")
+            self.send_response(200)
+        elif path == "/":
+            body = _PAGE
+            self.send_response(200)
+        else:
             self.send_error(404)
             return
-        self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Security-Policy", "default-src 'self' 'unsafe-inline'")
-        self.send_header("Content-Length", str(len(_PAGE)))
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(_PAGE)
+        self.wfile.write(body)
 
     def log_message(self, _format: str, *args: object) -> None:
         del args

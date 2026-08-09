@@ -17,6 +17,7 @@ from sova.trace import TraceWriter, generate_ed25519_keypair
 
 if TYPE_CHECKING:
     from sova.live.browser import ApprovalPrompt
+    from sova.runtime import BrowserProfileLease
     from sova.safety import ControlProof
     from sova.targets import TargetManifest
 
@@ -327,6 +328,7 @@ def run_agent_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
     control_proof: ControlProof | None = None,
     event_observer: AgentCampaignEventObserver | None = None,
     prior_rounds: tuple[dict[str, Any], ...] = (),
+    profile_lease: BrowserProfileLease | None = None,
 ) -> AgentBrowserCampaignArtifacts:
     """Plan without tools, execute only after review, and judge only safe evidence."""
     if max_model_turns < _REQUIRED_MODEL_TURNS:
@@ -464,6 +466,7 @@ def run_agent_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             approval_prompt=approval_prompt,
             control_proof=control_proof,
             event_observer=event_observer,
+            profile_lease=profile_lease,
         )
         browser_report = strict_json_loads(browser.report.read_bytes())
         if not isinstance(browser_report, dict):

@@ -96,9 +96,7 @@ class FakeCuaProcess:
 
 def _cua_spec(tmp_path: Path, *, policy: bool = True) -> StdioServerSpec:
     environment = (
-        {"CUA_DRIVER_SESSION_POLICY_FILE": str(tmp_path / "policy.yaml")}
-        if policy
-        else {}
+        {"CUA_DRIVER_SESSION_POLICY_FILE": str(tmp_path / "policy.yaml")} if policy else {}
     )
     return StdioServerSpec(
         "cua-driver",
@@ -197,6 +195,31 @@ def test_stdio_start_failure_is_normalized(tmp_path: Path) -> None:
     )
     with pytest.raises(FormatError, match="could not start"):
         StdioMCPClient(spec)
+
+
+def test_stdio_close_prefers_graceful_exit_then_bounds_terminate_and_kill() -> None:
+    def client_for(process: FakeCuaProcess) -> Any:
+        cast("Any", process).stdin = io.BytesIO()
+        client = cast("Any", object.__new__(StdioMCPClient))
+        client._closed = False
+        client._process = process
+        client._reader = SimpleNamespace(join=lambda timeout: timeout)
+        client._stderr_reader = SimpleNamespace(join=lambda timeout: timeout)
+        return client
+
+    graceful_process = FakeCuaProcess(wait_timeouts=0)
+    graceful = client_for(graceful_process)
+    graceful.close()
+    graceful.close()
+    assert graceful_process.return_code == 0
+    assert graceful_process.terminated is False
+    assert graceful_process.killed is False
+
+    stuck_process = FakeCuaProcess(wait_timeouts=2)
+    stuck = client_for(stuck_process)
+    stuck.close()
+    assert stuck_process.terminated is True
+    assert stuck_process.killed is True
 
 
 def test_stdio_spec_rejects_non_allowlisted_environment(tmp_path: Path) -> None:
@@ -662,6 +685,19 @@ def test_fail_closed_specs_reject_missing_launch_dependencies(tmp_path: Path) ->
             package_runner=tmp_path / "npx",
             workspace=tmp_path,
             browser_executable=tmp_path / "chrome",
+        )
+    runner = tmp_path / "npx"
+    browser = tmp_path / "chrome"
+    runner.write_bytes(b"fixture")
+    browser.write_bytes(b"fixture")
+    outside = tmp_path.parent / "outside-profile"
+    outside.mkdir(exist_ok=True)
+    with pytest.raises(FormatError, match="admitted workspace"):
+        playwright_stdio_spec(
+            package_runner=runner,
+            workspace=tmp_path,
+            browser_executable=browser,
+            profile_directory=outside,
         )
     uvx = tmp_path / "uvx"
     uvx.write_bytes(b"fixture")

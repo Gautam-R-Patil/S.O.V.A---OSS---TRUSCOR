@@ -715,8 +715,7 @@ class CuaDriverExecutorAdapter:
         return tuple(
             Capability(action, "0.12.6", effect, idempotent, evidence)
             for action, (tool, effect, idempotent, evidence) in sorted(_CUA_ACTIONS.items())
-            if tool in self._tools
-            and (action != "computer.desktop" or self._allow_desktop_scope)
+            if tool in self._tools and (action != "computer.desktop" or self._allow_desktop_scope)
         )
 
     @staticmethod
@@ -733,9 +732,7 @@ class CuaDriverExecutorAdapter:
     @staticmethod
     def _provider_text(result: MCPToolResult) -> str:
         return "\n".join(
-            str(item.get("text", ""))
-            for item in result.content
-            if item.get("type") == "text"
+            str(item.get("text", "")) for item in result.content if item.get("type") == "text"
         ).casefold()
 
     def _ensure_session(self, timeout_seconds: float) -> None:

@@ -675,12 +675,22 @@ sova target prove ./website-target.json ./website-challenge.json ./website-proof
 sova detonate browser ./website-target.json ./scenario.sova ./website-proof \
   --control-proof ./website-proof.json
 
+# If the controlled target requires login, provision an opaque profile bound
+# to the exact targetDigest, then complete login/CAPTCHA yourself in a headful
+# browser. SOVA never receives credentials or exports the browser profile.
+sova session browser-create ./.sova/browser-profiles operator TARGET_DIGEST
+sova session browser-handoff ./website-target.json https://owned.example/login \
+  ./.sova/browser-profiles PROFILE_HANDLE ./browser-handoff \
+  --control-proof ./website-proof.json
+
 # Search multiple reviewed interactions through a real browser, capture
 # snapshot/screenshot-digest/console/network sensors, reproduce success, and
 # package discovery.sova.
 sova hunt owned-web-fixture ./live-browser-hunt
 sova hunt browser ./website-target.json ./browser-campaign.json ./website-hunt \
-  --control-proof ./website-proof.json
+  --control-proof ./website-proof.json \
+  --browser-profile-vault ./.sova/browser-profiles \
+  --browser-profile-handle PROFILE_HANDLE
 
 # Optionally let tool-isolated model roles propose the bounded candidate set.
 # Provider calls and the resulting exact browser-action batch are authorized separately.
@@ -851,6 +861,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `sova check` | Bundled synthetic and authorized live-browser checks with finite candidate sets, exact human approval, signed traces, controlled reproduction, and honest confirmed/not-observed/inconclusive states |
 | `sova detonate` | Real Playwright/Chrome website execution plus bounded trusted local-process execution on two credential-stripped copies; both require exact human approval and produce signed primary/reproduction traces plus evidence capsules. Native desktop UI automation and untrusted-code isolation remain unsupported |
 | `sova hunt` | Bounded operator-authored or provider-assisted candidate search executes in real Playwright/Chrome, records snapshot/console/network observations, detects near misses, reproduces the winning recipe under fresh approval, and emits signed traces plus an offline-verifiable discovery capsule; deterministic tests verify isolated roles, while a real external-provider acceptance run remains optional and unclaimed |
+| Persistent browser sessions | Exact-target-bound opaque profiles, cross-process exclusive leases, bounded stale recovery, manual headful authentication/CAPTCHA handoff, campaign reuse, and installed-Chrome two-process fixture persistence are implemented; profile state remains sensitive local executor material, is not SOVA-encrypted, and is never embedded in capsules or traces |
 | MELRA/CUA adapters | MELRA `0.3.0-alpha.10` browser/terminal/computer probe and same-process session reuse passed live; checksum-pinned CUA `0.12.6` bounded reads passed, while live desktop mutation remains visibly blocked on this runner |
 | Sleeper demonstration | Implemented with named narrow baselines, two-dimensional search, signed discovery/reproduction traces, `.sova`, independent offline verification, and reset evidence |
 | `sova forensics` | Evidence-linked reconstruction, reviewed-trial attribution, and repeated authorized real-browser message-removal interventions with signed evidence; general causal accuracy remains unproven |

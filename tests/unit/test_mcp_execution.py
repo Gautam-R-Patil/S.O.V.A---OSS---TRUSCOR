@@ -508,9 +508,7 @@ def test_cua_adapter_normalizes_session_and_observation_failures(tmp_path: Path)
     assert outcome.status == OutcomeStatus.FAILED
     assert outcome.error_code == "SOVA-CUA-SESSION"
 
-    refused = _cua_client(
-        [MCPToolResult(content=(), structured_content=None, is_error=True)]
-    )
+    refused = _cua_client([MCPToolResult(content=(), structured_content=None, is_error=True)])
     adapter = CuaDriverExecutorAdapter(refused, session_id="sova-unit")
     outcome = adapter.execute(
         ActionRequest("windows", "computer.windows", {}, 5),
@@ -626,6 +624,32 @@ def test_pinned_open_source_launch_specs_are_fail_closed(tmp_path: Path) -> None
     assert "--block-service-workers" in playwright.argv
     assert playwright.startup_timeout_seconds == 120
     assert playwright.environment["PLAYWRIGHT_BROWSERS_PATH"].startswith(str(tmp_path))
+
+    profile = tmp_path / ".sova" / "browser-profiles" / "persistent"
+    profile.mkdir(parents=True)
+    persistent = playwright_stdio_spec(
+        package_runner=runner,
+        workspace=tmp_path,
+        browser_executable=browser,
+        profile_directory=profile,
+        headless=False,
+    )
+    assert "--isolated" not in persistent.argv
+    assert "--headless" not in persistent.argv
+    profile_index = persistent.argv.index("--user-data-dir")
+    assert persistent.argv[profile_index + 1] == str(profile.resolve())
+
+    external_vault = tmp_path.parent / f"{tmp_path.name}-profile-vault"
+    external_profile = external_vault / "profile"
+    external_profile.mkdir(parents=True)
+    admitted = playwright_stdio_spec(
+        package_runner=runner,
+        workspace=tmp_path,
+        browser_executable=browser,
+        profile_directory=external_profile,
+        profile_vault_root=external_vault,
+    )
+    assert str(external_profile.resolve()) in admitted.argv
 
     melra = melra_stdio_spec(
         node_executable=node,

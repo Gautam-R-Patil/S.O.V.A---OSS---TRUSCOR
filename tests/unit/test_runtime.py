@@ -840,6 +840,112 @@ def test_browser_profiles_are_durable_opaque_and_identity_bound(tmp_path: Path) 
         )
 
 
+def test_browser_profile_leases_are_exclusive_trace_safe_and_recoverable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vault = BrowserProfileVault(tmp_path / "profiles")
+    record = vault.create(identity_id="operator", target="owned.example")
+    lease = vault.acquire(record.handle, owner_id="campaign-a", ttl_seconds=60)
+    trace_safe = lease.trace_mapping()
+    rendered = json.dumps(trace_safe)
+    profile_path = lease.path_for_executor()
+    assert record.handle not in rendered
+    assert str(profile_path) not in rendered
+    assert trace_safe["profileMaterialPresent"] is False
+    lease.require_target("owned.example")
+    with pytest.raises(FormatError, match="different target"):
+        lease.require_target("other.example")
+
+    reopened = BrowserProfileVault(tmp_path / "profiles")
+    with pytest.raises(FormatError, match="active or unrecoverable"):
+        reopened.acquire(record.handle, owner_id="campaign-b")
+    lease.release()
+    lease.release()
+    with pytest.raises(FormatError, match="released"):
+        lease.path_for_executor()
+    with pytest.raises(FormatError, match="released"):
+        lease.root_for_executor()
+
+    replacement = reopened.acquire(record.handle, owner_id="campaign-b")
+    lease_path = replacement._lease_path
+    replacement.release()
+    lease_path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": "0.1.0",
+                "leaseId": "profile-lease:stale",
+                "ownerId": "crashed-campaign",
+                "processId": 999_999_999,
+                "acquiredUnixMs": 0,
+                "expiresUnixMs": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(BrowserProfileVault, "_pid_is_alive", staticmethod(lambda _pid: False))
+    recovered = reopened.acquire(record.handle, owner_id="campaign-c", recover_stale=True)
+    assert recovered.path_for_executor() == profile_path
+    recovered.release()
+
+    missing_lock = reopened.acquire(record.handle, owner_id="missing-lock")
+    missing_lock._lease_path.unlink()
+    missing_lock.release()
+
+    substituted = reopened.acquire(record.handle, owner_id="substituted-lock")
+    lock_document = json.loads(substituted._lease_path.read_text(encoding="utf-8"))
+    lock_document["leaseId"] = "profile-lease:replacement"
+    substituted._lease_path.write_text(json.dumps(lock_document), encoding="utf-8")
+    with pytest.raises(FormatError, match="replaced"):
+        substituted.release()
+    substituted._lease_path.unlink()
+
+
+def test_browser_profile_pid_liveness_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert BrowserProfileVault._pid_is_alive(0) is False
+
+    def absent(_pid: int, _signal: int) -> None:
+        raise ProcessLookupError
+
+    monkeypatch.setattr("sova.runtime.sessions.os.kill", absent)
+    assert BrowserProfileVault._pid_is_alive(42) is False
+
+    def denied(_pid: int, _signal: int) -> None:
+        raise PermissionError
+
+    monkeypatch.setattr("sova.runtime.sessions.os.kill", denied)
+    assert BrowserProfileVault._pid_is_alive(42) is True
+
+
+def test_browser_profile_lease_refuses_malformed_and_live_stale_locks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vault = BrowserProfileVault(tmp_path / "profiles")
+    record = vault.create(identity_id="operator", target="owned.example")
+    profile = vault.path_for_executor(record.handle)
+    lock = profile / "sova-profile.lease.json"
+    lock.write_text("[]", encoding="utf-8")
+    with pytest.raises(FormatError, match="malformed"):
+        vault.acquire(record.handle, owner_id="campaign")
+    lock.write_text(
+        json.dumps(
+            {
+                "schemaVersion": "0.1.0",
+                "leaseId": "profile-lease:live",
+                "ownerId": "campaign",
+                "processId": 10,
+                "acquiredUnixMs": 0,
+                "expiresUnixMs": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(BrowserProfileVault, "_pid_is_alive", staticmethod(lambda _pid: True))
+    with pytest.raises(FormatError, match="active or unrecoverable"):
+        vault.acquire(record.handle, owner_id="other", recover_stale=True)
+
+
 def test_reliability_plane_configuration_exceptions_denial_and_cancellation(
     tmp_path: Path,
 ) -> None:

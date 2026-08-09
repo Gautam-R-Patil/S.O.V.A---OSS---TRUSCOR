@@ -62,6 +62,7 @@ dist/
 build/
 coverage/
 .coverage
+coverage.json
 htmlcov/
 *.log
 audit-requirements.txt

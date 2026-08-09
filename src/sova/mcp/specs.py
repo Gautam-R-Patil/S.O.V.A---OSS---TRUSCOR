@@ -30,20 +30,25 @@ def _file(path: Path, role: str) -> str:
     return str(resolved)
 
 
-def playwright_stdio_spec(
+def playwright_stdio_spec(  # noqa: PLR0913 - launch security inputs remain explicit
     *,
     package_runner: Path,
     workspace: Path,
     browser_executable: Path,
     allowed_origins: tuple[str, ...] = (),
     package_cache: Path | None = None,
+    profile_directory: Path | None = None,
+    profile_vault_root: Path | None = None,
+    headless: bool = True,
 ) -> StdioServerSpec:
-    """Create a workspace-local isolated Playwright MCP launch.
+    """Create a workspace-local Playwright MCP launch.
 
     On Windows ``npx.cmd`` cannot be launched reliably with ``shell=False``.
     Resolve it to Node's real ``npx-cli.js`` entrypoint instead of invoking a
     command shell.  Cache, browser bookkeeping, and evidence stay inside the
-    caller's workspace; no persistent browser profile is used.
+    caller's workspace.  The default is isolated and ephemeral.  A caller may
+    supply an already-exclusive, workspace-contained profile directory at the
+    trusted executor boundary to opt into durable browser state.
 
     Playwright documents ``--allowed-origins`` as request filtering rather
     than a security boundary.  SOVA therefore also validates every navigation
@@ -76,6 +81,23 @@ def playwright_stdio_spec(
         if any(not origin or ";" in origin for origin in allowed_origins):
             raise FormatError("SOVA-MCP-ORIGIN", "allowed origins must be non-empty URI origins")
         origin_args = ("--allowed-origins", ";".join(allowed_origins))
+    if profile_directory is None:
+        profile_args: tuple[str, ...] = ("--isolated",)
+    else:
+        admission_root = workspace if profile_vault_root is None else profile_vault_root.resolve()
+        if not admission_root.is_dir() or admission_root.is_symlink():
+            raise FormatError(
+                "SOVA-MCP-LAUNCH-PATH",
+                "Playwright profile vault root must be a real existing directory",
+            )
+        profile = _inside(admission_root, profile_directory, "Playwright profile directory")
+        if not profile.is_dir() or profile.is_symlink():
+            raise FormatError(
+                "SOVA-MCP-LAUNCH-PATH",
+                "Playwright profile directory must be a real existing directory",
+            )
+        profile_args = ("--user-data-dir", str(profile))
+    display_args = ("--headless",) if headless else ()
     return StdioServerSpec(
         "microsoft-playwright-mcp",
         (
@@ -84,8 +106,8 @@ def playwright_stdio_spec(
             "--cache",
             str(npm_cache),
             "@playwright/mcp@0.0.78",
-            "--headless",
-            "--isolated",
+            *display_args,
+            *profile_args,
             "--block-service-workers",
             "--image-responses",
             "omit",

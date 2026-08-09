@@ -11,6 +11,11 @@ have independent version ledgers.
 
 ### Added
 
+- Target-digest-bound opaque browser profiles with atomic cross-process leases,
+  bounded stale-lock recovery, graceful MCP/Chromium shutdown, a manual headful
+  login/CAPTCHA handoff, opt-in reuse across browser/agent/Arena campaigns, and
+  a signed installed-Chrome two-process persistence proof that excludes profile
+  handles, paths, and cookie material from evidence.
 - An inert `sova target browser-kit` authoring workflow that normalizes one
   controlled origin, generates a strict target/campaign/assessment-plan bundle,
   explains external proof-of-control and human approval, and performs no

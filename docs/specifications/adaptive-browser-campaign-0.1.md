@@ -50,8 +50,11 @@ still requires the deterministic oracle and a fresh controlled reproduction;
 the model judge is advisory and cannot override either.
 
 This is adaptive candidate-batch search, not a general web-navigation agent.
-Each round currently uses an ephemeral browser context. Persistent authenticated
-sessions and arbitrary action planning have separate acceptance gates.
+Each round uses an ephemeral context by default. An operator may explicitly
+reuse one exact-target-bound profile under an exclusive lease; raw profile
+state still never reaches a planning role. Persistent session mechanics and
+manual authentication are specified separately, and arbitrary action planning
+remains outside this workflow.
 
 ## Interoperability and prior work
 

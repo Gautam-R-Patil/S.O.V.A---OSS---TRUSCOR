@@ -244,9 +244,7 @@ def test_adaptive_runner_stops_on_stagnation(
     assert artifacts.status == "not-confirmed"
     report = strict_json_loads(artifacts.report.read_bytes())
     assert report["stopReason"] == "stagnation"
-    assert TraceReader(artifacts.coordinator_trace).verify(
-        require_signature=True
-    ).signature_valid
+    assert TraceReader(artifacts.coordinator_trace).verify(require_signature=True).signature_valid
 
 
 def test_adaptive_runner_distinguishes_duration_candidate_and_token_stops(

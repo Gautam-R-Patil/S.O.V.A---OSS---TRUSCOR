@@ -39,6 +39,7 @@ from sova.search import (
 from sova.trace import Redactor, TraceReader, generate_ed25519_keypair
 
 if TYPE_CHECKING:
+    from sova.runtime import BrowserProfileLease
     from sova.safety import ControlProof
     from sova.targets import TargetManifest
 
@@ -459,8 +460,11 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
     control_proof: ControlProof | None = None,
     package_cache: Path | None = None,
     event_observer: CampaignEventObserver | None = None,
+    profile_lease: BrowserProfileLease | None = None,
 ) -> BrowserCampaignArtifacts:
     """Search a declared candidate set, reproduce success, and package proof."""
+    if profile_lease is not None:
+        profile_lease.require_target(target.digest)
     origins, host, proof, control_status = verified_browser_control(target, control_proof)
     entry_origin = urlsplit(campaign.entry_url)
     entry_host = entry_origin.hostname
@@ -506,7 +510,9 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
     posture = {
         "backend": "microsoft-playwright-mcp",
         "version": "0.0.78",
-        "ephemeralProfile": True,
+        "ephemeralProfile": profile_lease is None,
+        "profileMode": "ephemeral" if profile_lease is None else "opaque-exclusive-durable",
+        "profileEvidence": None if profile_lease is None else profile_lease.trace_mapping(),
         "headless": True,
         "serviceWorkersBlocked": True,
         "allowedOrigins": list(origins),
@@ -520,6 +526,8 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
         browser_executable=browser_executable,
         allowed_origins=origins,
         package_cache=package_cache,
+        profile_directory=(None if profile_lease is None else profile_lease.path_for_executor()),
+        profile_vault_root=(None if profile_lease is None else profile_lease.root_for_executor()),
     )
     signing_key = generate_ed25519_keypair()
     code_digest = sha256_digest(
@@ -760,7 +768,12 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
         "containment": {
             **posture,
             "digest": containment_digest,
-            "statement": "restricted ephemeral browser session; not a VM security sandbox",
+            "statement": (
+                "restricted browser session with local durable profile state; not a VM "
+                "security sandbox"
+                if profile_lease is not None
+                else "restricted ephemeral browser session; not a VM security sandbox"
+            ),
         },
         "search": search_report.to_mapping(),
         "attempts": [
@@ -797,7 +810,17 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
             "universalCoverage": False,
             "privateModelThoughtsCaptured": False,
         },
-        "limitations": list(search_report.limitations),
+        "limitations": [
+            *search_report.limitations,
+            *(
+                (
+                    "The local browser profile may contain authentication material and is "
+                    "neither embedded in evidence nor claimed to be encrypted by SOVA.",
+                )
+                if profile_lease is not None
+                else ()
+            ),
+        ],
     }
     report_path.write_bytes(canonical_json_bytes(report) + b"\n")
     return BrowserCampaignArtifacts(

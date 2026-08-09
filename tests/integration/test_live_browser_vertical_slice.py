@@ -13,6 +13,7 @@ import pytest
 from sova.capsule import build_capsule, capsule_manifest_template, scenario_template
 from sova.forensics import BrowserCounterfactualStudy, CausalLayer, run_browser_counterfactual_study
 from sova.formats import strict_json_loads
+from sova.formats.errors import FormatError
 from sova.live import (
     AdaptiveBrowserPolicy,
     ControlFetchResult,
@@ -26,13 +27,14 @@ from sova.live import (
     run_agent_browser_campaign,
     run_browser_campaign,
     run_live_browser_assessment,
+    run_owned_persistent_session_restart_probe,
     run_owned_web_campaign,
     run_owned_web_vertical_slice,
 )
 from sova.mcp import MCPTool, MCPToolResult
 from sova.models import ScriptedModel, ScriptedTurn
 from sova.replay import VerificationState, verify_artifact
-from sova.runtime import ModelRouter, RoleKind, RoleModel, standard_profile
+from sova.runtime import BrowserProfileVault, ModelRouter, RoleKind, RoleModel, standard_profile
 from sova.targets import TargetKind, TargetManifest
 from sova.trace import TraceReader
 from sova.workflows import build_case_workspace, run_browser_check
@@ -298,6 +300,53 @@ def test_bounded_live_campaign_discovers_reproduces_and_packages(
 
 
 @pytest.mark.integration
+def test_bounded_campaign_accepts_only_target_bound_exclusive_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    origin = "http://127.0.0.1:9187"
+    target = owned_web_target(origin)
+    runner = tmp_path / "npx.exe"
+    browser = tmp_path / "browser.exe"
+    runner.write_bytes(b"deterministic test placeholder")
+    browser.write_bytes(b"deterministic test placeholder")
+    monkeypatch.setattr("sova.live.campaign.StdioMCPClient", _DeterministicBrowserMCP)
+    vault = BrowserProfileVault(tmp_path / ".sova" / "browser-profiles")
+    record = vault.create(identity_id="fixture-operator", target=target.digest)
+    with vault.acquire(record.handle, owner_id="fixture-campaign") as lease:
+        artifacts = run_browser_campaign(
+            target,
+            owned_web_campaign(origin + "/"),
+            tmp_path / "persistent-campaign-result",
+            package_runner=runner,
+            browser_executable=browser,
+            approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
+            profile_lease=lease,
+        )
+        report = strict_json_loads(artifacts.report.read_bytes())
+        assert isinstance(report, dict)
+        assert report["containment"]["profileMode"] == "opaque-exclusive-durable"
+        rendered = artifacts.report.read_text(encoding="utf-8")
+        assert record.handle not in rendered
+        assert str(lease.path_for_executor()) not in rendered
+
+    wrong = vault.create(identity_id="fixture-operator", target="sha256:" + "0" * 64)
+    with (
+        vault.acquire(wrong.handle, owner_id="wrong-target") as lease,
+        pytest.raises(FormatError, match="different target"),
+    ):
+        run_browser_campaign(
+            target,
+            owned_web_campaign(origin + "/"),
+            tmp_path / "wrong-target-result",
+            package_runner=runner,
+            browser_executable=browser,
+            approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
+            profile_lease=lease,
+        )
+
+
+@pytest.mark.integration
 def test_tool_isolated_agent_roles_plan_an_approved_real_browser_campaign(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -484,16 +533,12 @@ def test_optional_real_playwright_mcp_adaptive_hunt(tmp_path: Path) -> None:
             max_model_turns=10,
             max_total_tokens=10,
             package_runner=Path(r"C:\Program Files\nodejs\npx.cmd"),
-            browser_executable=Path(
-                r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-            ),
+            browser_executable=Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
             approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
         )
     assert artifacts.status == "pass"
     assert len(artifacts.rounds) == 2
-    assert TraceReader(artifacts.coordinator_trace).verify(
-        require_signature=True
-    ).signature_valid
+    assert TraceReader(artifacts.coordinator_trace).verify(require_signature=True).signature_valid
 
 
 @pytest.mark.integration
@@ -593,9 +638,7 @@ def test_adaptive_agent_campaign_uses_prior_evidence_and_fresh_round_approval(
     assert len(approvals) == 3  # one failed batch plus discovery and fresh reproduction
     assert artifacts.discovery_capsule is not None
     assert verify_artifact(artifacts.discovery_capsule).state == VerificationState.VERIFIED
-    assert TraceReader(artifacts.coordinator_trace).verify(
-        require_signature=True
-    ).signature_valid
+    assert TraceReader(artifacts.coordinator_trace).verify(require_signature=True).signature_valid
     report = strict_json_loads(artifacts.report.read_bytes())
     assert isinstance(report, dict)
     assert report["status"] == "pass"
@@ -608,9 +651,7 @@ def test_adaptive_agent_campaign_uses_prior_evidence_and_fresh_round_approval(
         "providerOutputIsExecutionEvidence": False,
         "rawTargetContentAvailableToPlanner": False,
     }
-    assert observed["adaptive-coordinator"] == TraceReader(
-        artifacts.coordinator_trace
-    ).events()
+    assert observed["adaptive-coordinator"] == TraceReader(artifacts.coordinator_trace).events()
     assert any(channel.startswith("round-002/") for channel in observed)
 
 
@@ -627,6 +668,21 @@ def test_optional_real_playwright_mcp_owned_fixture(tmp_path: Path) -> None:
         approval_prompt=lambda challenge, _intent: challenge.exact_phrase,
     )
     assert artifacts.status == "pass"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    os.environ.get("SOVA_RUN_REAL_BROWSER") != "1",
+    reason="set SOVA_RUN_REAL_BROWSER=1 for the optional installed-browser lane",
+)
+def test_optional_real_playwright_profile_survives_mcp_restart(tmp_path: Path) -> None:
+    artifacts = run_owned_persistent_session_restart_probe(
+        tmp_path / "real-persistent-session",
+        package_runner=Path(r"C:\Program Files\nodejs\npx.cmd"),
+        browser_executable=Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+    )
+    assert artifacts.status == "pass"
+    assert TraceReader(artifacts.trace).verify(require_signature=True).signature_valid
 
 
 @pytest.mark.integration

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from sova.live.agent_campaign import AgentCampaignEventObserver
     from sova.live.browser import ApprovalPrompt
-    from sova.runtime import ModelRouter
+    from sova.runtime import BrowserProfileLease, ModelRouter
     from sova.safety import ControlProof
     from sova.targets import TargetManifest
 
@@ -269,6 +269,7 @@ def run_adaptive_agent_browser_campaign(  # noqa: PLR0913, PLR0915
     approval_prompt: ApprovalPrompt,
     control_proof: ControlProof | None = None,
     event_observer: AgentCampaignEventObserver | None = None,
+    profile_lease: BrowserProfileLease | None = None,
 ) -> AdaptiveBrowserCampaignArtifacts:
     """Iterate over reviewed batches while preserving exact scope and hard budgets."""
     required_turns = policy.max_rounds * _TURNS_PER_ROUND
@@ -354,6 +355,7 @@ def run_adaptive_agent_browser_campaign(  # noqa: PLR0913, PLR0915
                 control_proof=control_proof,
                 event_observer=_round_observer(event_observer, round_index),
                 prior_rounds=tuple(prior_rounds),
+                profile_lease=profile_lease,
             )
             rounds.append(artifacts)
             candidate_count = _campaign_candidate_count(artifacts)
@@ -461,7 +463,11 @@ def run_adaptive_agent_browser_campaign(  # noqa: PLR0913, PLR0915
         ),
         "limitations": [
             "The coordinator adapts candidate batches, not arbitrary browser actions.",
-            "Each round reruns candidates in an ephemeral browser context.",
+            (
+                "Each round reuses one operator-authorized local profile under an exclusive lease."
+                if profile_lease is not None
+                else "Each round reruns candidates in an ephemeral browser context."
+            ),
             "A miss does not establish that no trigger exists outside the bounded search.",
             (
                 "Provider output is untrusted planning data and cannot override "

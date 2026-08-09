@@ -15,6 +15,7 @@ import pytest
 
 from sova import cli
 from sova.formats.errors import FormatError
+from sova.live import owned_web_target
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -64,6 +65,81 @@ def test_detected_path_covers_explicit_path_search_and_refusal(
     assert cli._detected_path(None, (str(executable),), "runner") == executable.resolve()
     with pytest.raises(FormatError, match="was not detected"):
         cli._detected_path(None, ("absent-command",), "runner")
+
+
+def test_browser_profile_cli_provisions_inspects_pairs_and_target_binds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    target = owned_web_target("http://127.0.0.1:9187")
+    digest = target.digest
+    vault = tmp_path / "profiles"
+    create = argparse.Namespace(vault=vault, identity="operator", target_digest=digest)
+    assert cli._session_browser_create(create) == 0
+    provisioned = json.loads(capfd.readouterr().out)
+    handle = provisioned["handle"]
+    assert provisioned["profilePathIncluded"] is False
+
+    assert cli._session_browser_inspect(argparse.Namespace(vault=vault, handle=handle)) == 0
+    inspected = json.loads(capfd.readouterr().out)
+    assert inspected["target"] == digest
+    assert inspected["profilePathPresent"] is False
+
+    args = argparse.Namespace(browser_profile_vault=vault, browser_profile_handle=handle)
+    with cli._browser_profile_lease(args, target) as lease:
+        assert lease is not None
+        assert lease.target == digest
+    with (
+        pytest.raises(FormatError, match="supplied together"),
+        cli._browser_profile_lease(
+            argparse.Namespace(browser_profile_vault=vault, browser_profile_handle=None),
+            target,
+        ),
+    ):
+        pass
+    with (
+        pytest.raises(FormatError, match="different target"),
+        cli._browser_profile_lease(
+            args,
+            owned_web_target("http://127.0.0.1:9188"),
+        ),
+    ):
+        pass
+    with pytest.raises(FormatError, match="exact sha256"):
+        cli._session_browser_create(
+            argparse.Namespace(vault=vault, identity="operator", target_digest="not-a-digest")
+        )
+
+    _tty(monkeypatch)
+    executable = tmp_path / "executable"
+    executable.write_bytes(b"fixture")
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {})
+    monkeypatch.setattr(cli, "target_manifest_from_mapping", lambda _value: target)
+    monkeypatch.setattr(cli, "_campaign_executables", lambda _args: (executable, executable))
+
+    def handoff(*received: object, **options: Any) -> Any:
+        assert received[:2] == (target, "http://127.0.0.1:9187/login")
+        assert options["profile_lease"].target == target.digest
+        assert options["handoff_prompt"]("APPROVE", "manual") == "APPROVE"
+        return SimpleNamespace(
+            status="pass",
+            to_mapping=lambda: {"status": "pass", "profileMaterialIncluded": False},
+        )
+
+    monkeypatch.setattr(cli, "run_browser_profile_handoff", handoff)
+    handoff_args = argparse.Namespace(
+        manifest=tmp_path / "target.json",
+        entry_url="http://127.0.0.1:9187/login",
+        browser_profile_vault=vault,
+        browser_profile_handle=handle,
+        destination=tmp_path / "handoff",
+        control_proof=None,
+        package_runner=None,
+        browser_executable=None,
+    )
+    assert cli._session_browser_handoff(handoff_args) == 0
+    assert json.loads(capfd.readouterr().out)["profileMaterialIncluded"] is False
 
 
 def test_owned_fixture_detonation_routes_approval_and_outputs_artifacts(

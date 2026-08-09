@@ -35,6 +35,7 @@ from sova.runtime.reliability import (
     VerificationResult,
 )
 from sova.runtime.sessions import (
+    BrowserProfileLease,
     BrowserProfileRecord,
     BrowserProfileVault,
     SessionBroker,
@@ -45,6 +46,7 @@ from sova.runtime.sessions import (
 __all__ = [
     "AdjudicatedVerdict",
     "BackendCandidate",
+    "BrowserProfileLease",
     "BrowserProfileRecord",
     "BrowserProfileVault",
     "CalibrationReport",

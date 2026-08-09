@@ -187,6 +187,11 @@ class StdioMCPClient:
     def server_name(self) -> str:
         return self.spec.name
 
+    @property
+    def process_id(self) -> int:
+        """Return the local child PID for lifecycle verification only."""
+        return self._process.pid
+
     def _read_stdout(self) -> None:
         stream = self._process.stdout
         if stream is None:
@@ -357,12 +362,15 @@ class StdioMCPClient:
             with suppress(OSError):
                 self._process.stdin.close()
         if self._process.poll() is None:
-            self._process.terminate()
             try:
                 self._process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                self._process.kill()
-                self._process.wait(timeout=5)
+                self._process.terminate()
+                try:
+                    self._process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    self._process.kill()
+                    self._process.wait(timeout=2)
         self._reader.join(timeout=2)
         self._stderr_reader.join(timeout=2)
 

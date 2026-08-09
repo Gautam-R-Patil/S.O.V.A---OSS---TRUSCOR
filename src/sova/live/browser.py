@@ -48,6 +48,7 @@ from sova.trace import TraceReader, generate_ed25519_keypair
 
 if TYPE_CHECKING:
     from sova.executors import Capability
+    from sova.runtime import BrowserProfileLease
     from sova.safety import ActionIntent, ApprovalBatchChallenge
 
 ApprovalPrompt = Callable[["ApprovalBatchChallenge", tuple["ActionIntent", ...]], str]
@@ -458,8 +459,11 @@ def run_live_browser_assessment(  # noqa: PLR0913
     approval_prompt: ApprovalPrompt,
     control_proof: ControlProof | None = None,
     event_observer: BrowserEventObserver | None = None,
+    profile_lease: BrowserProfileLease | None = None,
 ) -> LiveBrowserArtifacts:
     """Run and reproduce a capsule on a real, explicitly authorized website."""
+    if profile_lease is not None:
+        profile_lease.require_target(target.digest)
     origins, host, proof, control_status = verified_browser_control(target, control_proof)
     scenario = _capsule_scenario(source_capsule)
     destination = destination.resolve()
@@ -475,7 +479,9 @@ def run_live_browser_assessment(  # noqa: PLR0913
     posture = {
         "backend": "microsoft-playwright-mcp",
         "version": "0.0.78",
-        "ephemeralProfile": True,
+        "ephemeralProfile": profile_lease is None,
+        "profileMode": "ephemeral" if profile_lease is None else "opaque-exclusive-durable",
+        "profileEvidence": None if profile_lease is None else profile_lease.trace_mapping(),
         "headless": True,
         "serviceWorkersBlocked": True,
         "allowedOrigins": list(origins),
@@ -488,6 +494,8 @@ def run_live_browser_assessment(  # noqa: PLR0913
         workspace=destination,
         browser_executable=browser_executable,
         allowed_origins=origins,
+        profile_directory=(None if profile_lease is None else profile_lease.path_for_executor()),
+        profile_vault_root=(None if profile_lease is None else profile_lease.root_for_executor()),
     )
     signing_key = generate_ed25519_keypair()
     code_digest = sha256_digest(
@@ -653,7 +661,12 @@ def run_live_browser_assessment(  # noqa: PLR0913
         "containment": {
             **posture,
             "digest": containment_digest,
-            "statement": "restricted ephemeral browser session; not a VM security sandbox",
+            "statement": (
+                "restricted browser session with local durable profile state; not a VM "
+                "security sandbox"
+                if profile_lease is not None
+                else "restricted ephemeral browser session; not a VM security sandbox"
+            ),
         },
         "primary": {
             **asdict(primary),
@@ -688,6 +701,14 @@ def run_live_browser_assessment(  # noqa: PLR0913
             *scenario["limitations"],
             "Playwright's origin filter is defense in depth, not a standalone security boundary.",
             "A valid trace signature identifies the included key, not an external legal identity.",
+            *(
+                (
+                    "The local browser profile may contain authentication material and is "
+                    "neither embedded in evidence nor claimed to be encrypted by SOVA.",
+                )
+                if profile_lease is not None
+                else ()
+            ),
         ],
     }
     report_path.write_bytes(canonical_json_bytes(report) + b"\n")

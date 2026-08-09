@@ -39,6 +39,13 @@ from sova.live.control import (
     create_website_control_challenge,
 )
 from sova.live.fixture_web import OwnedWebFixture
+from sova.live.persistent_session import (
+    BrowserHandoffPrompt,
+    BrowserSessionHandoffArtifacts,
+    PersistentSessionArtifacts,
+    run_browser_profile_handoff,
+    run_owned_persistent_session_restart_probe,
+)
 from sova.live.software import (
     LiveSoftwareArtifacts,
     SoftwareApprovalPrompt,
@@ -56,11 +63,14 @@ __all__ = [
     "BrowserCampaign",
     "BrowserCampaignArtifacts",
     "BrowserEventObserver",
+    "BrowserHandoffPrompt",
+    "BrowserSessionHandoffArtifacts",
     "CampaignEventObserver",
     "ControlFetchResult",
     "LiveBrowserArtifacts",
     "LiveSoftwareArtifacts",
     "OwnedWebFixture",
+    "PersistentSessionArtifacts",
     "SoftwareApprovalPrompt",
     "SoftwareEventObserver",
     "UrllibControlFetcher",
@@ -78,8 +88,10 @@ __all__ = [
     "run_adaptive_agent_browser_campaign",
     "run_agent_browser_campaign",
     "run_browser_campaign",
+    "run_browser_profile_handoff",
     "run_live_browser_assessment",
     "run_live_software_assessment",
+    "run_owned_persistent_session_restart_probe",
     "run_owned_software_vertical_slice",
     "run_owned_web_campaign",
     "run_owned_web_vertical_slice",

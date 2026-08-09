@@ -71,11 +71,14 @@ for disclosure.
 
 ## Containment statement
 
-The browser uses an ephemeral profile, headless mode, a workspace-local data
-directory, blocked service workers, and a declared request-origin filter. This
-is a restricted browser session, not a VM or complete security sandbox. The
-built-in target has no credentials, user data, external services, native code,
-or destructive behavior.
+The default browser uses an ephemeral profile, headless mode, a workspace-local
+data directory, blocked service workers, and a declared request-origin filter.
+An operator may instead supply an exclusively leased, exact-target-bound local
+profile under the [persistent-session contract](./persistent-browser-sessions-0.1.md).
+That profile is executor state, never capsule or trace content. Either mode is a
+restricted browser session, not a VM or complete security sandbox. The built-in
+target has no credentials, user data, external services, native code, or
+destructive behavior.
 
 ## Acceptance
 

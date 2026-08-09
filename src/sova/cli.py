@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import sys
+from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -97,6 +98,7 @@ from sova.live import (
     run_adaptive_agent_browser_campaign,
     run_agent_browser_campaign,
     run_browser_campaign,
+    run_browser_profile_handoff,
     run_live_browser_assessment,
     run_live_software_assessment,
     run_owned_software_vertical_slice,
@@ -143,7 +145,13 @@ from sova.replay import (
     verify_artifact,
 )
 from sova.reproduction import compare_observable_outcomes
-from sova.runtime import ProfileKind, RunProfile, standard_profile
+from sova.runtime import (
+    BrowserProfileLease,
+    BrowserProfileVault,
+    ProfileKind,
+    RunProfile,
+    standard_profile,
+)
 from sova.safety import (
     DisclosureRequest,
     VulnerabilityState,
@@ -156,11 +164,25 @@ from sova.trace.otel import export_event
 from sova.workflows import build_case_workspace, run_browser_check, run_check, run_complete_demo
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
+
+    from sova.targets import TargetManifest
 
 
 def _path(value: str) -> Path:
     return Path(value)
+
+
+def _add_browser_profile_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--browser-profile-vault",
+        type=_path,
+        help="local BrowserProfileVault root; must be paired with --browser-profile-handle",
+    )
+    parser.add_argument(
+        "--browser-profile-handle",
+        help="opaque handle provisioned for the exact target digest",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
@@ -319,6 +341,7 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     detonate_browser.add_argument("--control-proof", type=_path)
     detonate_browser.add_argument("--package-runner", type=_path)
     detonate_browser.add_argument("--browser-executable", type=_path)
+    _add_browser_profile_arguments(detonate_browser)
     detonate_browser.set_defaults(handler=_detonate_browser)
     detonate_software = detonate_commands.add_parser(
         "software",
@@ -558,6 +581,38 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     )
     executor_receipts.set_defaults(handler=_executor_receipts)
 
+    session_parser = commands.add_parser(
+        "session", help="provision and inspect local opaque browser profiles"
+    )
+    session_commands = session_parser.add_subparsers(dest="session_command")
+    session_create = session_commands.add_parser(
+        "browser-create",
+        help="provision a profile bound to one exact target-manifest digest",
+    )
+    session_create.add_argument("vault", type=_path)
+    session_create.add_argument("identity")
+    session_create.add_argument("target_digest")
+    session_create.set_defaults(handler=_session_browser_create)
+    session_inspect = session_commands.add_parser(
+        "browser-inspect", help="print trace-safe profile metadata"
+    )
+    session_inspect.add_argument("vault", type=_path)
+    session_inspect.add_argument("handle")
+    session_inspect.set_defaults(handler=_session_browser_inspect)
+    session_handoff = session_commands.add_parser(
+        "browser-handoff",
+        help="open a target-bound profile for manual login or CAPTCHA completion",
+    )
+    session_handoff.add_argument("manifest", type=_path)
+    session_handoff.add_argument("entry_url")
+    session_handoff.add_argument("browser_profile_vault", type=_path)
+    session_handoff.add_argument("browser_profile_handle")
+    session_handoff.add_argument("destination", type=_path)
+    session_handoff.add_argument("--control-proof", type=_path)
+    session_handoff.add_argument("--package-runner", type=_path)
+    session_handoff.add_argument("--browser-executable", type=_path)
+    session_handoff.set_defaults(handler=_session_browser_handoff)
+
     hunt_parser = commands.add_parser(
         "hunt",
         help="run an authorization-gated bounded behavior search",
@@ -581,6 +636,7 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     hunt_browser.add_argument("--control-proof", type=_path)
     hunt_browser.add_argument("--package-runner", type=_path)
     hunt_browser.add_argument("--browser-executable", type=_path)
+    _add_browser_profile_arguments(hunt_browser)
     hunt_browser.set_defaults(handler=_hunt_browser)
     hunt_agent_browser = hunt_commands.add_parser(
         "agent-browser",
@@ -596,6 +652,7 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     hunt_agent_browser.add_argument("--control-proof", type=_path)
     hunt_agent_browser.add_argument("--package-runner", type=_path)
     hunt_agent_browser.add_argument("--browser-executable", type=_path)
+    _add_browser_profile_arguments(hunt_agent_browser)
     hunt_agent_browser.add_argument(
         "--allow-provider-calls",
         action="store_true",
@@ -617,6 +674,7 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     hunt_adaptive_browser.add_argument("--control-proof", type=_path)
     hunt_adaptive_browser.add_argument("--package-runner", type=_path)
     hunt_adaptive_browser.add_argument("--browser-executable", type=_path)
+    _add_browser_profile_arguments(hunt_adaptive_browser)
     hunt_adaptive_browser.add_argument(
         "--allow-provider-calls",
         action="store_true",
@@ -945,6 +1003,7 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     arena_web.add_argument("--control-proof", type=_path)
     arena_web.add_argument("--package-runner", type=_path)
     arena_web.add_argument("--browser-executable", type=_path)
+    _add_browser_profile_arguments(arena_web)
     arena_web.add_argument(
         "--allow-provider-calls",
         action="store_true",
@@ -1297,15 +1356,17 @@ def _detonate_browser(args: argparse.Namespace) -> int:
         sys.stderr.write(f"Type exactly: {challenge.exact_phrase}\n")
         return input("approval> ")
 
-    artifacts = run_live_browser_assessment(
-        target,
-        args.capsule,
-        args.destination,
-        package_runner=package_runner,
-        browser_executable=browser,
-        approval_prompt=prompt,
-        control_proof=proof,
-    )
+    with _browser_profile_lease(args, target) as profile_lease:
+        artifacts = run_live_browser_assessment(
+            target,
+            args.capsule,
+            args.destination,
+            package_runner=package_runner,
+            browser_executable=browser,
+            approval_prompt=prompt,
+            control_proof=proof,
+            profile_lease=profile_lease,
+        )
     sys.stdout.buffer.write(
         canonical_json_bytes(
             {
@@ -1437,6 +1498,31 @@ def _campaign_executables(args: argparse.Namespace) -> tuple[Path, Path]:
     return package_runner, browser
 
 
+@contextmanager
+def _browser_profile_lease(
+    args: argparse.Namespace,
+    target: TargetManifest,
+) -> Iterator[BrowserProfileLease | None]:
+    vault_path = getattr(args, "browser_profile_vault", None)
+    handle = getattr(args, "browser_profile_handle", None)
+    if (vault_path is None) != (handle is None):
+        raise FormatError(
+            "SOVA-PROFILE-CLI-PAIR",
+            "--browser-profile-vault and --browser-profile-handle must be supplied together",
+        )
+    if vault_path is None:
+        yield None
+        return
+    vault = BrowserProfileVault(vault_path)
+    with vault.acquire(
+        str(handle),
+        owner_id=f"sova-cli:{os.getpid()}",
+        ttl_seconds=3600,
+    ) as lease:
+        lease.require_target(target.digest)
+        yield lease
+
+
 def _campaign_output(artifacts: Any) -> dict[str, Any]:
     return {
         "status": artifacts.status,
@@ -1474,15 +1560,17 @@ def _hunt_browser(args: argparse.Namespace) -> int:
         else None
     )
     package_runner, browser = _campaign_executables(args)
-    artifacts = run_browser_campaign(
-        target,
-        campaign,
-        args.destination,
-        package_runner=package_runner,
-        browser_executable=browser,
-        approval_prompt=_live_campaign_prompt,
-        control_proof=proof,
-    )
+    with _browser_profile_lease(args, target) as profile_lease:
+        artifacts = run_browser_campaign(
+            target,
+            campaign,
+            args.destination,
+            package_runner=package_runner,
+            browser_executable=browser,
+            approval_prompt=_live_campaign_prompt,
+            control_proof=proof,
+            profile_lease=profile_lease,
+        )
     sys.stdout.buffer.write(canonical_json_bytes(_campaign_output(artifacts)) + b"\n")
     return 0 if artifacts.status == "pass" else 2
 
@@ -1503,18 +1591,20 @@ def _hunt_agent_browser(args: argparse.Namespace) -> int:
         else None
     )
     package_runner, browser = _campaign_executables(args)
-    artifacts = run_agent_browser_campaign(
-        target,
-        campaign,
-        args.destination,
-        router=provider_model_router(runtime, secret_resolver=os.getenv),
-        max_model_turns=runtime.max_model_turns,
-        max_total_tokens=runtime.max_total_tokens,
-        package_runner=package_runner,
-        browser_executable=browser,
-        approval_prompt=_live_campaign_prompt,
-        control_proof=proof,
-    )
+    with _browser_profile_lease(args, target) as profile_lease:
+        artifacts = run_agent_browser_campaign(
+            target,
+            campaign,
+            args.destination,
+            router=provider_model_router(runtime, secret_resolver=os.getenv),
+            max_model_turns=runtime.max_model_turns,
+            max_total_tokens=runtime.max_total_tokens,
+            package_runner=package_runner,
+            browser_executable=browser,
+            approval_prompt=_live_campaign_prompt,
+            control_proof=proof,
+            profile_lease=profile_lease,
+        )
     output = _campaign_output(artifacts.browser)
     output.update(
         {
@@ -1543,19 +1633,21 @@ def _hunt_adaptive_browser(args: argparse.Namespace) -> int:
         else None
     )
     package_runner, browser = _campaign_executables(args)
-    artifacts = run_adaptive_agent_browser_campaign(
-        target,
-        campaign,
-        policy,
-        args.destination,
-        router=provider_model_router(runtime, secret_resolver=os.getenv),
-        max_model_turns=runtime.max_model_turns,
-        max_total_tokens=runtime.max_total_tokens,
-        package_runner=package_runner,
-        browser_executable=browser,
-        approval_prompt=_live_campaign_prompt,
-        control_proof=proof,
-    )
+    with _browser_profile_lease(args, target) as profile_lease:
+        artifacts = run_adaptive_agent_browser_campaign(
+            target,
+            campaign,
+            policy,
+            args.destination,
+            router=provider_model_router(runtime, secret_resolver=os.getenv),
+            max_model_turns=runtime.max_model_turns,
+            max_total_tokens=runtime.max_total_tokens,
+            package_runner=package_runner,
+            browser_executable=browser,
+            approval_prompt=_live_campaign_prompt,
+            control_proof=proof,
+            profile_lease=profile_lease,
+        )
     output = {
         "status": artifacts.status,
         "rounds": len(artifacts.rounds),
@@ -1861,19 +1953,21 @@ def _arena_web(args: argparse.Namespace) -> int:
         sys.stdout.buffer.write(canonical_json_bytes(envelope) + b"\n")
         sys.stdout.buffer.flush()
 
-    artifacts = run_agent_browser_campaign(
-        target,
-        campaign,
-        args.destination,
-        router=provider_model_router(runtime, secret_resolver=os.getenv),
-        max_model_turns=runtime.max_model_turns,
-        max_total_tokens=runtime.max_total_tokens,
-        package_runner=package_runner,
-        browser_executable=browser,
-        approval_prompt=_live_campaign_prompt,
-        control_proof=proof,
-        event_observer=observe if args.stream_jsonl else None,
-    )
+    with _browser_profile_lease(args, target) as profile_lease:
+        artifacts = run_agent_browser_campaign(
+            target,
+            campaign,
+            args.destination,
+            router=provider_model_router(runtime, secret_resolver=os.getenv),
+            max_model_turns=runtime.max_model_turns,
+            max_total_tokens=runtime.max_total_tokens,
+            package_runner=package_runner,
+            browser_executable=browser,
+            approval_prompt=_live_campaign_prompt,
+            control_proof=proof,
+            event_observer=observe if args.stream_jsonl else None,
+            profile_lease=profile_lease,
+        )
     output = _campaign_output(artifacts.browser)
     output.update(
         {
@@ -2197,6 +2291,76 @@ def _executor_receipts(_args: argparse.Namespace) -> int:
     }
     sys.stdout.buffer.write(canonical_json_bytes(value) + b"\n")
     return 0
+
+
+def _session_browser_create(args: argparse.Namespace) -> int:
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", str(args.target_digest)) is None:
+        raise FormatError(
+            "SOVA-PROFILE-TARGET-DIGEST",
+            "browser profile target must be an exact sha256 target-manifest digest",
+        )
+    vault = BrowserProfileVault(args.vault)
+    record = vault.create(identity_id=str(args.identity), target=str(args.target_digest))
+    sys.stdout.buffer.write(
+        canonical_json_bytes(
+            {
+                "artifactType": "sova.browser-profile-provisioning-result",
+                "schemaVersion": "0.1.0",
+                "handle": record.handle,
+                "identityId": record.identity_id,
+                "targetDigest": record.target,
+                "profilePathIncluded": False,
+                "profileMaterialIncluded": False,
+                "operatorAction": (
+                    "Keep this vault local. Use the handle only with the exact target digest."
+                ),
+            }
+        )
+        + b"\n"
+    )
+    return 0
+
+
+def _session_browser_inspect(args: argparse.Namespace) -> int:
+    value = BrowserProfileVault(args.vault).inspect(str(args.handle))
+    sys.stdout.buffer.write(canonical_json_bytes(value) + b"\n")
+    return 0
+
+
+def _session_browser_handoff(args: argparse.Namespace) -> int:
+    if not sys.stdin.isatty():
+        raise FormatError(
+            "SOVA-PROFILE-HANDOFF-INTERACTIVE",
+            "browser profile handoff requires a human-operated interactive terminal",
+        )
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    proof = (
+        control_proof_from_mapping(_load_object(args.control_proof))
+        if args.control_proof is not None
+        else None
+    )
+    package_runner, browser = _campaign_executables(args)
+
+    def prompt(phrase: str, summary: str) -> str:
+        sys.stderr.write(summary + "\n")
+        sys.stderr.write(f"Type exactly: {phrase}\n")
+        return input("handoff> ")
+
+    with _browser_profile_lease(args, target) as profile_lease:
+        if profile_lease is None:  # pragma: no cover - parser requires both values
+            raise FormatError("SOVA-PROFILE-HANDOFF", "browser profile lease is required")
+        artifacts = run_browser_profile_handoff(
+            target,
+            str(args.entry_url),
+            args.destination,
+            profile_lease=profile_lease,
+            package_runner=package_runner,
+            browser_executable=browser,
+            handoff_prompt=prompt,
+            control_proof=proof,
+        )
+    sys.stdout.buffer.write(canonical_json_bytes(artifacts.to_mapping()) + b"\n")
+    return 0 if artifacts.status == "pass" else 2
 
 
 def _hunt_demo(_args: argparse.Namespace) -> int:

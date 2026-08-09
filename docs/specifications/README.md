@@ -35,6 +35,7 @@ claiming that the field set is ready for `1.0`.
 - [extensions, providers, targets, and interoperability](./extensions-providers-interoperability-0.1.md)
 - [probe, local Arena, leaderboard, CTF, and replay media](./community-surfaces-0.1.md)
 - [authorization-gated live browser assessment](./live-browser-assessment-0.1.md)
+- [opaque persistent browser sessions](./persistent-browser-sessions-0.1.md)
 - [authorized local-software assessment](./live-software-assessment-0.1.md)
 - [bounded live browser campaign](./live-browser-campaign-0.1.md)
 - [provider-assisted browser campaign](./provider-agent-browser-campaign-0.1.md)
