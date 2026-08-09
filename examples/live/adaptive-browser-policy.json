@@ -1,0 +1,11 @@
+{
+  "artifactType": "sova.adaptive-browser-policy",
+  "schemaVersion": "0.1.0",
+  "id": "sova:adaptive-browser-policy:owned-example",
+  "budgets": {
+    "maxRounds": 2,
+    "maxTotalCandidates": 8,
+    "maxDurationSeconds": 600,
+    "maxStagnantRounds": 1
+  }
+}

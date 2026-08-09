@@ -12,13 +12,13 @@ human text or HTML artifact is the command's purpose.
 | Capsule | `inspect`, `validate`, `lint`, `verify`, `migrate`, `compat`, `format`, `hash`, `template`, `pack` |
 | Trace/replay | `playback`, `replay modes`, `replay timeline`, `replay study`, `replay clip`, `query`, `compare`, `export`, `recover-trace` |
 | First value | `map`, `check`, `demo`, `safety backends`, `executors receipts` |
-| Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics browser-counterfactual`, `forensics benchmark`, `evidence`, `case build`, `adjudicate`, `compose` |
+| Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt adaptive-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics browser-counterfactual`, `forensics benchmark`, `evidence`, `case build`, `adjudicate`, `compose` |
 | Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse agent-run`, `rehearse export`, `trace command`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `ci`, `self-check` |
 | Registry/community | `registry verify`, `sync`, `contribute`, `probe issue`, `probe verify`, `arena run`, `arena agent-run`, `arena chamber`, `arena web`, `leaderboard build`, `ctf build` |
 | Extensions | `extension discover`, `extension prepare`, `extension run` |
 | Local MCP | `mcp manifest`, `mcp init-control`, `mcp approve`, `mcp serve` |
 | Release and compatibility | `release sbom`, `release checksums`, `release verify-checksums`, `conformance export`, `conformance verify` |
-| Authorized targets | `target browser-kit`, `target template`, `target validate`, `target plan`, `target fixture`, `target challenge`, `target prove`, `detonate owned-web-fixture`, `detonate owned-software-fixture`, `detonate browser`, `detonate software`, `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser` |
+| Authorized targets | `target browser-kit`, `target template`, `target validate`, `target plan`, `target fixture`, `target challenge`, `target prove`, `detonate owned-web-fixture`, `detonate owned-software-fixture`, `detonate browser`, `detonate software`, `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt adaptive-browser` |
 
 `sova target browser-kit ORIGIN DESTINATION` writes an inert, secret-free
 browser assessment starter kit. It accepts HTTPS or loopback HTTP, performs no
@@ -66,6 +66,11 @@ the result, but it still runs with ordinary host authority and is not a sandbox.
 browser authority. It requires `--allow-provider-calls`; provider configuration
 is secret-free, model output is untrusted, and deterministic evidence controls
 the verdict.
+
+`hunt adaptive-browser` repeats that plan-review-execute-evaluate sequence for
+separately approved bounded batches. Earlier rounds disclose only candidate
+sequences and deterministic outcome fields to the next planner. Global round,
+candidate, time, model-turn, and optional token ceilings fail closed.
 
 `arena agent-run` uses the same credential-late provider boundary for a local
 synthetic multi-agent message experiment. It grants participants no tools,

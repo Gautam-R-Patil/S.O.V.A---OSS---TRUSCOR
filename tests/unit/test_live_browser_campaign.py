@@ -9,7 +9,12 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from sova.formats.errors import FormatError
-from sova.live import browser_campaign_from_mapping, owned_web_campaign
+from sova.live import (
+    AdaptiveBrowserPolicy,
+    adaptive_browser_policy_from_mapping,
+    browser_campaign_from_mapping,
+    owned_web_campaign,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -61,3 +66,45 @@ def test_campaign_rejects_boolean_and_unbounded_budget_values() -> None:
     with pytest.raises(FormatError) as captured:
         browser_campaign_from_mapping(value)
     assert captured.value.issue.code == "SOVA-LIVE-CAMPAIGN-BUDGET"
+
+
+def test_adaptive_policy_round_trip_and_digest_are_deterministic() -> None:
+    source = AdaptiveBrowserPolicy("bounded-adaptive", 3, 12, 600, 2)
+    parsed = adaptive_browser_policy_from_mapping(source.to_mapping())
+
+    assert parsed == source
+    assert parsed.digest == source.digest
+
+
+@pytest.mark.parametrize(
+    ("mutation", "code"),
+    (
+        (lambda value: value.update({"unknown": True}), "SOVA-ADAPTIVE-POLICY"),
+        (
+            lambda value: value.update({"schemaVersion": "9.0.0"}),
+            "SOVA-ADAPTIVE-POLICY",
+        ),
+        (
+            lambda value: value["budgets"].update({"maxRounds": True}),
+            "SOVA-ADAPTIVE-POLICY",
+        ),
+        (
+            lambda value: value["budgets"].update({"maxRounds": 9}),
+            "SOVA-ADAPTIVE-POLICY-ROUNDS",
+        ),
+        (
+            lambda value: value["budgets"].update({"maxStagnantRounds": 4}),
+            "SOVA-ADAPTIVE-POLICY-STAGNATION",
+        ),
+    ),
+)
+def test_adaptive_policy_rejects_hostile_or_unbounded_input(
+    mutation: Callable[[dict[str, Any]], None],
+    code: str,
+) -> None:
+    value = AdaptiveBrowserPolicy("bounded-adaptive", 3, 12, 600, 2).to_mapping()
+    mutation(value)
+
+    with pytest.raises(FormatError) as captured:
+        adaptive_browser_policy_from_mapping(value)
+    assert captured.value.issue.code == code

@@ -88,11 +88,13 @@ from sova.formats import (
 )
 from sova.formats.errors import FormatError
 from sova.live import (
+    adaptive_browser_policy_from_mapping,
     browser_campaign_from_mapping,
     challenge_from_mapping,
     collect_website_control_proof,
     control_proof_from_mapping,
     create_website_control_challenge,
+    run_adaptive_agent_browser_campaign,
     run_agent_browser_campaign,
     run_browser_campaign,
     run_live_browser_assessment,
@@ -600,6 +602,27 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         help="explicitly permit configured model-provider calls, which may incur cost",
     )
     hunt_agent_browser.set_defaults(handler=_hunt_agent_browser)
+    hunt_adaptive_browser = hunt_commands.add_parser(
+        "adaptive-browser",
+        help=(
+            "adapt provider-proposed candidate batches between independently approved "
+            "rounds on one authorized website"
+        ),
+    )
+    hunt_adaptive_browser.add_argument("manifest", type=_path)
+    hunt_adaptive_browser.add_argument("campaign", type=_path)
+    hunt_adaptive_browser.add_argument("policy", type=_path)
+    hunt_adaptive_browser.add_argument("provider_runtime", type=_path)
+    hunt_adaptive_browser.add_argument("destination", type=_path)
+    hunt_adaptive_browser.add_argument("--control-proof", type=_path)
+    hunt_adaptive_browser.add_argument("--package-runner", type=_path)
+    hunt_adaptive_browser.add_argument("--browser-executable", type=_path)
+    hunt_adaptive_browser.add_argument(
+        "--allow-provider-calls",
+        action="store_true",
+        help="explicitly permit configured model-provider calls, which may incur cost",
+    )
+    hunt_adaptive_browser.set_defaults(handler=_hunt_adaptive_browser)
 
     hunt_demo_parser = commands.add_parser(
         "hunt-demo",
@@ -1499,6 +1522,49 @@ def _hunt_agent_browser(args: argparse.Namespace) -> int:
             "agentOrchestrationTrace": str(artifacts.orchestration_trace),
         }
     )
+    sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
+    return 0 if artifacts.status == "pass" else 2
+
+
+def _hunt_adaptive_browser(args: argparse.Namespace) -> int:
+    if not args.allow_provider_calls:
+        raise FormatError(
+            "SOVA-PROVIDER-CALLS-NOT-ALLOWED",
+            "adaptive browser planning requires the explicit --allow-provider-calls flag",
+        )
+    _require_live_campaign_terminal()
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    campaign = browser_campaign_from_mapping(_load_object(args.campaign))
+    policy = adaptive_browser_policy_from_mapping(_load_object(args.policy))
+    runtime = provider_runtime_from_mapping(_load_object(args.provider_runtime))
+    proof = (
+        control_proof_from_mapping(_load_object(args.control_proof))
+        if args.control_proof is not None
+        else None
+    )
+    package_runner, browser = _campaign_executables(args)
+    artifacts = run_adaptive_agent_browser_campaign(
+        target,
+        campaign,
+        policy,
+        args.destination,
+        router=provider_model_router(runtime, secret_resolver=os.getenv),
+        max_model_turns=runtime.max_model_turns,
+        max_total_tokens=runtime.max_total_tokens,
+        package_runner=package_runner,
+        browser_executable=browser,
+        approval_prompt=_live_campaign_prompt,
+        control_proof=proof,
+    )
+    output = {
+        "status": artifacts.status,
+        "rounds": len(artifacts.rounds),
+        "report": str(artifacts.report),
+        "coordinatorTrace": str(artifacts.coordinator_trace),
+        "discoveryCapsule": (
+            None if artifacts.discovery_capsule is None else str(artifacts.discovery_capsule)
+        ),
+    }
     sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
     return 0 if artifacts.status == "pass" else 2
 

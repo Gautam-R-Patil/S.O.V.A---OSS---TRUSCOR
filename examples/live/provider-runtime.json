@@ -39,7 +39,7 @@
     }
   },
   "budgets": {
-    "maxModelTurns": 5,
+    "maxModelTurns": 10,
     "maxTotalTokens": 20000
   }
 }

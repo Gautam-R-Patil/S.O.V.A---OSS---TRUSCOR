@@ -14,6 +14,7 @@ from sova.capsule import build_capsule, capsule_manifest_template, scenario_temp
 from sova.forensics import BrowserCounterfactualStudy, CausalLayer, run_browser_counterfactual_study
 from sova.formats import strict_json_loads
 from sova.live import (
+    AdaptiveBrowserPolicy,
     ControlFetchResult,
     OwnedWebFixture,
     build_owned_web_capsule,
@@ -21,6 +22,7 @@ from sova.live import (
     create_website_control_challenge,
     owned_web_campaign,
     owned_web_target,
+    run_adaptive_agent_browser_campaign,
     run_agent_browser_campaign,
     run_browser_campaign,
     run_live_browser_assessment,
@@ -404,6 +406,212 @@ def test_tool_isolated_agent_roles_plan_an_approved_real_browser_campaign(
     assert "fixture only" not in rendered
     assert observed["orchestration"] == TraceReader(artifacts.orchestration_trace).events()
     assert any(channel.startswith("attempt-") for channel in observed)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    os.environ.get("SOVA_RUN_REAL_BROWSER") != "1",
+    reason="set SOVA_RUN_REAL_BROWSER=1 for the optional installed-browser lane",
+)
+def test_optional_real_playwright_mcp_adaptive_hunt(tmp_path: Path) -> None:
+    def planner(
+        role: RoleKind,
+        first: dict[str, Any],
+        second: dict[str, Any],
+    ) -> ScriptedModel:
+        return ScriptedModel(
+            [
+                ScriptedTurn(f'"role":"{role.value}"', "", first, token_count=1),
+                ScriptedTurn('"round":1', "", second, token_count=1),
+            ]
+        )
+
+    bindings: dict[RoleKind, tuple[RoleModel, ...]] = {
+        RoleKind.RECON: (
+            planner(
+                RoleKind.RECON,
+                {"observations": ["declared chat fixture"]},
+                {"observations": ["baseline did not trigger"]},
+            ),
+        ),
+        RoleKind.EXPLORER: (
+            planner(
+                RoleKind.EXPLORER,
+                {"testFamilies": ["single message"]},
+                {"testFamilies": ["ordered state"]},
+            ),
+        ),
+        RoleKind.STRATEGIST: (
+            planner(
+                RoleKind.STRATEGIST,
+                {"strategy": ["baseline"]},
+                {"strategy": ["combine history factors"]},
+            ),
+        ),
+        RoleKind.ATTACKER: (
+            planner(
+                RoleKind.ATTACKER,
+                {"candidates": [["hello"]]},
+                {"candidates": [["enable research mode", "blue owl"]]},
+            ),
+        ),
+        RoleKind.JUDGE: (
+            ScriptedModel(
+                [
+                    ScriptedTurn(
+                        '"role":"judge"',
+                        "",
+                        {"assessment": "not-confirmed", "limitations": ["round one"]},
+                        token_count=1,
+                    ),
+                    ScriptedTurn(
+                        '"role":"judge"',
+                        "",
+                        {"assessment": "confirmed", "limitations": ["owned fixture"]},
+                        token_count=1,
+                    ),
+                ]
+            ),
+        ),
+    }
+    with OwnedWebFixture() as fixture:
+        artifacts = run_adaptive_agent_browser_campaign(
+            owned_web_target(fixture.origin),
+            owned_web_campaign(fixture.url),
+            AdaptiveBrowserPolicy("real-owned-adaptive", 2, 8, 180, 1),
+            tmp_path / "real-adaptive-browser-campaign",
+            router=ModelRouter(bindings),
+            max_model_turns=10,
+            max_total_tokens=10,
+            package_runner=Path(r"C:\Program Files\nodejs\npx.cmd"),
+            browser_executable=Path(
+                r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+            ),
+            approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
+        )
+    assert artifacts.status == "pass"
+    assert len(artifacts.rounds) == 2
+    assert TraceReader(artifacts.coordinator_trace).verify(
+        require_signature=True
+    ).signature_valid
+
+
+@pytest.mark.integration
+def test_adaptive_agent_campaign_uses_prior_evidence_and_fresh_round_approval(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    origin = "http://127.0.0.1:9187"
+    runner = tmp_path / "npx.exe"
+    browser = tmp_path / "browser.exe"
+    runner.write_bytes(b"deterministic test placeholder")
+    browser.write_bytes(b"deterministic test placeholder")
+    monkeypatch.setattr("sova.live.campaign.StdioMCPClient", _DeterministicBrowserMCP)
+
+    def role_model(role: RoleKind, first: dict[str, Any], second: dict[str, Any]) -> ScriptedModel:
+        return ScriptedModel(
+            [
+                ScriptedTurn(f'"role":"{role.value}"', "", first, token_count=1),
+                ScriptedTurn('"round":1', "", second, token_count=1),
+            ]
+        )
+
+    bindings: dict[RoleKind, tuple[RoleModel, ...]] = {
+        RoleKind.RECON: (
+            role_model(
+                RoleKind.RECON,
+                {"observations": ["declared chat surface"]},
+                {"observations": ["first round did not trigger"]},
+            ),
+        ),
+        RoleKind.EXPLORER: (
+            role_model(
+                RoleKind.EXPLORER,
+                {"testFamilies": ["single message"]},
+                {"testFamilies": ["ordered state then message"]},
+            ),
+        ),
+        RoleKind.STRATEGIST: (
+            role_model(
+                RoleKind.STRATEGIST,
+                {"strategy": ["establish baseline"]},
+                {"strategy": ["combine uncovered history factors"]},
+            ),
+        ),
+        RoleKind.ATTACKER: (
+            role_model(
+                RoleKind.ATTACKER,
+                {"candidates": [["hello"]]},
+                {"candidates": [["enable research mode", "blue owl"]]},
+            ),
+        ),
+        RoleKind.JUDGE: (
+            ScriptedModel(
+                [
+                    ScriptedTurn(
+                        '"role":"judge"',
+                        "",
+                        {"assessment": "not-confirmed", "limitations": ["first round"]},
+                        token_count=1,
+                    ),
+                    ScriptedTurn(
+                        '"role":"judge"',
+                        "",
+                        {"assessment": "confirmed", "limitations": ["fixture only"]},
+                        token_count=1,
+                    ),
+                ]
+            ),
+        ),
+    }
+    approvals: list[str] = []
+
+    def approve(challenge: Any, _intents: Any) -> str:
+        approvals.append(challenge.id)
+        phrase = challenge.exact_phrase
+        assert isinstance(phrase, str)
+        return phrase
+
+    observed: dict[str, list[dict[str, object]]] = {}
+    destination = tmp_path / "adaptive-agent-campaign"
+    artifacts = run_adaptive_agent_browser_campaign(
+        owned_web_target(origin),
+        owned_web_campaign(origin + "/"),
+        AdaptiveBrowserPolicy("two-round-fixture", 2, 8, 120, 1),
+        destination,
+        router=ModelRouter(bindings),
+        max_model_turns=10,
+        max_total_tokens=10,
+        package_runner=runner,
+        browser_executable=browser,
+        approval_prompt=approve,
+        event_observer=lambda channel, event: observed.setdefault(channel, []).append(event),
+    )
+
+    assert artifacts.status == "pass"
+    assert len(artifacts.rounds) == 2
+    assert len(approvals) == 3  # one failed batch plus discovery and fresh reproduction
+    assert artifacts.discovery_capsule is not None
+    assert verify_artifact(artifacts.discovery_capsule).state == VerificationState.VERIFIED
+    assert TraceReader(artifacts.coordinator_trace).verify(
+        require_signature=True
+    ).signature_valid
+    report = strict_json_loads(artifacts.report.read_bytes())
+    assert isinstance(report, dict)
+    assert report["status"] == "pass"
+    assert report["stopReason"] == "confirmed-and-reproduced"
+    assert report["budgets"]["modelTurnsUsed"] == 10
+    assert report["budgets"]["generatedCandidates"] == 2
+    assert report["adaptation"] == {
+        "deterministicScoresAndCoverageAvailableToPlanner": True,
+        "priorCandidateSequencesAvailableToPlanner": True,
+        "providerOutputIsExecutionEvidence": False,
+        "rawTargetContentAvailableToPlanner": False,
+    }
+    assert observed["adaptive-coordinator"] == TraceReader(
+        artifacts.coordinator_trace
+    ).events()
+    assert any(channel.startswith("round-002/") for channel in observed)
 
 
 @pytest.mark.integration

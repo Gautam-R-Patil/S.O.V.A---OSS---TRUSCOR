@@ -161,6 +161,25 @@ evidence summary and cannot override the deterministic oracle. Provider output
 content is omitted from the orchestration report; identity, digests, usage, and
 fallback failures remain auditable.
 
+## Adapt between independently approved candidate batches
+
+Copy
+[`examples/live/adaptive-browser-policy.json`](../../examples/live/adaptive-browser-policy.json)
+and set the provider runtime's `maxModelTurns` to at least five times the
+policy's `maxRounds`. Then run:
+
+```console
+sova hunt adaptive-browser website-target.json browser-campaign.json \
+  adaptive-browser-policy.json provider-runtime.json website-adaptive-hunt \
+  --control-proof website-proof.json --allow-provider-calls
+```
+
+Each round is planned and authorized separately. Only the earlier candidate
+sequences plus deterministic score and coverage fields reach the next round;
+raw target content does not. The global duration, candidate, model-turn, and
+optional token budgets cannot be widened by a provider. See the
+[adaptive browser specification](../specifications/adaptive-browser-campaign-0.1.md).
+
 ## What can be validated without a live browser
 
 `sova target fixture website DEST` and `sova target fixture software DEST`

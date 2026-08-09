@@ -688,6 +688,12 @@ sova hunt agent-browser ./website-target.json ./browser-campaign.json \
   ./provider-runtime.json ./website-agent-hunt \
   --control-proof ./website-proof.json --allow-provider-calls
 
+# Adapt the next finite batch from deterministic prior-round evidence. Every
+# round receives fresh exact approval; raw target content is not fed back.
+sova hunt adaptive-browser ./website-target.json ./browser-campaign.json \
+  ./adaptive-browser-policy.json ./provider-runtime.json ./website-adaptive-hunt \
+  --control-proof ./website-proof.json --allow-provider-calls
+
 # Live offensive MCP operations require a separately issued approval
 sova mcp init-control ./control.key
 

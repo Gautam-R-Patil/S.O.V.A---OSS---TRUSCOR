@@ -143,11 +143,32 @@ def test_agent_browser_cli_requires_explicit_provider_permission_before_io(
     assert "SOVA-LIVE-INTERACTIVE-APPROVAL" in capfd.readouterr().err
 
 
+def test_adaptive_browser_cli_requires_explicit_provider_permission_before_io(
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    missing = "missing.json"
+    assert (
+        main(
+            [
+                "hunt",
+                "adaptive-browser",
+                missing,
+                missing,
+                missing,
+                missing,
+                "out",
+            ]
+        )
+        == 2
+    )
+    assert "SOVA-PROVIDER-CALLS-NOT-ALLOWED" in capfd.readouterr().err
+
+
 def test_public_provider_runtime_example_is_valid_and_secret_free() -> None:
     value = strict_json_loads(Path("examples/live/provider-runtime.json").read_bytes())
     assert isinstance(value, dict)
     parsed = provider_runtime_from_mapping(value)
-    assert parsed.max_model_turns == 5
+    assert parsed.max_model_turns == 10
     rendered = json.dumps(parsed.to_mapping()).casefold()
     assert "api_key" not in rendered
     assert "secret" not in rendered
