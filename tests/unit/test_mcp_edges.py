@@ -4,7 +4,10 @@
 from __future__ import annotations
 
 import base64
-from typing import TYPE_CHECKING, Any
+import io
+import subprocess
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
@@ -19,6 +22,7 @@ from sova.executors import (
 from sova.formats.errors import FormatError
 from sova.mcp import (
     CapabilityExecutionBroker,
+    CuaDriverService,
     MCPExecutorAdapter,
     MCPTool,
     MCPToolResult,
@@ -64,8 +68,87 @@ class EdgeClient:
         self.closed = True
 
 
+class FakeCuaProcess:
+    def __init__(self, *, return_code: int | None = None, wait_timeouts: int = 0) -> None:
+        self.return_code = return_code
+        self.wait_timeouts = wait_timeouts
+        self.stderr = io.BytesIO(b"synthetic service stderr")
+        self.terminated = False
+        self.killed = False
+
+    def poll(self) -> int | None:
+        return self.return_code
+
+    def wait(self, timeout: float) -> int:
+        if self.wait_timeouts:
+            self.wait_timeouts -= 1
+            raise subprocess.TimeoutExpired("cua-driver", timeout)
+        self.return_code = 0
+        return 0
+
+    def terminate(self) -> None:
+        self.terminated = True
+
+    def kill(self) -> None:
+        self.killed = True
+        self.return_code = 0
+
+
+def _cua_spec(tmp_path: Path, *, policy: bool = True) -> StdioServerSpec:
+    environment = (
+        {"CUA_DRIVER_SESSION_POLICY_FILE": str(tmp_path / "policy.yaml")}
+        if policy
+        else {}
+    )
+    return StdioServerSpec(
+        "cua-driver",
+        (
+            str(tmp_path / "cua-driver.exe"),
+            "mcp",
+            "--socket",
+            r"\\.\pipe\sova-cua-00000000000000000000000000000000",
+            "--no-overlay",
+        ),
+        tmp_path,
+        environment,
+        "0.12.6",
+        "fixture",
+        "MIT",
+    )
+
+
 def _context(tmp_path: Path) -> ExecutionContext:
-    return ExecutionContext(tmp_path, {"decision": "allowed"})
+    return ExecutionContext(
+        tmp_path,
+        {
+            "decision": "allowed",
+            "scopeDigest": "sha256:" + "1" * 64,
+            "decidedBy": "sova.authorization-kernel/0.1",
+        },
+    )
+
+
+def _melra_plan(
+    task_id: str,
+    capability: str = "browser.inspect",
+    inputs: dict[str, Any] | None = None,
+    *,
+    effect: str = "read",
+    approval: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    kind, action = capability.split(".", 1)
+    value: dict[str, Any] = {
+        "id": task_id,
+        "contract": {
+            "taskId": task_id,
+            "capability": capability,
+            "operation": {"kind": kind, "action": action, **dict(inputs or {})},
+            "effect": effect,
+        },
+    }
+    if approval is not None:
+        value["approval"] = approval
+    return value
 
 
 def _mapping(*, post_observe: bool = False) -> ToolMapping:
@@ -127,6 +210,113 @@ def test_stdio_spec_rejects_non_allowlisted_environment(tmp_path: Path) -> None:
             "fixture",
             "MIT",
         )
+
+
+def test_cua_service_rejects_malformed_or_policyless_specs(tmp_path: Path) -> None:
+    malformed = StdioServerSpec(
+        "other",
+        ("x",),
+        tmp_path,
+        {},
+        "1",
+        "fixture",
+        "MIT",
+    )
+    with pytest.raises(FormatError) as malformed_error:
+        CuaDriverService.start(malformed)
+    assert malformed_error.value.issue.code == "SOVA-CUA-SERVICE-SPEC"
+    with pytest.raises(FormatError) as policy_error:
+        CuaDriverService.start(_cua_spec(tmp_path, policy=False))
+    assert policy_error.value.issue.code == "SOVA-CUA-SERVICE-SPEC"
+
+
+def test_cua_service_starts_probes_and_stops_exact_generation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = FakeCuaProcess()
+    launched: list[tuple[tuple[object, ...], dict[str, object]]] = []
+    calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    def popen(argv: tuple[object, ...], **kwargs: object) -> FakeCuaProcess:
+        launched.append((argv, kwargs))
+        return process
+
+    def run(argv: tuple[object, ...], **kwargs: object) -> SimpleNamespace:
+        calls.append((argv, kwargs))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("sova.mcp.cua_driver.subprocess.Popen", popen)
+    monkeypatch.setattr("sova.mcp.cua_driver.subprocess.run", run)
+    spec = _cua_spec(tmp_path)
+    with CuaDriverService.start(spec) as service:
+        assert service.socket_name == spec.argv[3]
+        assert service.__enter__() is service
+    service.close()
+    assert len(launched) == 1
+    assert launched[0][0][1:3] == ("serve", "--socket")
+    assert launched[0][0][-1] == "--approve-session-policy"
+    assert calls[0][0][1] == "status"
+    assert calls[1][0][1] == "stop"
+    assert process.return_code == 0
+    assert process.stderr.closed
+
+
+def test_cua_service_normalizes_start_and_early_exit_failures(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def denied(*_args: object, **_kwargs: object) -> FakeCuaProcess:
+        message = "synthetic denied"
+        raise OSError(message)
+
+    monkeypatch.setattr("sova.mcp.cua_driver.subprocess.Popen", denied)
+    with pytest.raises(FormatError) as start_error:
+        CuaDriverService.start(_cua_spec(tmp_path))
+    assert start_error.value.issue.code == "SOVA-CUA-SERVICE-START"
+
+    exited = FakeCuaProcess(return_code=7)
+    monkeypatch.setattr(
+        "sova.mcp.cua_driver.subprocess.Popen",
+        lambda *_args, **_kwargs: exited,
+    )
+    with pytest.raises(FormatError) as exit_error:
+        CuaDriverService.start(_cua_spec(tmp_path))
+    assert exit_error.value.issue.code == "SOVA-CUA-SERVICE-EXIT"
+    assert exit_error.value.issue.details is not None
+    assert exit_error.value.issue.details["returnCode"] == 7
+    assert exited.stderr.closed
+
+
+def test_cua_service_readiness_timeout_and_kill_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    process = FakeCuaProcess(wait_timeouts=1)
+    spec = _cua_spec(tmp_path)
+    service = CuaDriverService(spec, cast("Any", process), spec.argv[3])
+    ticks = iter((0.0, 0.0, 31.0))
+    monkeypatch.setattr("sova.mcp.cua_driver.time.monotonic", lambda: next(ticks))
+    monkeypatch.setattr("sova.mcp.cua_driver.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        "sova.mcp.cua_driver.subprocess.run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=1),
+    )
+    with pytest.raises(FormatError) as timeout_error:
+        service._wait_ready()
+    assert timeout_error.value.issue.code == "SOVA-CUA-SERVICE-TIMEOUT"
+
+    process.wait_timeouts = 1
+
+    def failed_stop(*_args: object, **_kwargs: object) -> SimpleNamespace:
+        message = "synthetic stop failure"
+        raise OSError(message)
+
+    monkeypatch.setattr("sova.mcp.cua_driver.subprocess.run", failed_stop)
+    service.close()
+    assert process.terminated
+    assert process.killed
+    assert process.stderr.closed
 
 
 def test_protocol_parsers_cover_pagination_optional_fields_and_rejections(
@@ -332,19 +522,20 @@ def test_melra_unavailable_malformed_approval_unknown_and_cleanup(tmp_path: Path
             [
                 MCPToolResult(
                     content=(),
-                    structured_content={"id": "task", "approval": {}},
+                    structured_content=_melra_plan("task", approval={}),
                     is_error=False,
                 )
             ],
         )
     ).execute(ActionRequest("x", "browser.inspect", {}, 1), _context(tmp_path), CancellationToken())
-    assert approval.status == OutcomeStatus.DENIED
+    assert approval.status == OutcomeStatus.FAILED
+    assert approval.error_code == "SOVA-MELRA-APPROVAL"
 
     unknown = MelraExecutorAdapter(
         EdgeClient(
             tools,
             [
-                MCPToolResult(content=(), structured_content={"id": "task"}, is_error=False),
+                MCPToolResult(content=(), structured_content=_melra_plan("task"), is_error=False),
                 MCPToolResult(
                     content=(),
                     structured_content={"task": {"id": "task", "status": "future"}},
@@ -397,7 +588,7 @@ def test_melra_text_fallback_state_receipts_cancellation_and_protocol_failure(
         EdgeClient(
             tools,
             [
-                MCPToolResult(content=(), structured_content={"id": task_id}, is_error=False),
+                MCPToolResult(content=(), structured_content=_melra_plan(task_id), is_error=False),
                 MCPToolResult(
                     content=(),
                     structured_content={

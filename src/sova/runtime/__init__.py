@@ -34,11 +34,19 @@ from sova.runtime.reliability import (
     ReliableExecutionResult,
     VerificationResult,
 )
-from sova.runtime.sessions import SessionBroker, SessionIdentity, SessionLease
+from sova.runtime.sessions import (
+    BrowserProfileRecord,
+    BrowserProfileVault,
+    SessionBroker,
+    SessionIdentity,
+    SessionLease,
+)
 
 __all__ = [
     "AdjudicatedVerdict",
     "BackendCandidate",
+    "BrowserProfileRecord",
+    "BrowserProfileVault",
     "CalibrationReport",
     "EvidenceAtom",
     "EvidenceFirewall",

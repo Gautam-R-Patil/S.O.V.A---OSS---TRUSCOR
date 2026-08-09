@@ -34,7 +34,8 @@ again after normalization.
 | `RestrictedLocalExecutor` | bounded local file/process/terminal intent | ordinary host process confinement is not a security sandbox |
 | Microsoft Playwright MCP 0.0.78 | preferred browser backend | isolated profile, exact executable, origin policy plus SOVA post-observation; Playwright MCP is not containment |
 | Windows-MCP 0.8.2 | optional Windows desktop reads/actions | Python 3.13+, telemetry disabled, explicit tool allowlist; full host access remains high risk |
-| MELRA 0.3.0-alpha.0 package metadata | optional browser/computer/terminal adapter | audited commit pinned; provider policy and receipts are not SOVA authority/evidence |
+| CUA Driver 0.12.6 | optional Windows computer backend | signed release checksum, private service generation, bounded session manifest, telemetry off; live reads passed, live mutation remains unadmitted on this runner |
+| MELRA 0.3.0-alpha.10 | optional browser/computer/terminal adapter | public HEAD and lockfile pinned; provider policy and receipts are not SOVA authority/evidence |
 
 The default Windows-MCP launch allowlist is read-only: `Snapshot,Screenshot`.
 `Click,Type,Scroll,WaitFor` require an explicit `allow_input=True` launch
@@ -53,6 +54,13 @@ Read actions use their direct result as the observation. Mutations remain
 `provider-result-only` unless a separate observation succeeds. The broker
 accepts neither that state nor MELRA's defense-in-depth result as independent
 verification.
+
+The CUA adapter additionally requires an exact positive PID/HWND for every
+mutation, sends background delivery first, and permits a foreground retry only
+after CUA emits `background_unavailable` and SOVA supplies a separate fresh
+foreground approval. CUA's second provider call is explicitly not independent
+SOVA verification. Desktop-wide capture is disabled unless the adapter is
+constructed with an explicit opt-in.
 
 ## Reliability and fallback
 
@@ -93,4 +101,5 @@ Primary specifications and implementations:
 - [MCP 2025-11-25 tools](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)
 - [Microsoft Playwright MCP](https://github.com/microsoft/playwright-mcp)
 - [Windows-MCP](https://github.com/CursorTouch/Windows-MCP)
+- [CUA](https://github.com/trycua/cua)
 - [MELRA](https://github.com/XAGI-Lab/melra)

@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import base64
 import binascii
+import re
 from collections.abc import Mapping
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Self
 from urllib.parse import urlsplit
@@ -54,6 +56,45 @@ _MELRA_TERMINAL = {
     "cancelled",
     "failed",
 }
+_MELRA_DIGEST = re.compile(r"^[a-f0-9]{64}$")
+_MELRA_EFFECT_RANK = {"read": 0, "mutate": 1, "destructive": 2}
+_MAX_CUA_SESSION_ID_CHARS = 128
+
+
+def _melra_action_catalog() -> tuple[tuple[str, str, SideEffect], ...]:
+    browser_reads = ("inspect", "wait", "screenshot", "tabs")
+    browser_mutations = (
+        "navigate",
+        "back",
+        "forward",
+        "reload",
+        "click",
+        "type",
+        "fill_form",
+        "select",
+        "press",
+        "scroll",
+        "upload",
+        "download",
+        "tab_new",
+        "tab_switch",
+        "close",
+    )
+    computer_reads = ("capabilities", "inspect", "screenshot")
+    computer_mutations = ("click", "move", "drag", "type", "key", "scroll")
+    terminal_reads = ("status", "output")
+    terminal_mutations = ("run", "start", "stop", "send")
+    groups = (
+        ("browser", browser_reads, SideEffect.READ),
+        ("browser", browser_mutations, SideEffect.MUTATE),
+        ("computer", computer_reads, SideEffect.READ),
+        ("computer", computer_mutations, SideEffect.MUTATE),
+        ("terminal", terminal_reads, SideEffect.READ),
+        ("terminal", terminal_mutations, SideEffect.MUTATE),
+    )
+    return tuple(
+        (kind, action, side_effect) for kind, actions, side_effect in groups for action in actions
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +129,14 @@ class MelraTaskState:
             "normalizedStatus": self.normalized_status.value,
             "terminal": self.terminal,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class _MelraApprovalExpectation:
+    task_id: str
+    capability: str
+    operation: Mapping[str, Any]
+    maximum_effect: SideEffect
 
 
 def _identity(arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -557,6 +606,330 @@ def windows_mcp_mappings() -> tuple[ToolMapping, ...]:
     )
 
 
+_CUA_ACTIONS: dict[str, tuple[str, SideEffect, bool, tuple[str, ...]]] = {
+    "computer.windows": ("list_windows", SideEffect.READ, True, ("window-list",)),
+    "computer.inspect": (
+        "get_window_state",
+        SideEffect.READ,
+        True,
+        ("accessibility-tree", "window-screenshot"),
+    ),
+    "computer.desktop": (
+        "get_desktop_state",
+        SideEffect.READ,
+        True,
+        ("desktop-screenshot",),
+    ),
+    "computer.click": ("click", SideEffect.MUTATE, False, ("window-state",)),
+    "computer.type": ("type_text", SideEffect.MUTATE, False, ("window-state",)),
+    "computer.key": ("press_key", SideEffect.MUTATE, False, ("window-state",)),
+    "computer.hotkey": ("hotkey", SideEffect.MUTATE, False, ("window-state",)),
+    "computer.scroll": ("scroll", SideEffect.MUTATE, False, ("window-state",)),
+}
+_CUA_INPUTS: dict[str, tuple[str, ...]] = {
+    "computer.windows": ("pid", "onScreenOnly"),
+    "computer.inspect": ("pid", "windowId", "query", "maxDepth", "maxElements"),
+    "computer.desktop": (),
+    "computer.click": (
+        "pid",
+        "windowId",
+        "elementToken",
+        "x",
+        "y",
+        "button",
+        "count",
+        "allowForegroundEscalation",
+    ),
+    "computer.type": (
+        "pid",
+        "windowId",
+        "elementToken",
+        "x",
+        "y",
+        "text",
+        "delayMs",
+        "allowForegroundEscalation",
+    ),
+    "computer.key": (
+        "pid",
+        "windowId",
+        "elementToken",
+        "x",
+        "y",
+        "key",
+        "modifiers",
+        "allowForegroundEscalation",
+    ),
+    "computer.hotkey": (
+        "pid",
+        "windowId",
+        "x",
+        "y",
+        "keys",
+        "allowForegroundEscalation",
+    ),
+    "computer.scroll": (
+        "pid",
+        "windowId",
+        "elementToken",
+        "x",
+        "y",
+        "direction",
+        "amount",
+        "by",
+        "allowForegroundEscalation",
+    ),
+}
+_CUA_ARGUMENT_NAMES = {
+    "windowId": "window_id",
+    "elementToken": "element_token",
+    "onScreenOnly": "on_screen_only",
+    "maxDepth": "max_depth",
+    "maxElements": "max_elements",
+    "delayMs": "delay_ms",
+}
+
+
+class CuaDriverExecutorAdapter:
+    """Bounded CUA adapter with SOVA authorization and provider-observation labels."""
+
+    name = "cua-driver-mcp"
+
+    def __init__(
+        self,
+        client: MCPClient,
+        *,
+        session_id: str,
+        allow_desktop_scope: bool = False,
+    ) -> None:
+        if not session_id or len(session_id) > _MAX_CUA_SESSION_ID_CHARS:
+            raise FormatError("SOVA-CUA-SESSION", "CUA session id is invalid")
+        self._client = client
+        self._session_id = session_id
+        self._allow_desktop_scope = allow_desktop_scope
+        self._tools = {tool.name for tool in client.list_tools()}
+        self._started = False
+        self._closed = False
+
+    def capabilities(self) -> tuple[Capability, ...]:
+        return tuple(
+            Capability(action, "0.12.6", effect, idempotent, evidence)
+            for action, (tool, effect, idempotent, evidence) in sorted(_CUA_ACTIONS.items())
+            if tool in self._tools
+            and (action != "computer.desktop" or self._allow_desktop_scope)
+        )
+
+    @staticmethod
+    def _authorized(context: ExecutionContext, *, foreground: bool = False) -> bool:
+        digest = context.authorization.get("scopeDigest")
+        return bool(
+            context.authorization.get("decision") == "allowed"
+            and isinstance(digest, str)
+            and digest.startswith("sha256:")
+            and _MELRA_DIGEST.fullmatch(digest.removeprefix("sha256:")) is not None
+            and (not foreground or context.authorization.get("foregroundApproved") is True)
+        )
+
+    @staticmethod
+    def _provider_text(result: MCPToolResult) -> str:
+        return "\n".join(
+            str(item.get("text", ""))
+            for item in result.content
+            if item.get("type") == "text"
+        ).casefold()
+
+    def _ensure_session(self, timeout_seconds: float) -> None:
+        if self._started:
+            return
+        if "start_session" not in self._tools:
+            raise FormatError("SOVA-CUA-SESSION", "CUA start_session tool is unavailable")
+        result = self._client.call_tool(
+            "start_session",
+            {
+                "session": self._session_id,
+                "capture_scope": "desktop" if self._allow_desktop_scope else "window",
+            },
+            timeout_seconds=timeout_seconds,
+        )
+        if result.is_error:
+            raise FormatError("SOVA-CUA-SESSION", "CUA session start was refused")
+        self._started = True
+
+    @staticmethod
+    def _arguments(action: str, inputs: Mapping[str, Any], session_id: str) -> dict[str, Any]:
+        allowed = _CUA_INPUTS[action]
+        unsupported = sorted(set(inputs) - set(allowed))
+        if unsupported:
+            raise FormatError(
+                "SOVA-CUA-INPUT",
+                "CUA action contains unsupported input fields",
+                details={"fields": unsupported},
+            )
+        if action == "computer.type":
+            text = inputs.get("text")
+            if not isinstance(text, str) or len(text.encode("utf-8")) > 16 * 1024:
+                raise FormatError("SOVA-CUA-TEXT", "CUA text input is absent or exceeds 16 KiB")
+        arguments = {
+            _CUA_ARGUMENT_NAMES.get(key, key): value
+            for key, value in inputs.items()
+            if key != "allowForegroundEscalation"
+        }
+        if action == "computer.inspect":
+            arguments["include_screenshot"] = True
+        if _CUA_ACTIONS[action][1] == SideEffect.MUTATE:
+            pid = inputs.get("pid")
+            window_id = inputs.get("windowId")
+            if (
+                not isinstance(pid, int)
+                or pid <= 0
+                or not isinstance(window_id, int)
+                or window_id <= 0
+            ):
+                raise FormatError(
+                    "SOVA-CUA-WINDOW-BINDING",
+                    "CUA mutation requires an exact positive pid and windowId",
+                )
+            arguments["scope"] = "window"
+            arguments["delivery_mode"] = "background"
+        arguments["session"] = session_id
+        return arguments
+
+    def execute(  # noqa: PLR0911 - each refusal state is an explicit executor outcome
+        self,
+        request: ActionRequest,
+        context: ExecutionContext,
+        cancellation: CancellationToken,
+    ) -> ActionOutcome:
+        contract = _CUA_ACTIONS.get(request.action)
+        if contract is None or contract[0] not in self._tools:
+            return ActionOutcome(request.id, OutcomeStatus.UNSUPPORTED, SideEffect.READ, {})
+        tool, effect, idempotent, _evidence = contract
+        if cancellation.cancelled:
+            return ActionOutcome(request.id, OutcomeStatus.CANCELLED, effect, {})
+        if not self._authorized(context):
+            return ActionOutcome(
+                request.id,
+                OutcomeStatus.DENIED,
+                effect,
+                {},
+                error_code="SOVA-CUA-AUTHORIZATION",
+            )
+        if request.action == "computer.desktop" and not self._allow_desktop_scope:
+            return ActionOutcome(
+                request.id,
+                OutcomeStatus.DENIED,
+                effect,
+                {},
+                error_code="SOVA-CUA-DESKTOP-SCOPE",
+            )
+        try:
+            arguments = self._arguments(request.action, request.inputs, self._session_id)
+            self._ensure_session(request.timeout_seconds)
+            result = self._client.call_tool(
+                tool,
+                arguments,
+                timeout_seconds=request.timeout_seconds,
+            )
+            foreground_used = False
+            if result.is_error and effect == SideEffect.MUTATE:
+                foreground_requested = request.inputs.get("allowForegroundEscalation") is True
+                background_unavailable = "background_unavailable" in self._provider_text(result)
+                if background_unavailable and foreground_requested:
+                    if not self._authorized(context, foreground=True):
+                        return ActionOutcome(
+                            request.id,
+                            OutcomeStatus.DENIED,
+                            effect,
+                            {},
+                            error_code="SOVA-CUA-FOREGROUND-AUTHORIZATION",
+                        )
+                    arguments["delivery_mode"] = "foreground"
+                    result = self._client.call_tool(
+                        tool,
+                        arguments,
+                        timeout_seconds=request.timeout_seconds,
+                    )
+                    foreground_used = True
+            observation = None
+            verification = "direct-provider-observation"
+            if effect == SideEffect.MUTATE and not result.is_error:
+                if "get_window_state" in self._tools:
+                    observation = self._client.call_tool(
+                        "get_window_state",
+                        {
+                            "pid": request.inputs["pid"],
+                            "window_id": request.inputs["windowId"],
+                            "session": self._session_id,
+                            "include_screenshot": False,
+                            "max_depth": 12,
+                            "max_elements": 2000,
+                        },
+                        timeout_seconds=request.timeout_seconds,
+                    )
+                verification = (
+                    "cua-provider-post-action-observation"
+                    if observation is not None and not observation.is_error
+                    else "observation-failed"
+                )
+            outcome = _normalize_result(
+                request,
+                result,
+                side_effect=effect,
+                verification=verification,
+                observation=observation,
+            )
+            output = dict(outcome.output)
+            output["cua"] = {
+                "sessionScope": "desktop" if self._allow_desktop_scope else "window",
+                "foregroundEscalationUsed": foreground_used,
+                "targetBound": effect == SideEffect.READ
+                or ("pid" in request.inputs and "windowId" in request.inputs),
+            }
+            return ActionOutcome(
+                outcome.request_id,
+                outcome.status,
+                outcome.side_effect,
+                output,
+                outcome.evidence,
+                outcome.verification,
+                idempotent and outcome.retryable,
+                outcome.error_code,
+                (
+                    *outcome.limitations,
+                    "CUA provider observations are not independent SOVA verification.",
+                    "Host desktop execution is not a security sandbox.",
+                ),
+                outcome.failure_cause,
+            )
+        except (FormatError, KeyError) as error:
+            code = error.issue.code if isinstance(error, FormatError) else "SOVA-CUA-INPUT"
+            return ActionOutcome(
+                request.id,
+                OutcomeStatus.TIMEOUT if code == "SOVA-MCP-TIMEOUT" else OutcomeStatus.FAILED,
+                effect,
+                {},
+                verification="adapter-protocol-failure",
+                retryable=idempotent,
+                error_code=code,
+                failure_cause=(
+                    FailureCause.TIMEOUT if code == "SOVA-MCP-TIMEOUT" else FailureCause.EXECUTOR
+                ),
+            )
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        if self._started and "end_session" in self._tools:
+            with suppress(FormatError):
+                self._client.call_tool(
+                    "end_session",
+                    {"session": self._session_id},
+                    timeout_seconds=10,
+                )
+        self._client.close()
+
+
 class MelraExecutorAdapter:
     """Optional MELRA plan/execute adapter; SOVA remains the authority and evidence root."""
 
@@ -571,28 +944,113 @@ class MelraExecutorAdapter:
     def capabilities(self) -> tuple[Capability, ...]:
         if not self._available:
             return ()
-        actions = (
-            ("browser", "navigate", SideEffect.MUTATE),
-            ("browser", "inspect", SideEffect.READ),
-            ("browser", "click", SideEffect.MUTATE),
-            ("browser", "type", SideEffect.MUTATE),
-            ("browser", "screenshot", SideEffect.READ),
-            ("computer", "capabilities", SideEffect.READ),
-            ("computer", "screenshot", SideEffect.READ),
-            ("computer", "click", SideEffect.MUTATE),
-            ("computer", "type", SideEffect.MUTATE),
-            ("terminal", "run", SideEffect.MUTATE),
-        )
         return tuple(
             Capability(
                 name=f"{kind}.{action}",
-                version="0.1",
+                version="0.3.0-alpha.10",
                 side_effect=effect,
                 idempotent=effect == SideEffect.READ,
                 evidence=("melra-receipt",),
             )
-            for kind, action, effect in actions
+            for kind, action, effect in _melra_action_catalog()
         )
+
+    @staticmethod
+    def _contains_projection(actual: Any, expected: Any) -> bool:
+        if isinstance(expected, dict):
+            return isinstance(actual, dict) and all(
+                key in actual and MelraExecutorAdapter._contains_projection(actual[key], value)
+                for key, value in expected.items()
+            )
+        if isinstance(expected, list):
+            return (
+                isinstance(actual, list)
+                and len(actual) == len(expected)
+                and all(
+                    MelraExecutorAdapter._contains_projection(left, right)
+                    for left, right in zip(actual, expected, strict=True)
+                )
+            )
+        return bool(actual == expected)
+
+    @staticmethod
+    def _required_evidence(
+        kind: str,
+        action: str,
+        inputs: Mapping[str, Any],
+        side_effect: SideEffect,
+    ) -> list[dict[str, Any]]:
+        if kind == "browser" and action == "navigate" and isinstance(inputs.get("url"), str):
+            return [{"type": "url_matches", "pattern": f"{inputs['url']}*"}]
+        if side_effect == SideEffect.READ:
+            return []
+        if kind == "terminal" and action == "run":
+            return [{"type": "exit_code", "value": 0}]
+        return [{"type": "result_equals", "path": "success", "value": True}]
+
+    @staticmethod
+    def _provider_approval(
+        plan: Mapping[str, Any],
+        *,
+        expected: _MelraApprovalExpectation,
+        authorization: Mapping[str, Any],
+    ) -> dict[str, str] | None:
+        contract = plan.get("contract")
+        if not isinstance(contract, dict):
+            raise FormatError("SOVA-MELRA-PLAN-CONTRACT", "MELRA plan omitted its effect contract")
+        if (
+            contract.get("taskId") != expected.task_id
+            or contract.get("capability") != expected.capability
+            or not MelraExecutorAdapter._contains_projection(
+                contract.get("operation"), dict(expected.operation)
+            )
+        ):
+            raise FormatError(
+                "SOVA-MELRA-PLAN-CONTRACT",
+                "MELRA effect contract did not match the SOVA-authorized action",
+            )
+        effect = contract.get("effect")
+        if (
+            not isinstance(effect, str)
+            or effect not in _MELRA_EFFECT_RANK
+            or _MELRA_EFFECT_RANK[effect] > _MELRA_EFFECT_RANK[expected.maximum_effect.value]
+        ):
+            raise FormatError(
+                "SOVA-MELRA-EFFECT-ESCALATION",
+                "MELRA classified an effect above the SOVA-authorized maximum",
+            )
+        approval = plan.get("approval")
+        if approval is None:
+            return None
+        scope_digest = authorization.get("scopeDigest")
+        if (
+            authorization.get("decision") != "allowed"
+            or not isinstance(scope_digest, str)
+            or not scope_digest.startswith("sha256:")
+            or _MELRA_DIGEST.fullmatch(scope_digest.removeprefix("sha256:")) is None
+        ):
+            raise FormatError(
+                "SOVA-MELRA-SOVA-AUTHORIZATION",
+                "MELRA approval delegation requires a fresh SOVA authorization decision",
+            )
+        if not isinstance(approval, dict):
+            raise FormatError("SOVA-MELRA-APPROVAL", "MELRA approval challenge was malformed")
+        approval_id = approval.get("approvalId")
+        phrase = approval.get("phrase")
+        action_digest = approval.get("actionDigest")
+        if (
+            approval.get("taskId") != expected.task_id
+            or not isinstance(approval_id, str)
+            or not isinstance(phrase, str)
+            or not isinstance(action_digest, str)
+            or _MELRA_DIGEST.fullmatch(action_digest) is None
+            or phrase != f"APPROVE {action_digest[:12]}"
+        ):
+            raise FormatError(
+                "SOVA-MELRA-APPROVAL",
+                "MELRA approval challenge was not bound to the planned action",
+            )
+        return {"approvalId": approval_id, "phrase": phrase}
 
     @staticmethod
     def _structured(result: MCPToolResult) -> dict[str, Any] | None:
@@ -659,6 +1117,8 @@ class MelraExecutorAdapter:
         capability: Capability,
         planned_task_id: str,
         result: MCPToolResult,
+        *,
+        provider_approval_delegated: bool,
     ) -> ActionOutcome:
         """Translate MELRA's task state without trusting MCP transport success."""
         execution = MelraExecutorAdapter._structured(result)
@@ -695,6 +1155,7 @@ class MelraExecutorAdapter:
         output: dict[str, Any] = {
             "taskId": task_id,
             "providerStatus": provider_status,
+            "providerApprovalDelegated": provider_approval_delegated,
         }
         evidence: list[EvidenceReference] = []
         if isinstance(provider_output, dict):
@@ -750,7 +1211,6 @@ class MelraExecutorAdapter:
         context: ExecutionContext,
         cancellation: CancellationToken,
     ) -> ActionOutcome:
-        del context
         available = {capability.name: capability for capability in self.capabilities()}
         capability = available.get(request.action)
         if capability is None:
@@ -759,24 +1219,40 @@ class MelraExecutorAdapter:
             return ActionOutcome(request.id, OutcomeStatus.CANCELLED, capability.side_effect, {})
         kind, action = request.action.split(".", 1)
         operation = {"kind": kind, "action": action, **request.inputs}
+        required_evidence = self._required_evidence(
+            kind, action, request.inputs, capability.side_effect
+        )
         plan_request = {
             "goal": f"SOVA authorized action {request.id}",
             "operation": operation,
-            "constraints": ["Return bounded observable evidence to SOVA."],
+            "constraints": [],
             "forbiddenEffects": ["destructive"],
             "budget": {
                 "maxSteps": 1,
                 "maxDurationMs": min(int(request.timeout_seconds * 1000), 120_000),
                 "maxRetries": 0,
             },
-            "requiredEvidence": [],
+            "requiredEvidence": required_evidence,
+            "identity": {
+                "principal": {"kind": "harness", "id": "sova-oss"},
+                "onBehalfOf": [],
+            },
         }
         try:
             planned = self._client.call_tool(
                 "melra_plan", plan_request, timeout_seconds=request.timeout_seconds
             )
             plan = self._structured(planned)
-            task_id = plan.get("id") if isinstance(plan, dict) else None
+            if not isinstance(plan, dict):
+                return ActionOutcome(
+                    request.id,
+                    OutcomeStatus.FAILED,
+                    capability.side_effect,
+                    {},
+                    error_code="SOVA-MELRA-PLAN",
+                    failure_cause=FailureCause.EXECUTOR,
+                )
+            task_id = plan.get("id")
             if not isinstance(task_id, str):
                 return ActionOutcome(
                     request.id,
@@ -786,22 +1262,29 @@ class MelraExecutorAdapter:
                     error_code="SOVA-MELRA-PLAN",
                     failure_cause=FailureCause.EXECUTOR,
                 )
-            if isinstance(plan, dict) and plan.get("approval") is not None:
-                return ActionOutcome(
-                    request.id,
-                    OutcomeStatus.DENIED,
+            approval = self._provider_approval(
+                plan,
+                expected=_MelraApprovalExpectation(
+                    task_id,
+                    request.action,
+                    operation,
                     capability.side_effect,
-                    {"taskId": task_id, "providerApprovalRequired": True},
-                    error_code="SOVA-MELRA-PROVIDER-APPROVAL",
-                    limitations=(
-                        "MELRA approval cannot replace or silently weaken SOVA authorization.",
-                    ),
-                    failure_cause=FailureCause.POLICY,
-                )
-            result = self._client.call_tool(
-                "melra_execute", {"taskId": task_id}, timeout_seconds=request.timeout_seconds
+                ),
+                authorization=context.authorization,
             )
-            return self._execution_outcome(request, capability, task_id, result)
+            execute_arguments: dict[str, Any] = {"taskId": task_id}
+            if approval is not None:
+                execute_arguments["approval"] = approval
+            result = self._client.call_tool(
+                "melra_execute", execute_arguments, timeout_seconds=request.timeout_seconds
+            )
+            return self._execution_outcome(
+                request,
+                capability,
+                task_id,
+                result,
+                provider_approval_delegated=approval is not None,
+            )
         except FormatError as error:
             return ActionOutcome(
                 request.id,
@@ -822,6 +1305,7 @@ class MelraExecutorAdapter:
 
 
 __all__ = [
+    "CuaDriverExecutorAdapter",
     "MCPExecutorAdapter",
     "MelraExecutorAdapter",
     "MelraTaskState",

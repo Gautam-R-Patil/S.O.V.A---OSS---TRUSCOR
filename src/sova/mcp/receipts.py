@@ -28,19 +28,49 @@ class ExternalExecutorReceipt:
 
 MELRA_AUDIT_RECEIPT = ExternalExecutorReceipt(
     name="melra",
-    version="0.3.0-alpha.0-package-metadata",
+    version="0.3.0-alpha.10",
     source="https://github.com/XAGI-Lab/melra",
-    commit="a6dd6710f5ae94e8ce825ef99df9b01d7f974b95",
+    commit="b9edeb35b3749de029386c929fbe8a21cc666a08",
     package_digest=None,
-    dependency_lock_digest="sha256:d0556db0883d311dcb017c34a66f68fadad70db6d58f49af09aa7d539ddda1b3",
+    dependency_lock_digest="sha256:0c85260bc26947ac834ad2202d8c1ecb345cce245fac00e72393c9b064a17fc0",
     license="Apache-2.0",
     protocol="MCP 2025-11-25 stdio",
-    status="optional-audited-with-failures",
+    status="optional-windows-live-validated-with-bounds",
     limitations=(
-        "No matching v0.3.0-alpha.0 Git tag was present at audit time.",
-        "The Windows build failed at a Unix-only chmod step.",
-        "The Windows test suite failed at a symlink-permission case.",
-        "Documented Windows computer input was not established.",
+        "The Windows source build compiles every package but its CLI script still fails at "
+        "an unconditional POSIX chmod step.",
+        "MELRA's L3 conformance exercises file effects; it does not prove browser, terminal, "
+        "computer, or memory conformance.",
+        "Windows computer input targets the active desktop and MELRA reports that focus is "
+        "not independently verified.",
+        "MELRA developer mode is not a hard trust boundary and its own roadmap leaves enforced "
+        "sandboxing and independent verification unfinished.",
+    ),
+)
+
+CUA_DRIVER_AUDIT_RECEIPT = ExternalExecutorReceipt(
+    name="cua-driver",
+    version="0.12.6",
+    source="https://github.com/trycua/cua",
+    commit="9eb1f481b8a12cd6ffda2ad5af21653a9e5aa9e5",
+    package_digest="sha256:d18a0ca02314c6dc7dfdfbb20aac8f52c7b1547308f182546a9252a991d4d0dd",
+    dependency_lock_digest=None,
+    license="MIT",
+    protocol="MCP stdio",
+    status="optional-windows-release-read-live-action-runner-blocked",
+    limitations=(
+        "The official Windows x86_64 release checksum was verified and bounded read-only MCP "
+        "calls passed live. Fixture-owned mutation remains blocked on the current runner because "
+        "it exposes no independently verifiable foreground desktop.",
+        "CUA 0.12.6 UI Automation timed out on both a fixture-owned Windows Forms window and "
+        "Notepad on this host; its pixel/global-input fallback was not counted without an exact "
+        "foreground ownership check.",
+        "The exact source build requires Microsoft's Spectre-mitigated Visual C++ libraries, "
+        "which are absent on the current validation host; SOVA did not weaken that mitigation.",
+        "Host-desktop automation is not isolation. Use a separately admitted VM backend for "
+        "untrusted agents or applications.",
+        "CUA telemetry is default-on upstream; every SOVA launch forces it off and confines "
+        "its telemetry state to the admitted workspace.",
     ),
 )
 
@@ -81,6 +111,7 @@ WINDOWS_MCP_RECEIPT = ExternalExecutorReceipt(
 
 
 __all__ = [
+    "CUA_DRIVER_AUDIT_RECEIPT",
     "MELRA_AUDIT_RECEIPT",
     "PLAYWRIGHT_MCP_RECEIPT",
     "WINDOWS_MCP_RECEIPT",

@@ -57,6 +57,7 @@ class CapabilityExecutionBroker:
             "not-performed",
             "provider-result-only",
             "observation-failed",
+            "cua-provider-post-action-observation",
             "melra-result-defense-in-depth-only",
         }
         return VerificationResult(

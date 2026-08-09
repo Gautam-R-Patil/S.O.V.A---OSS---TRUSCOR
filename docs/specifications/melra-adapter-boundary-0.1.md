@@ -24,18 +24,21 @@ promoting MELRA's own policy or verification claims.
 
 ## Verified source and live snapshot
 
-The source review pinned commit
-`a6dd6710f5ae94e8ce825ef99df9b01d7f974b95` (`0.3.0-alpha.0` package
-metadata, 2026-08-03). No matching release tag was present. The lockfile digest
-is recorded by `sova executors receipts`. The Windows build failed at a Unix-only
-`chmod`; the test run failed at a Windows symlink-permission case; and public
-documentation did not establish Windows computer input.
+The current source review pins public HEAD
+`b9edeb35b3749de029386c929fbe8a21cc666a08` (`0.3.0-alpha.10`) and lockfile
+SHA-256
+`0c85260bc26947ac834ad2202d8c1ecb345cce245fac00e72393c9b064a17fc0`.
+The lockfile installation and TypeScript compilation completed. MELRA's
+aggregate Windows build still exits after compilation because the CLI build
+script invokes Unix `chmod`.
 
-The live stdio inventory exposed ten MCP tools. A computer-capability request
-returned MCP transport success while the embedded MELRA task was
-`policy_blocked`. The adapter therefore recognizes only internal
-`verified_success`; every blocked, partial, waiting, cancelled, failed,
-nonterminal, unknown, or substituted-task state is non-success.
+The opt-in live SOVA adapter test passed Windows computer capability
+inspection, an allowlisted terminal command, installed-Chrome navigation to a
+self-owned loopback fixture, and same-process cookie reuse through a
+SOVA-owned opaque profile handle. Cross-process profile persistence is not
+claimed. The adapter recognizes only an exact matching plan whose internal
+task status is `verified_success`; blocked, partial, waiting, cancelled,
+failed, nonterminal, unknown, or substituted-task states are non-success.
 
 Those facts are release-specific. The adapter must not rely on the confidential
 target architecture or assume a roadmap capability shipped.
@@ -57,6 +60,10 @@ target architecture or assume a roadmap capability shipped.
 Implementation and conformance are documented in
 [`external-execution-broker-0.1.md`](./external-execution-broker-0.1.md) and the
 Topics 12-14 engineering validation record.
+
+The current external-executor evidence, including CUA comparison and failed
+paths, is recorded in
+[`external-executor-validation-2026-08-09.md`](../engineering/external-executor-validation-2026-08-09.md).
 
 Primary source: [XAGI-Lab/melra](https://github.com/XAGI-Lab/melra), especially
 its `docs/CAPABILITIES.md` and `docs/THREAT_MODEL.md` at the pinned commit.

@@ -25,14 +25,19 @@ from sova.formats.errors import FormatError
 from sova.live.startup import start_stdio_client
 from sova.mcp import (
     CapabilityExecutionBroker,
+    CuaDriverDirectories,
+    CuaDriverExecutorAdapter,
     MCPExecutorAdapter,
     MCPTool,
     MCPToolResult,
+    MelraDirectories,
     MelraExecutorAdapter,
     StdioMCPClient,
     StdioServerSpec,
     ToolMapping,
     WindowsMCPDirectories,
+    cua_driver_stdio_spec,
+    melra_stdio_spec,
     playwright_mappings,
     playwright_stdio_spec,
     windows_mcp_mappings,
@@ -77,7 +82,37 @@ class FakeMCPClient:
 
 
 def _context(tmp_path: Path) -> ExecutionContext:
-    return ExecutionContext(tmp_path, {"decision": "allowed"})
+    return ExecutionContext(
+        tmp_path,
+        {
+            "decision": "allowed",
+            "scopeDigest": "sha256:" + "1" * 64,
+            "decidedBy": "sova.authorization-kernel/0.1",
+        },
+    )
+
+
+def _melra_plan(
+    task_id: str,
+    capability: str = "browser.inspect",
+    inputs: dict[str, Any] | None = None,
+    *,
+    effect: str = "read",
+    approval: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    kind, action = capability.split(".", 1)
+    value: dict[str, Any] = {
+        "id": task_id,
+        "contract": {
+            "taskId": task_id,
+            "capability": capability,
+            "operation": {"kind": kind, "action": action, **dict(inputs or {})},
+            "effect": effect,
+        },
+    }
+    if approval is not None:
+        value["approval"] = approval
+    return value
 
 
 def test_stdio_client_initializes_lists_and_calls_real_fake_server(tmp_path: Path) -> None:
@@ -260,12 +295,326 @@ def test_windows_mapping_excludes_dangerous_host_tools() -> None:
     assert {"Snapshot", "Screenshot", "Click", "Type", "Scroll", "WaitFor"} <= mapping_tools
 
 
+def _cua_client(results: list[MCPToolResult]) -> FakeMCPClient:
+    return FakeMCPClient(
+        (
+            "start_session",
+            "end_session",
+            "list_windows",
+            "get_window_state",
+            "get_desktop_state",
+            "click",
+            "type_text",
+            "press_key",
+            "hotkey",
+            "scroll",
+        ),
+        results,
+    )
+
+
+def test_cua_adapter_is_window_bound_and_desktop_capture_is_opt_in(tmp_path: Path) -> None:
+    client = _cua_client([])
+    adapter = CuaDriverExecutorAdapter(client, session_id="sova-unit")
+    capabilities = {item.name for item in adapter.capabilities()}
+    assert "computer.desktop" not in capabilities
+    assert {
+        "computer.windows",
+        "computer.inspect",
+        "computer.click",
+        "computer.type",
+    } <= capabilities
+    outcome = adapter.execute(
+        ActionRequest("click", "computer.click", {"x": 10, "y": 20}, 5),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.FAILED
+    assert outcome.error_code == "SOVA-CUA-WINDOW-BINDING"
+    assert client.calls == []
+
+
+def test_cua_adapter_retries_foreground_only_after_typed_failure_and_fresh_approval(
+    tmp_path: Path,
+) -> None:
+    client = _cua_client(
+        [
+            MCPToolResult(content=(), structured_content={"started": True}, is_error=False),
+            MCPToolResult(
+                content=({"type": "text", "text": "background_unavailable"},),
+                structured_content=None,
+                is_error=True,
+            ),
+            MCPToolResult(
+                content=(),
+                structured_content={"verified": True},
+                is_error=False,
+            ),
+            MCPToolResult(
+                content=(),
+                structured_content={"elements": []},
+                is_error=False,
+            ),
+        ]
+    )
+    adapter = CuaDriverExecutorAdapter(client, session_id="sova-unit")
+    context = ExecutionContext(
+        tmp_path,
+        {
+            "decision": "allowed",
+            "scopeDigest": "sha256:" + "1" * 64,
+            "decidedBy": "sova.authorization-kernel/0.1",
+            "foregroundApproved": True,
+        },
+    )
+    outcome = adapter.execute(
+        ActionRequest(
+            "type",
+            "computer.type",
+            {
+                "pid": 42,
+                "windowId": 99,
+                "text": "authorized fixture",
+                "allowForegroundEscalation": True,
+            },
+            5,
+        ),
+        context,
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.SUCCEEDED
+    assert outcome.verification == "cua-provider-post-action-observation"
+    assert outcome.output["cua"]["foregroundEscalationUsed"] is True
+    assert [name for name, _arguments in client.calls] == [
+        "start_session",
+        "type_text",
+        "type_text",
+        "get_window_state",
+    ]
+    assert client.calls[1][1]["delivery_mode"] == "background"
+    assert client.calls[2][1]["delivery_mode"] == "foreground"
+
+
+def test_cua_adapter_refuses_foreground_retry_without_separate_approval(tmp_path: Path) -> None:
+    client = _cua_client(
+        [
+            MCPToolResult(content=(), structured_content={"started": True}, is_error=False),
+            MCPToolResult(
+                content=({"type": "text", "text": "background_unavailable"},),
+                structured_content=None,
+                is_error=True,
+            ),
+        ]
+    )
+    adapter = CuaDriverExecutorAdapter(client, session_id="sova-unit")
+    outcome = adapter.execute(
+        ActionRequest(
+            "hotkey",
+            "computer.hotkey",
+            {
+                "pid": 42,
+                "windowId": 99,
+                "keys": ["ctrl", "s"],
+                "allowForegroundEscalation": True,
+            },
+            5,
+        ),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.DENIED
+    assert outcome.error_code == "SOVA-CUA-FOREGROUND-AUTHORIZATION"
+    assert [name for name, _arguments in client.calls] == ["start_session", "hotkey"]
+
+
+def test_cua_adapter_fail_closed_states_are_explicit(tmp_path: Path) -> None:
+    with pytest.raises(FormatError, match="session id"):
+        CuaDriverExecutorAdapter(_cua_client([]), session_id="")
+
+    client = _cua_client([])
+    adapter = CuaDriverExecutorAdapter(client, session_id="sova-unit")
+    unsupported = adapter.execute(
+        ActionRequest("unknown", "computer.unknown", {}, 5),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert unsupported.status == OutcomeStatus.UNSUPPORTED
+
+    cancelled = CancellationToken()
+    cancelled.cancel()
+    outcome = adapter.execute(
+        ActionRequest("inspect", "computer.inspect", {}, 5),
+        _context(tmp_path),
+        cancelled,
+    )
+    assert outcome.status == OutcomeStatus.CANCELLED
+
+    denied_context = ExecutionContext(tmp_path, {"decision": "denied"})
+    outcome = adapter.execute(
+        ActionRequest("inspect", "computer.inspect", {}, 5),
+        denied_context,
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.DENIED
+    assert outcome.error_code == "SOVA-CUA-AUTHORIZATION"
+
+    desktop = adapter.execute(
+        ActionRequest("desktop", "computer.desktop", {}, 5),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert desktop.status == OutcomeStatus.DENIED
+    assert desktop.error_code == "SOVA-CUA-DESKTOP-SCOPE"
+    assert client.calls == []
+
+
+@pytest.mark.parametrize(
+    ("inputs", "error_code"),
+    [
+        ({"unexpected": True}, "SOVA-CUA-INPUT"),
+        ({"pid": 42, "windowId": 99}, "SOVA-CUA-TEXT"),
+        (
+            {"pid": 42, "windowId": 99, "text": "x" * (16 * 1024 + 1)},
+            "SOVA-CUA-TEXT",
+        ),
+    ],
+)
+def test_cua_adapter_rejects_invalid_inputs_before_starting_a_session(
+    tmp_path: Path,
+    inputs: dict[str, Any],
+    error_code: str,
+) -> None:
+    client = _cua_client([])
+    adapter = CuaDriverExecutorAdapter(client, session_id="sova-unit")
+    action = "computer.inspect" if "unexpected" in inputs else "computer.type"
+    outcome = adapter.execute(
+        ActionRequest("invalid", action, inputs, 5),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.FAILED
+    assert outcome.error_code == error_code
+    assert client.calls == []
+
+
+def test_cua_adapter_normalizes_session_and_observation_failures(tmp_path: Path) -> None:
+    missing_start = FakeMCPClient(("get_window_state",), [])
+    adapter = CuaDriverExecutorAdapter(missing_start, session_id="sova-unit")
+    outcome = adapter.execute(
+        ActionRequest("inspect", "computer.inspect", {}, 5),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.FAILED
+    assert outcome.error_code == "SOVA-CUA-SESSION"
+
+    refused = _cua_client(
+        [MCPToolResult(content=(), structured_content=None, is_error=True)]
+    )
+    adapter = CuaDriverExecutorAdapter(refused, session_id="sova-unit")
+    outcome = adapter.execute(
+        ActionRequest("windows", "computer.windows", {}, 5),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.FAILED
+    assert outcome.error_code == "SOVA-CUA-SESSION"
+
+    observation_failure = _cua_client(
+        [
+            MCPToolResult(content=(), structured_content={"started": True}, is_error=False),
+            MCPToolResult(content=(), structured_content={"clicked": True}, is_error=False),
+            MCPToolResult(content=(), structured_content=None, is_error=True),
+            MCPToolResult(content=(), structured_content={"ended": True}, is_error=False),
+        ]
+    )
+    adapter = CuaDriverExecutorAdapter(observation_failure, session_id="sova-unit")
+    outcome = adapter.execute(
+        ActionRequest(
+            "click",
+            "computer.click",
+            {"pid": 42, "windowId": 99, "x": 10, "y": 20},
+            5,
+        ),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.SUCCEEDED
+    assert outcome.verification == "observation-failed"
+    adapter.close()
+    adapter.close()
+    assert observation_failure.closed
+    assert [name for name, _arguments in observation_failure.calls][-1] == "end_session"
+
+
+def test_cua_desktop_read_requires_opt_in_and_reports_scope(tmp_path: Path) -> None:
+    client = _cua_client(
+        [
+            MCPToolResult(content=(), structured_content={"started": True}, is_error=False),
+            MCPToolResult(content=(), structured_content={"screens": []}, is_error=False),
+        ]
+    )
+    adapter = CuaDriverExecutorAdapter(
+        client,
+        session_id="sova-unit",
+        allow_desktop_scope=True,
+    )
+    assert "computer.desktop" in {item.name for item in adapter.capabilities()}
+    outcome = adapter.execute(
+        ActionRequest("desktop", "computer.desktop", {}, 5),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.SUCCEEDED
+    assert outcome.output["cua"]["sessionScope"] == "desktop"
+    assert client.calls[0][1]["capture_scope"] == "desktop"
+
+
+def test_cua_provider_failure_does_not_escalate_without_typed_reason(tmp_path: Path) -> None:
+    client = _cua_client(
+        [
+            MCPToolResult(content=(), structured_content={"started": True}, is_error=False),
+            MCPToolResult(
+                content=({"type": "text", "text": "generic provider failure"},),
+                structured_content=None,
+                is_error=True,
+            ),
+        ]
+    )
+    adapter = CuaDriverExecutorAdapter(client, session_id="sova-unit")
+    outcome = adapter.execute(
+        ActionRequest(
+            "scroll",
+            "computer.scroll",
+            {
+                "pid": 42,
+                "windowId": 99,
+                "direction": "down",
+                "amount": 1,
+                "allowForegroundEscalation": True,
+            },
+            5,
+        ),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.FAILED
+    assert [name for name, _arguments in client.calls] == ["start_session", "scroll"]
+
+
 def test_pinned_open_source_launch_specs_are_fail_closed(tmp_path: Path) -> None:
     runner = tmp_path / "npx.cmd"
+    node = tmp_path / "node.exe"
+    melra_cli = tmp_path / "melra-cli.js"
+    melra_policy = tmp_path / "melra-policy.json"
+    cua_policy = tmp_path / "cua-policy.yaml"
+    cua_driver = tmp_path / "cua-driver.exe"
     browser = tmp_path / "chrome.exe"
     uvx = tmp_path / "uvx.exe"
-    for path in (runner, browser, uvx):
+    for path in (runner, node, melra_cli, browser, uvx, cua_driver):
         path.write_bytes(b"synthetic executable placeholder")
+    melra_policy.write_text('{"version":"test"}', encoding="utf-8")
+    cua_policy.write_text("version: 1\nmode: bounded\n", encoding="utf-8")
     playwright = playwright_stdio_spec(
         package_runner=runner,
         workspace=tmp_path,
@@ -277,6 +626,39 @@ def test_pinned_open_source_launch_specs_are_fail_closed(tmp_path: Path) -> None
     assert "--block-service-workers" in playwright.argv
     assert playwright.startup_timeout_seconds == 120
     assert playwright.environment["PLAYWRIGHT_BROWSERS_PATH"].startswith(str(tmp_path))
+
+    melra = melra_stdio_spec(
+        node_executable=node,
+        cli_entrypoint=melra_cli,
+        workspace=tmp_path,
+        directories=MelraDirectories(
+            state=tmp_path / ".sova" / "melra",
+            policy=melra_policy,
+            browser_profile=tmp_path / ".sova" / "browser-profiles" / "test",
+        ),
+        browser_executable=browser,
+    )
+    assert melra.argv[-1] == "serve"
+    assert "--unhinged" not in melra.argv
+    assert melra.environment["MELRA_HOME"].startswith(str(tmp_path))
+    assert melra.environment["MELRA_BROWSER_PROFILE"].startswith(str(tmp_path))
+    assert melra.version == "0.3.0-alpha.10"
+
+    cua = cua_driver_stdio_spec(
+        executable=cua_driver,
+        workspace=tmp_path,
+        directories=CuaDriverDirectories(
+            state=tmp_path / ".sova" / "cua",
+            policy=cua_policy,
+        ),
+    )
+    assert cua.argv[1:3] == ("mcp", "--socket")
+    assert cua.argv[3].startswith(r"\\.\pipe\sova-cua-")
+    assert cua.argv[4] == "--no-overlay"
+    assert cua.environment["CUA_DRIVER_PERMISSION_MODE"] == "bounded"
+    assert cua.environment["CUA_DRIVER_RS_TELEMETRY_ENABLED"] == "0"
+    assert cua.environment["CUA_DRIVER_DISABLE_UNRESTRICTED"] == "1"
+    assert cua.max_message_bytes == 32 * 1024 * 1024
 
     windows = windows_mcp_stdio_spec(
         uvx=uvx,
@@ -303,7 +685,7 @@ def test_executor_receipts_cli_reports_removable_melra(
     assert value["sovaRemainsAuthority"] is True
     assert value["noMelraOperationPreserved"] is True
     by_name = {item["name"]: item for item in value["receipts"]}
-    assert by_name["melra"]["commit"] == "a6dd6710f5ae94e8ce825ef99df9b01d7f974b95"
+    assert by_name["melra"]["commit"] == "b9edeb35b3749de029386c929fbe8a21cc666a08"
     assert by_name["windows-mcp"]["status"] == "optional-high-risk-computer-backend"
 
 
@@ -410,7 +792,10 @@ def test_melra_adapter_requires_plan_execute_and_never_uses_memory(tmp_path: Pat
         [
             MCPToolResult(
                 content=(),
-                structured_content={"id": "019fc000-0000-7000-8000-000000000013"},
+                structured_content=_melra_plan(
+                    "019fc000-0000-7000-8000-000000000013",
+                    inputs={"url": "https://example.invalid"},
+                ),
                 is_error=False,
             ),
             MCPToolResult(
@@ -442,6 +827,7 @@ def test_melra_adapter_requires_plan_execute_and_never_uses_memory(tmp_path: Pat
     assert [name for name, _arguments in client.calls] == ["melra_plan", "melra_execute"]
     plan = client.calls[0][1]
     assert plan["forbiddenEffects"] == ["destructive"]
+    assert plan["constraints"] == []
     assert outcome.verification == "melra-result-defense-in-depth-only"
     assert outcome.output["providerStatus"] == "verified_success"
 
@@ -497,7 +883,7 @@ def test_melra_internal_task_status_overrides_transport_success(
     client = FakeMCPClient(
         ("melra_capabilities", "melra_plan", "melra_execute"),
         [
-            MCPToolResult((), {"id": task_id}, is_error=False),
+            MCPToolResult((), _melra_plan(task_id), is_error=False),
             MCPToolResult(
                 ({"type": "text", "text": "transport completed"},),
                 {"task": {"id": task_id, "status": provider_status}},
@@ -521,7 +907,7 @@ def test_melra_rejects_substituted_task_result(tmp_path: Path) -> None:
     client = FakeMCPClient(
         ("melra_capabilities", "melra_plan", "melra_execute"),
         [
-            MCPToolResult((), {"id": planned}, is_error=False),
+            MCPToolResult((), _melra_plan(planned), is_error=False),
             MCPToolResult(
                 (),
                 {"task": {"id": substituted, "status": "verified_success"}},
@@ -536,6 +922,95 @@ def test_melra_rejects_substituted_task_result(tmp_path: Path) -> None:
     )
     assert outcome.status == OutcomeStatus.FAILED
     assert outcome.error_code == "SOVA-MELRA-EXECUTION-SHAPE"
+
+
+def test_melra_delegates_provider_challenge_only_after_exact_sova_authorization(
+    tmp_path: Path,
+) -> None:
+    task_id = "019fc000-0000-7000-8000-000000000013"
+    digest = "a" * 64
+    inputs = {"command": "python", "args": ["-c", "print('safe')"]}
+    approval = {
+        "approvalId": "019fc000-0000-7000-8000-000000000014",
+        "taskId": task_id,
+        "actionDigest": digest,
+        "phrase": f"APPROVE {digest[:12]}",
+        "expiresAt": "2026-08-09T16:00:00Z",
+    }
+    client = FakeMCPClient(
+        ("melra_capabilities", "melra_plan", "melra_execute"),
+        [
+            MCPToolResult(
+                (),
+                _melra_plan(
+                    task_id,
+                    "terminal.run",
+                    inputs,
+                    effect="mutate",
+                    approval=approval,
+                ),
+                is_error=False,
+            ),
+            MCPToolResult(
+                (),
+                {
+                    "task": {"id": task_id, "status": "verified_success"},
+                    "output": {"exitCode": 0, "stdout": "safe"},
+                },
+                is_error=False,
+            ),
+        ],
+    )
+    outcome = MelraExecutorAdapter(client).execute(
+        ActionRequest("run", "terminal.run", inputs, 5),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.SUCCEEDED
+    assert outcome.output["providerApprovalDelegated"] is True
+    plan = client.calls[0][1]
+    assert plan["requiredEvidence"] == [{"type": "exit_code", "value": 0}]
+    assert client.calls[1][1] == {
+        "taskId": task_id,
+        "approval": {
+            "approvalId": approval["approvalId"],
+            "phrase": approval["phrase"],
+        },
+    }
+
+
+@pytest.mark.parametrize(
+    "plan",
+    [
+        _melra_plan("task", "computer.click", {"x": 0.5, "y": 0.5}, effect="destructive"),
+        {
+            **_melra_plan("task", "computer.click", {"x": 0.5, "y": 0.5}, effect="mutate"),
+            "contract": {
+                **_melra_plan("other", "computer.click", {"x": 0.5, "y": 0.5}, effect="mutate")[
+                    "contract"
+                ],
+            },
+        },
+        _melra_plan("task", "computer.type", {"x": 0.5, "y": 0.5}, effect="mutate"),
+    ],
+)
+def test_melra_rejects_plan_substitution_or_effect_escalation(
+    tmp_path: Path, plan: dict[str, Any]
+) -> None:
+    client = FakeMCPClient(
+        ("melra_capabilities", "melra_plan", "melra_execute"),
+        [MCPToolResult((), plan, is_error=False)],
+    )
+    outcome = MelraExecutorAdapter(client).execute(
+        ActionRequest("click", "computer.click", {"x": 0.5, "y": 0.5}, 5),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.FAILED
+    assert outcome.error_code in {
+        "SOVA-MELRA-PLAN-CONTRACT",
+        "SOVA-MELRA-EFFECT-ESCALATION",
+    }
 
 
 def test_adapter_timeout_and_cancellation_are_visible(tmp_path: Path) -> None:

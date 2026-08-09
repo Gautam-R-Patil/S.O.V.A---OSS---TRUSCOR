@@ -25,6 +25,7 @@ from sova.mapping import build_capability_map
 from sova.models import ScriptedModel, ScriptedTurn
 from sova.runtime import (
     BackendCandidate,
+    BrowserProfileVault,
     EvidenceFirewall,
     ExecutionReliabilityPlane,
     ExperienceRecord,
@@ -790,6 +791,53 @@ def test_session_broker_validation_expiry_and_authorized_sharing(
     monkeypatch.setattr("sova.runtime.sessions.time.monotonic_ns", lambda: 2_000_000_000)
     with pytest.raises(FormatError, match="expired"):
         broker.secret_refs_for_executor(expiring.id)
+
+
+def test_browser_profiles_are_durable_opaque_and_identity_bound(tmp_path: Path) -> None:
+    identity = SessionIdentity(
+        "shared-user",
+        "owned.test",
+        ("sova-secret:vault/shared",),
+        max_concurrency=2,
+        shared_state_allowed=True,
+    )
+    broker = SessionBroker((identity,))
+    first = broker.lease(
+        identity.id,
+        agent_id="recon",
+        scope=("browser.inspect",),
+        shared=True,
+    )
+    second = broker.lease(
+        identity.id,
+        agent_id="attacker",
+        scope=("browser.click",),
+        shared=True,
+    )
+    assert first.profile_handle == second.profile_handle
+
+    vault = BrowserProfileVault(tmp_path / "profiles")
+    record = vault.provision(
+        first.profile_handle,
+        identity_id=identity.id,
+        target=identity.target,
+    )
+    profile = vault.path_for_executor(first.profile_handle)
+    (profile / "Cookies").write_text("fixture-cookie-material", encoding="utf-8")
+    reopened = BrowserProfileVault(tmp_path / "profiles")
+    assert reopened.path_for_executor(second.profile_handle) == profile
+    safe = reopened.inspect(second.profile_handle)
+    rendered = json.dumps(safe)
+    assert record.identity_id == identity.id
+    assert "fixture-cookie-material" not in rendered
+    assert str(profile) not in rendered
+    assert safe["secretValuesPresent"] is False
+    with pytest.raises(FormatError, match="different identity"):
+        reopened.provision(
+            second.profile_handle,
+            identity_id="substituted-user",
+            target=identity.target,
+        )
 
 
 def test_reliability_plane_configuration_exceptions_denial_and_cancellation(

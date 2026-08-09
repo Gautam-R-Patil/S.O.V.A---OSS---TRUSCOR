@@ -359,6 +359,7 @@ flowchart TB
     SCRIPT["ScriptedExecutor<br/>deterministic tests"]
     LOCAL["RestrictedLocalExecutor<br/>developer-only host execution"]
     MELRA["Optional MelraExecutorAdapter<br/>browser • computer • terminal"]
+    CUA["Optional CUA Driver adapter<br/>bounded Windows computer"]
     SENSORS["SOVA sensor mesh and deterministic oracles"]
     TRACE[".sova-trace evidence substrate"]
     OUTPUT["verify • replay • forensics • evidence • registry"]
@@ -371,11 +372,13 @@ flowchart TB
     EXEC --> PLAYWRIGHT["Playwright MCP"]
     EXEC --> WINDOWS["Windows-MCP"]
     EXEC --> MELRA
+    EXEC --> CUA
     SCRIPT --> SENSORS
     LOCAL --> SENSORS
     PLAYWRIGHT --> SENSORS
     WINDOWS --> SENSORS
     MELRA --> SENSORS
+    CUA --> SENSORS
     SENSORS --> TRACE
     TRACE --> OUTPUT
 ```
@@ -392,12 +395,21 @@ SOVA does **not** outsource its containment admission, authorization, trigger se
 
 MELRA is a separate XAGI Labs project, not SOVA Engine and not a source of TRUSCOR authority. Public SOVA integration will rely only on MELRA's public interface and reproducible behavior of a pinned public release; confidential Atlas/MELRA material is outside this repository.
 
-The current MELRA audit is intentionally cautious: its Windows build and one
-Windows test case failed, and a live MCP transport success contained an internal
-`policy_blocked` task. SOVA therefore recognizes only MELRA's explicit
-`verified_success`, treats MELRA receipts as defense-in-depth input, and can
-remove MELRA without changing any artifact or evidence contract. See the
-[external execution specification](./docs/specifications/external-execution-broker-0.1.md).
+The current MELRA `0.3.0-alpha.10` audit is intentionally split by capability.
+SOVA's opt-in test passed computer capability inspection, an allowlisted
+terminal command, installed-Chrome navigation to a self-owned loopback fixture,
+and same-process cookie reuse. MELRA's Windows build command still ends on a
+Unix-only `chmod`, and process-restart profile persistence is not claimed. SOVA
+therefore recognizes only MELRA's exact planned `verified_success`, treats its
+receipts as defense-in-depth input, and can remove MELRA without changing any
+artifact or evidence contract.
+
+SOVA also has a checksum-pinned optional [CUA Driver](https://github.com/trycua/cua)
+`0.12.6` boundary. Bounded read-only live conformance passed, while effectful
+desktop conformance remains unadmitted because UI Automation timed out and this
+runner exposed no independently verifiable foreground desktop. See the
+[external execution specification](./docs/specifications/external-execution-broker-0.1.md)
+and [live validation record](./docs/engineering/external-executor-validation-2026-08-09.md).
 
 ## Implemented evidence, replay, rehearsal, and regression core
 
@@ -833,7 +845,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `sova check` | Bundled synthetic and authorized live-browser checks with finite candidate sets, exact human approval, signed traces, controlled reproduction, and honest confirmed/not-observed/inconclusive states |
 | `sova detonate` | Real Playwright/Chrome website execution plus bounded trusted local-process execution on two credential-stripped copies; both require exact human approval and produce signed primary/reproduction traces plus evidence capsules. Native desktop UI automation and untrusted-code isolation remain unsupported |
 | `sova hunt` | Bounded operator-authored or provider-assisted candidate search executes in real Playwright/Chrome, records snapshot/console/network observations, detects near misses, reproduces the winning recipe under fresh approval, and emits signed traces plus an offline-verifiable discovery capsule; deterministic tests verify isolated roles, while a real external-provider acceptance run remains optional and unclaimed |
-| MELRA adapter | Public `0.3.0-alpha.0` boundary reviewed; adapter and conformance remain Topic 13 |
+| MELRA/CUA adapters | MELRA `0.3.0-alpha.10` browser/terminal/computer probe and same-process session reuse passed live; checksum-pinned CUA `0.12.6` bounded reads passed, while live desktop mutation remains visibly blocked on this runner |
 | Sleeper demonstration | Implemented with named narrow baselines, two-dimensional search, signed discovery/reproduction traces, `.sova`, independent offline verification, and reset evidence |
 | `sova forensics` | Evidence-linked reconstruction, reviewed-trial attribution, and repeated authorized real-browser message-removal interventions with signed evidence; general causal accuracy remains unproven |
 | `sova case build` | Exact trace/capsule binding plus one offline forensic, replay, evidence, monitoring, and blocked contribution-preview workspace; no re-execution, network, upload, or automatic disclosure |

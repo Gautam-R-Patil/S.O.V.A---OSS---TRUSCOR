@@ -3,15 +3,24 @@
 
 from __future__ import annotations
 
+import re
+import secrets
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from sova.formats.errors import FormatError
 from sova.mcp.protocol import StdioServerSpec
-from sova.mcp.receipts import PLAYWRIGHT_MCP_RECEIPT, WINDOWS_MCP_RECEIPT
+from sova.mcp.receipts import (
+    CUA_DRIVER_AUDIT_RECEIPT,
+    MELRA_AUDIT_RECEIPT,
+    PLAYWRIGHT_MCP_RECEIPT,
+    WINDOWS_MCP_RECEIPT,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+_CUA_PIPE = re.compile(r"^\\\\\.\\pipe\\sova-cua-[a-f0-9]{32}$")
 
 
 def _file(path: Path, role: str) -> str:
@@ -102,6 +111,144 @@ def playwright_stdio_spec(
     )
 
 
+def _inside(root: Path, candidate: Path, role: str) -> Path:
+    resolved_root = root.resolve()
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(resolved_root)
+    except ValueError as error:
+        raise FormatError(
+            "SOVA-MCP-LAUNCH-PATH",
+            f"{role} must stay inside the admitted workspace",
+        ) from error
+    return resolved
+
+
+@dataclass(frozen=True, slots=True)
+class MelraDirectories:
+    """Workspace-contained mutable state admitted to the MELRA backend."""
+
+    state: Path
+    policy: Path
+    browser_profile: Path | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CuaDriverDirectories:
+    """Workspace-contained state and reviewed policy for CUA Driver."""
+
+    state: Path
+    policy: Path
+
+
+def cua_driver_stdio_spec(
+    *,
+    executable: Path,
+    workspace: Path,
+    directories: CuaDriverDirectories,
+    socket_name: str | None = None,
+) -> StdioServerSpec:
+    """Launch pinned CUA Driver in bounded, telemetry-off MCP mode.
+
+    SOVA never launches CUA in unrestricted mode. The operator-reviewed CUA
+    manifest is an additional deny-by-default layer; SOVA authorization and
+    post-action evidence remain authoritative.
+    """
+    workspace = workspace.resolve()
+    if not workspace.is_dir():
+        raise FormatError("SOVA-MCP-LAUNCH-PATH", "CUA workspace must exist")
+    state = _inside(workspace, directories.state, "CUA state directory")
+    policy = _inside(workspace, directories.policy, "CUA session policy")
+    state.mkdir(parents=True, exist_ok=True)
+    socket_name = socket_name or rf"\\.\pipe\sova-cua-{secrets.token_hex(16)}"
+    if _CUA_PIPE.fullmatch(socket_name) is None:
+        raise FormatError(
+            "SOVA-CUA-PIPE",
+            "CUA Driver requires a SOVA-owned per-run Windows named pipe",
+        )
+    return StdioServerSpec(
+        "cua-driver",
+        (
+            _file(executable, "CUA Driver executable"),
+            "mcp",
+            "--socket",
+            socket_name,
+            "--no-overlay",
+        ),
+        workspace,
+        {
+            "CUA_DRIVER_DISABLE_UNRESTRICTED": "1",
+            "CUA_DRIVER_PERMISSION_MODE": "bounded",
+            "CUA_DRIVER_RS_HOME": str(state),
+            "CUA_DRIVER_RS_PERMISSIONS_GATE": "0",
+            "CUA_DRIVER_RS_TELEMETRY_ENABLED": "0",
+            "CUA_DRIVER_SESSION_POLICY_APPROVED": "1",
+            "CUA_DRIVER_SESSION_POLICY_FILE": _file(policy, "CUA session policy"),
+            "CUA_DRIVER_TELEMETRY_HOME": str(state / "telemetry"),
+        },
+        CUA_DRIVER_AUDIT_RECEIPT.version,
+        CUA_DRIVER_AUDIT_RECEIPT.source,
+        CUA_DRIVER_AUDIT_RECEIPT.license,
+        CUA_DRIVER_AUDIT_RECEIPT.package_digest,
+        startup_timeout_seconds=60.0,
+        max_message_bytes=32 * 1024 * 1024,
+    )
+
+
+def melra_stdio_spec(
+    *,
+    node_executable: Path,
+    cli_entrypoint: Path,
+    workspace: Path,
+    directories: MelraDirectories,
+    browser_executable: Path | None = None,
+) -> StdioServerSpec:
+    """Create a pinned, confined MELRA stdio launch without unhinged mode.
+
+    MELRA remains an executor, not SOVA's policy, authorization, evidence, or
+    containment authority.  All mutable backend state, including an optional
+    persistent browser profile, must stay inside the explicitly admitted
+    workspace.  The profile path is opaque to traces and capsules.
+    """
+    workspace = workspace.resolve()
+    if not workspace.is_dir():
+        raise FormatError("SOVA-MCP-LAUNCH-PATH", "MELRA workspace must exist")
+    state = _inside(workspace, directories.state, "MELRA state directory")
+    profile = (
+        None
+        if directories.browser_profile is None
+        else _inside(workspace, directories.browser_profile, "MELRA browser profile")
+    )
+    state.mkdir(parents=True, exist_ok=True)
+    if profile is not None:
+        profile.mkdir(parents=True, exist_ok=True)
+    policy = _inside(workspace, directories.policy, "MELRA policy file")
+    environment = {
+        "MELRA_WORKSPACE": str(workspace),
+        "MELRA_HOME": str(state),
+        "MELRA_POLICY": _file(policy, "MELRA policy file"),
+    }
+    if browser_executable is not None:
+        environment["MELRA_BROWSER"] = _file(browser_executable, "browser executable")
+    if profile is not None:
+        environment["MELRA_BROWSER_PROFILE"] = str(profile)
+    return StdioServerSpec(
+        "melra",
+        (
+            _file(node_executable, "Node executable"),
+            _file(cli_entrypoint, "MELRA CLI entrypoint"),
+            "serve",
+        ),
+        workspace,
+        environment,
+        MELRA_AUDIT_RECEIPT.version,
+        MELRA_AUDIT_RECEIPT.source,
+        MELRA_AUDIT_RECEIPT.license,
+        MELRA_AUDIT_RECEIPT.package_digest,
+        startup_timeout_seconds=30.0,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class WindowsMCPDirectories:
     """Workspace-local uv directories for the optional Windows backend."""
@@ -152,7 +299,11 @@ def windows_mcp_stdio_spec(
 
 
 __all__ = [
+    "CuaDriverDirectories",
+    "MelraDirectories",
     "WindowsMCPDirectories",
+    "cua_driver_stdio_spec",
+    "melra_stdio_spec",
     "playwright_stdio_spec",
     "windows_mcp_stdio_spec",
 ]
