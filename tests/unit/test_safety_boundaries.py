@@ -61,6 +61,9 @@ def test_backend_inventory_never_infers_readiness_from_a_target_architecture() -
     assert backends["sova:backend:synthetic"].readiness == "ready"
     assert backends["sova:backend:restricted-local"].network_mode == NetworkMode.LIVE
     assert "Client presence does not prove" in backends["sova:backend:docker"].limitations[0]
+    assert backends["sova:backend:docker-desktop-oci"].readiness != "ready"
+    assert backends["sova:backend:docker-sandbox"].readiness != "ready"
+    assert backends["sova:backend:gvisor"].readiness != "ready"
 
 
 def test_reference_privacy_defaults_cannot_be_silently_enabled() -> None:

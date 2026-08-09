@@ -67,6 +67,33 @@ def test_detected_path_covers_explicit_path_search_and_refusal(
         cli._detected_path(None, ("absent-command",), "runner")
 
 
+def test_docker_attestation_cli_delegates_and_reports_readiness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    docker = tmp_path / "docker.exe"
+    docker.write_bytes(b"fixture")
+    observed: list[tuple[Path, str]] = []
+
+    class _Attestation:
+        ready = True
+
+        @staticmethod
+        def to_mapping() -> dict[str, object]:
+            return {"readiness": "ready", "rawDaemonConfigurationIncluded": False}
+
+    def attest(path: Path, image: str) -> _Attestation:
+        observed.append((path, image))
+        return _Attestation()
+
+    monkeypatch.setattr(cli, "attest_docker_desktop", attest)
+    image = "example.invalid/sova/fixture@sha256:" + "a" * 64
+    assert cli.main(["safety", "attest-docker", "--docker", str(docker), "--image", image]) == 0
+    assert observed == [(docker.resolve(), image)]
+    assert json.loads(capfd.readouterr().out)["rawDaemonConfigurationIncluded"] is False
+
+
 def test_browser_profile_cli_provisions_inspects_pairs_and_target_binds(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

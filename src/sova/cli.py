@@ -62,6 +62,7 @@ from sova.evidence import (
     prepare_disclosure_package,
     render_evidence_report,
 )
+from sova.executors import attest_docker_desktop
 from sova.extensions import (
     ExtensionApproval,
     ExtensionManifest,
@@ -519,6 +520,21 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         help="report known containment backends and explicit limitations",
     )
     backends_parser.set_defaults(handler=_safety_backends)
+    docker_attest_parser = safety_commands.add_parser(
+        "attest-docker",
+        help="attest a cached digest-pinned image on Docker Desktop without executing it",
+    )
+    docker_attest_parser.add_argument(
+        "--docker",
+        type=_path,
+        help="exact Docker CLI path; otherwise resolve docker from PATH",
+    )
+    docker_attest_parser.add_argument(
+        "--image",
+        required=True,
+        help="exact cached repository@sha256 image reference",
+    )
+    docker_attest_parser.set_defaults(handler=_safety_attest_docker)
 
     demo_parser = commands.add_parser(
         "demo",
@@ -2098,6 +2114,13 @@ def _safety_backends(_args: argparse.Namespace) -> int:
     value = [backend.to_mapping() for backend in known_backend_descriptors()]
     sys.stdout.buffer.write(canonical_json_bytes(value) + b"\n")
     return 0
+
+
+def _safety_attest_docker(args: argparse.Namespace) -> int:
+    docker = _detected_path(args.docker, ("docker", "docker.exe"), "Docker CLI")
+    attestation = attest_docker_desktop(docker, args.image)
+    sys.stdout.buffer.write(canonical_json_bytes(attestation.to_mapping()) + b"\n")
+    return 0 if attestation.ready else 3
 
 
 def _demo(args: argparse.Namespace) -> int:

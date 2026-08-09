@@ -228,6 +228,46 @@ def known_backend_descriptors() -> tuple[BackendDescriptor, ...]:
             ),
         ),
         BackendDescriptor(
+            id="sova:backend:docker-desktop-oci",
+            name="SOVA VM-hosted hardened OCI executor",
+            isolation=IsolationKind.CONTAINER,
+            executes_native_code=True,
+            network_mode=NetworkMode.NONE,
+            disposable=True,
+            deterministic_reset=True,
+            synthetic_credentials=True,
+            post_cleanup_verification=True,
+            readiness=(ReadinessState.DEGRADED if docker_present else ReadinessState.UNAVAILABLE),
+            protections=(
+                "digest-pinned cached image required",
+                "live Docker Desktop VM and control attestation required",
+            ),
+            limitations=(
+                "Static discovery cannot promote this backend to ready.",
+                "Use `sova safety attest-docker`; the OCI workload shares the Docker VM kernel.",
+            ),
+        ),
+        BackendDescriptor(
+            id="sova:backend:docker-sandbox",
+            name="Docker Sandboxes per-agent microVM candidate",
+            isolation=IsolationKind.MICROVM,
+            executes_native_code=True,
+            network_mode=NetworkMode.ALLOWLISTED,
+            disposable=True,
+            deterministic_reset=False,
+            synthetic_credentials=False,
+            post_cleanup_verification=True,
+            readiness=(ReadinessState.DEGRADED if docker_present else ReadinessState.UNAVAILABLE),
+            protections=("separate-kernel microVM architecture", "host-proxied network policy"),
+            limitations=(
+                "Plugin presence or a running VM record does not prove an executable sandbox.",
+                (
+                    "Admission requires in-VM health, mount, network, startup, "
+                    "and cleanup conformance."
+                ),
+            ),
+        ),
+        BackendDescriptor(
             id="sova:backend:gvisor",
             name="gVisor user-kernel container backend",
             isolation=IsolationKind.USER_KERNEL,
@@ -237,7 +277,7 @@ def known_backend_descriptors() -> tuple[BackendDescriptor, ...]:
             deterministic_reset=True,
             synthetic_credentials=True,
             post_cleanup_verification=True,
-            readiness=ReadinessState.READY if runsc_present else ReadinessState.UNAVAILABLE,
+            readiness=ReadinessState.DEGRADED if runsc_present else ReadinessState.UNAVAILABLE,
             protections=("user-space kernel", "OCI integration"),
             limitations=("Runtime configuration and host protections still require validation.",),
         ),
@@ -251,7 +291,9 @@ def known_backend_descriptors() -> tuple[BackendDescriptor, ...]:
             deterministic_reset=True,
             synthetic_credentials=True,
             post_cleanup_verification=True,
-            readiness=ReadinessState.READY if firecracker_present else ReadinessState.UNAVAILABLE,
+            readiness=ReadinessState.DEGRADED
+            if firecracker_present
+            else ReadinessState.UNAVAILABLE,
             protections=("KVM microVM boundary", "minimal device model"),
             limitations=("Requires a supported Linux/KVM host and hardened orchestration.",),
         ),
@@ -265,7 +307,7 @@ def known_backend_descriptors() -> tuple[BackendDescriptor, ...]:
             deterministic_reset=True,
             synthetic_credentials=True,
             post_cleanup_verification=True,
-            readiness=ReadinessState.READY if kata_present else ReadinessState.UNAVAILABLE,
+            readiness=ReadinessState.DEGRADED if kata_present else ReadinessState.UNAVAILABLE,
             protections=("VM-backed container boundary", "OCI integration"),
             limitations=("Runtime and hypervisor configuration require independent validation.",),
         ),

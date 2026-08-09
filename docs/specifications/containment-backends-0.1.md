@@ -30,6 +30,8 @@ as `developer-only`, never as allowed hardened isolation.
 | SOVA synthetic world | implemented | no native target code; simulator, not OS sandbox |
 | restricted local process | implemented developer tool | ordinary host process, not sandbox |
 | OCI/Docker | capability probe only | client presence does not prove hardened daemon |
+| SOVA Docker Desktop OCI | implemented, live-attested per image | no network/host mounts/socket, bounded non-root container inside Docker Desktop VM; shared VM kernel |
+| Docker Sandboxes | degraded candidate on current host | per-agent microVM architecture; VM record did not become an executable sandbox within the bounded probe |
 | gVisor | capability probe only | user-kernel isolation; configuration unverified |
 | Firecracker | capability probe only | microVM candidate; needs Linux/KVM orchestration |
 | Kata Containers | capability probe only | VM-backed OCI candidate; configuration unverified |
@@ -38,10 +40,13 @@ The no-native-code synthetic world may satisfy a research run that asks for a
 stronger native-code boundary only because it executes no target-native code.
 That exemption is explicit and appears in the decision.
 
-No reference backend in 0.1 is authorized to detonate suspected malicious
-native code on an ordinary host. Container, user-kernel, and microVM backends
-remain capability descriptors until their setup, teardown, network, image,
-kernel, and escape-resistance conformance tests exist.
+The Docker Desktop OCI backend can execute explicitly authorized, digest-pinned
+Linux command-line workloads only after live attestation. It uses Docker
+Desktop's VM as the outer host boundary and a hardened OCI container as the
+workload boundary. It is not a per-workload microVM and is not admitted when a
+scenario requires `IsolationKind.MICROVM`. Other container, user-kernel, and
+microVM candidates remain capability descriptors until their setup, teardown,
+network, image, kernel, and escape-oriented conformance tests pass.
 
 ## Primary references
 

@@ -11,6 +11,12 @@ have independent version ledgers.
 
 ### Added
 
+- A live-attested Docker Desktop OCI executor for digest-pinned cached images,
+  with no network, host mounts, Docker socket, or image pull; read-only rootfs,
+  non-root zero-capability execution, no-new-privileges, CPU/memory/PID/output/
+  runtime bounds, forced cleanup, a `sova safety attest-docker` command, and an
+  opt-in real-runtime conformance test. It is explicitly a container sharing
+  the Docker VM kernel, not a per-workload microVM.
 - Target-digest-bound opaque browser profiles with atomic cross-process leases,
   bounded stale-lock recovery, graceful MCP/Chromium shutdown, a manual headful
   login/CAPTCHA handoff, opt-in reuse across browser/agent/Arena campaigns, and

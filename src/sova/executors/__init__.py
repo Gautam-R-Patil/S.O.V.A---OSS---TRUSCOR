@@ -16,6 +16,15 @@ from sova.executors.contract import (
     SideEffect,
     negotiate,
 )
+from sova.executors.docker_desktop import (
+    BoundedDockerCommandRunner,
+    DockerCommandResult,
+    DockerDesktopAttestation,
+    DockerDesktopIsolationPolicy,
+    DockerDesktopOciExecutor,
+    attest_docker_desktop,
+    docker_desktop_backend_descriptor,
+)
 from sova.executors.local import RestrictedLocalExecutor
 from sova.executors.runner import (
     ScenarioRunResult,
@@ -28,9 +37,14 @@ from sova.executors.scripted import ScriptedAction, ScriptedExecutor
 __all__ = [
     "ActionOutcome",
     "ActionRequest",
+    "BoundedDockerCommandRunner",
     "CancellationToken",
     "Capability",
     "CapabilityReport",
+    "DockerCommandResult",
+    "DockerDesktopAttestation",
+    "DockerDesktopIsolationPolicy",
+    "DockerDesktopOciExecutor",
     "EvidenceReference",
     "ExecutionContext",
     "Executor",
@@ -43,6 +57,8 @@ __all__ = [
     "SecretProvider",
     "SideEffect",
     "action_intent_for_step",
+    "attest_docker_desktop",
+    "docker_desktop_backend_descriptor",
     "expanded_steps",
     "negotiate",
     "run_capsule",
