@@ -39,6 +39,7 @@ claiming that the field set is ready for `1.0`.
 - [bounded live browser campaign](./live-browser-campaign-0.1.md)
 - [provider-assisted browser campaign](./provider-agent-browser-campaign-0.1.md)
 - [provider-capable local Agent Arena](./agent-arena-0.1.md)
+- [real-time multi-agent Arena chamber](./arena-chamber-0.1.md)
 - [authorized target assessment](./authorized-target-assessment-0.1.md)
 - [neutral conformance kit](./conformance-kit-0.1.md)
 - [supply-chain release artifacts](./supply-chain-release-0.1.md)

@@ -3,9 +3,11 @@
 
 from sova.live.agent_campaign import (
     AgentBrowserCampaignArtifacts,
+    AgentCampaignEventObserver,
     run_agent_browser_campaign,
 )
 from sova.live.browser import (
+    BrowserEventObserver,
     LiveBrowserArtifacts,
     build_owned_web_capsule,
     owned_web_target,
@@ -15,6 +17,7 @@ from sova.live.browser import (
 from sova.live.campaign import (
     BrowserCampaign,
     BrowserCampaignArtifacts,
+    CampaignEventObserver,
     browser_campaign_from_mapping,
     owned_web_campaign,
     run_browser_campaign,
@@ -33,6 +36,7 @@ from sova.live.fixture_web import OwnedWebFixture
 from sova.live.software import (
     LiveSoftwareArtifacts,
     SoftwareApprovalPrompt,
+    SoftwareEventObserver,
     build_owned_software_capsule,
     run_live_software_assessment,
     run_owned_software_vertical_slice,
@@ -40,13 +44,17 @@ from sova.live.software import (
 
 __all__ = [
     "AgentBrowserCampaignArtifacts",
+    "AgentCampaignEventObserver",
     "BrowserCampaign",
     "BrowserCampaignArtifacts",
+    "BrowserEventObserver",
+    "CampaignEventObserver",
     "ControlFetchResult",
     "LiveBrowserArtifacts",
     "LiveSoftwareArtifacts",
     "OwnedWebFixture",
     "SoftwareApprovalPrompt",
+    "SoftwareEventObserver",
     "UrllibControlFetcher",
     "WebsiteControlChallenge",
     "browser_campaign_from_mapping",

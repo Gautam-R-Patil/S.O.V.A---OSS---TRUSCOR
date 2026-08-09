@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import platform
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -43,6 +44,22 @@ if TYPE_CHECKING:
 
 _MAX_CANDIDATES = 32
 _MAX_MESSAGES_PER_CANDIDATE = 6
+CampaignEventObserver = Callable[[str, dict[str, Any]], None]
+
+
+def _channel_observer(
+    observer: CampaignEventObserver | None,
+    channel: str,
+) -> Callable[[dict[str, Any]], None] | None:
+    if observer is None:
+        return None
+
+    def emit(event: dict[str, Any]) -> None:
+        observer(channel, event)
+
+    return emit
+
+
 _MAX_MESSAGE_CHARS = 1_024
 _MAX_SELECTOR_CHARS = 256
 _MAX_CAMPAIGN_ACTIONS = 256
@@ -441,6 +458,7 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
     approval_prompt: ApprovalPrompt,
     control_proof: ControlProof | None = None,
     package_cache: Path | None = None,
+    event_observer: CampaignEventObserver | None = None,
 ) -> BrowserCampaignArtifacts:
     """Search a declared candidate set, reproduce success, and package proof."""
     origins, host, proof, control_status = verified_browser_control(target, control_proof)
@@ -606,6 +624,7 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
                 signing_key=signing_key,
                 environment=environment,
                 fingerprints=fingerprints,
+                event_observer=_channel_observer(event_observer, key),
             )
             TraceReader(trace).verify(require_signature=True)
             observation = _trace_observation(trace, triggered=result.oracle_status == "pass")
@@ -638,6 +657,7 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
                 signing_key=signing_key,
                 environment=environment,
                 fingerprints=fingerprints,
+                event_observer=_channel_observer(event_observer, "reproduction"),
             )
             TraceReader(reproduction_trace).verify(require_signature=True)
             comparison = compare_observable_outcomes(
@@ -797,6 +817,7 @@ def run_owned_web_campaign(
     package_runner: Path,
     browser_executable: Path,
     approval_prompt: ApprovalPrompt,
+    event_observer: CampaignEventObserver | None = None,
 ) -> BrowserCampaignArtifacts:
     """Prove bounded trigger discovery through a real browser on SOVA's fixture."""
     with OwnedWebFixture() as fixture:
@@ -807,12 +828,14 @@ def run_owned_web_campaign(
             package_runner=package_runner,
             browser_executable=browser_executable,
             approval_prompt=approval_prompt,
+            event_observer=event_observer,
         )
 
 
 __all__ = [
     "BrowserCampaign",
     "BrowserCampaignArtifacts",
+    "CampaignEventObserver",
     "browser_campaign_from_mapping",
     "owned_web_campaign",
     "run_browser_campaign",

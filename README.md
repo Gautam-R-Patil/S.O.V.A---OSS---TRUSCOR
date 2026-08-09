@@ -436,6 +436,11 @@ The pre-alpha now includes:
 - freshness/scope/nonce-bound probe verification, a deterministic local Arena
   with trace-and-capsule evidence per attempt, a static evidence-gated
   leaderboard, an inert CTF catalog, and redaction-first captioned Y4M clips.
+- a real-time Arena chamber where one or several agents select exact declared
+  environment actions while SOVA records filesystem, database, API, sink-only
+  network, inter-agent, safety, authorization, state, and oracle events into
+  the same signed trace exposed live; plus an authorized provider-backed
+  website Arena lane.
 
 These are implemented engineering capabilities, not a claim that the current
 generic search algorithm is novel or superior on real systems.
@@ -593,6 +598,15 @@ sova mcp manifest
 sova arena run ./arena.json ./arena-output
 # Or run provider-capable agents in the fully observed synthetic message Arena.
 sova arena agent-run ./agent-arena.json ./agent-arena-output --allow-provider-calls
+# Run agents against an instrumented synthetic environment and stream the
+# canonical signed-trace event sequence while the match is running.
+sova arena chamber ./examples/arena/chamber.json ./arena-chamber-output \
+  --authorize-contained-fixture --stream-jsonl
+# Run isolated provider roles against one exactly authorized website. Every
+# generated browser batch still requires fresh human approval.
+sova arena web ./website-target.json ./browser-campaign.json ./provider-runtime.json \
+  ./arena-web-output --control-proof ./control-proof.json \
+  --allow-provider-calls --stream-jsonl
 sova leaderboard build ./leaderboard.json ./leaderboard-output
 sova ctf build ./ctf.json ./ctf-catalog.json
 sova replay clip ./clip.json ./replay.y4m
@@ -830,7 +844,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Registry, `sync`, adapters, and `contribute` | Offline content-addressed registry, signed index, trust pinning, pull-only mirror cache, adapters, and local contribution staging implemented in [ADR-0024](./docs/decisions/0024-offline-content-addressed-community-registry.md) |
 | Local MCP | MCP `2025-11-25` stdio, safe tools, three exact-gated tools, out-of-band human approval, manifest pin, and self-check implemented in [ADR-0025](./docs/decisions/0025-local-mcp-out-of-band-authorization.md) |
 | Extension SDK, providers, targets, interoperability | Experimental fail-closed contracts, import-free discovery, machine-local digest-pinned preparation, exact human-approved subprocess execution with signed evidence, and no-network compatibility kit implemented in [ADR-0026](./docs/decisions/0026-fail-closed-extension-and-provider-ecosystem.md); host execution is not a sandbox, and independent adoption plus real-provider transferability remain unproven |
-| Probe, Arena, leaderboard, CTF, replay media | Deterministic standard-profile Arena plus custom provider-capable multi-round challenger/defender/advisory-judge Arena implemented with signed observable evidence; arbitrary untrusted-code containment, standard real-model comparison, and public comparative results remain unproven |
+| Probe, Arena, leaderboard, CTF, replay media | Deterministic standard-profile Arena, provider-capable message Arena, real-time sensor-instrumented multi-agent chamber, and exactly authorized provider-backed website Arena implemented with signed observable evidence; “fully sensed” is bounded to declared healthy sensor families, while arbitrary untrusted-code containment, total host observability, standard real-model comparison, and public comparative results remain unproven |
 | Research/publication programme | Private source, opportunity, invention, and publication-readiness ledgers maintained; public novelty and submission remain human/external gates |
 | Onboarding and adoption | Account-free `init`, local `doctor`, reviewed data removal, installation/first-value/air-gap guides, and user pathways implemented |
 | Release and governance | Deterministic SBOM/checksum tools, public governance, compatibility policy, and release-candidate automation implemented; first signed public release remains a founder gate |

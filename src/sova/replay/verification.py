@@ -23,6 +23,7 @@ _SUPPORTED_CAPSULE_FEATURES = {
     "scenario.core/0.1",
     "trace.core/0.1",
     "detonation.synthetic/0.1",
+    "arena.chamber/0.1",
 }
 _SUPPORTED_TRACE_FEATURES = {"trace.core/0.1"}
 

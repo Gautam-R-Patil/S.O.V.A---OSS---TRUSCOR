@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,6 +29,20 @@ _PLANNING_ROLES = (
 _REQUIRED_MODEL_TURNS = len(_PLANNING_ROLES) + 1
 _MAX_ROLE_OUTPUT_BYTES = 262_144
 _PROVIDER_PREFIXES = frozenset({"anthropic", "ollama", "openai", "openrouter"})
+AgentCampaignEventObserver = Callable[[str, dict[str, Any]], None]
+
+
+def _channel_observer(
+    observer: AgentCampaignEventObserver | None,
+    channel: str,
+) -> Callable[[dict[str, Any]], None] | None:
+    if observer is None:
+        return None
+
+    def emit(event: dict[str, Any]) -> None:
+        observer(channel, event)
+
+    return emit
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,6 +318,7 @@ def run_agent_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
     browser_executable: Path,
     approval_prompt: ApprovalPrompt,
     control_proof: ControlProof | None = None,
+    event_observer: AgentCampaignEventObserver | None = None,
 ) -> AgentBrowserCampaignArtifacts:
     """Plan without tools, execute only after review, and judge only safe evidence."""
     if max_model_turns < _REQUIRED_MODEL_TURNS:
@@ -374,6 +390,7 @@ def run_agent_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             },
         },
         signing_key=signing_key,
+        event_observer=_channel_observer(event_observer, "orchestration"),
     )
     writer.append(
         "run.started",
@@ -438,6 +455,7 @@ def run_agent_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             browser_executable=browser_executable,
             approval_prompt=approval_prompt,
             control_proof=control_proof,
+            event_observer=event_observer,
         )
         browser_report = strict_json_loads(browser.report.read_bytes())
         if not isinstance(browser_report, dict):
@@ -556,4 +574,8 @@ def run_agent_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
     )
 
 
-__all__ = ["AgentBrowserCampaignArtifacts", "run_agent_browser_campaign"]
+__all__ = [
+    "AgentBrowserCampaignArtifacts",
+    "AgentCampaignEventObserver",
+    "run_agent_browser_campaign",
+]

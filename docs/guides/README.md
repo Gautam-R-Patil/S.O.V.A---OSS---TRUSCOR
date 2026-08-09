@@ -7,6 +7,7 @@ Start with the [canonical installation path](installation.md), then complete the
 
 - [all command families](command-reference.md);
 - [authorized website and software testing](authorized-target-testing.md);
+- [real-time multi-agent Arena](arena.md);
 - [air-gapped use](air-gapped.md);
 - [local data and removal](data-and-uninstall.md); and
 - [role-specific pathways](user-pathways.md).

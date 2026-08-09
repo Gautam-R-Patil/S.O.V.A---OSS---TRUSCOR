@@ -23,6 +23,7 @@ SUPPORTED_REQUIRED_FEATURES = frozenset(
         "scenario.core/0.1",
         "trace.core/0.1",
         "detonation.synthetic/0.1",
+        "arena.chamber/0.1",
     }
 )
 

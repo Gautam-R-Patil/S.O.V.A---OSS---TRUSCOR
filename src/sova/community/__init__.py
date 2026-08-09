@@ -15,6 +15,16 @@ from sova.community.arena import (
     ArenaProfile,
     run_local_arena,
 )
+from sova.community.chamber import (
+    ArenaChamberAction,
+    ArenaChamberArtifacts,
+    ArenaChamberBudget,
+    ArenaChamberCase,
+    ArenaChamberMode,
+    ArenaChamberParticipant,
+    run_arena_chamber,
+)
+from sova.community.chamber_config import run_arena_chamber_document
 from sova.community.config import (
     build_ctf_document,
     build_leaderboard_document,
@@ -34,6 +44,12 @@ __all__ = [
     "AgentArenaCase",
     "AgentArenaMatch",
     "ArenaCase",
+    "ArenaChamberAction",
+    "ArenaChamberArtifacts",
+    "ArenaChamberBudget",
+    "ArenaChamberCase",
+    "ArenaChamberMode",
+    "ArenaChamberParticipant",
     "ArenaMatch",
     "ArenaProfile",
     "CTFScenario",
@@ -50,6 +66,8 @@ __all__ = [
     "render_replay_clip_document",
     "run_agent_arena",
     "run_agent_arena_document",
+    "run_arena_chamber",
+    "run_arena_chamber_document",
     "run_arena_document",
     "run_local_arena",
     "verify_probe_response",

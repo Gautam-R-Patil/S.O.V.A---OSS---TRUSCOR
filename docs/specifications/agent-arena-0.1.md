@@ -4,6 +4,10 @@
 
 ## Purpose
 
+> This message-only runner remains a compatibility surface. New environment,
+> action, sensor, and real-time work uses the
+> [Arena chamber](./arena-chamber-0.1.md).
+
 `sova arena agent-run` runs provider-capable challenger and defender agents
 against each other inside a SOVA-controlled synthetic message environment. A
 third isolated model is an advisory judge. Every prompt, observable response,
@@ -11,9 +15,9 @@ message transfer, environment-state transition, oracle result, budget, and
 failure is represented in a signed `.sova-trace`; every completed match is
 packaged as a `.sova` capsule.
 
-This closes the real-agent execution gap in the original deterministic Arena
-without executing participant code or granting a model browser, terminal,
-filesystem, credential, or host access.
+This closes the provider-backed message-exchange gap in the original
+deterministic Arena. It does not by itself implement environment actions or
+website execution; those are provided by `arena chamber` and `arena web`.
 
 The public runner accepts only SOVA's exact built-in `ProviderRoleModel` and
 `ScriptedModel` adapters. Arbitrary in-process model classes are refused; a

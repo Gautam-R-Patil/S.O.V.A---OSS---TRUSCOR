@@ -31,9 +31,11 @@ def _approve(
 def test_owned_software_runs_real_process_reproduces_and_builds_case(tmp_path: Path) -> None:
     unrelated = tmp_path / ".software-assessment.sova"
     unrelated.write_bytes(b"unrelated-user-file")
+    observed: dict[str, list[dict[str, object]]] = {}
     artifacts = run_owned_software_vertical_slice(
         tmp_path / "software-assessment",
         approval_prompt=_approve,
+        event_observer=lambda channel, event: observed.setdefault(channel, []).append(event),
     )
     assert artifacts.status == "pass"
     assert unrelated.read_bytes() == b"unrelated-user-file"
@@ -57,6 +59,8 @@ def test_owned_software_runs_real_process_reproduces_and_builds_case(tmp_path: P
         assert outcome["output"]["workspaceDelta"]["complete"] is True
         assert outcome["output"]["workspaceDelta"]["created"][0]["path"] == "state.json"
         assert "unexpected-action" in outcome["output"]["stdout"]
+    assert observed["primary"] == TraceReader(artifacts.trace).events()
+    assert observed["reproduction"] == TraceReader(artifacts.reproduction_trace).events()
     assert verify_artifact(artifacts.evidence_capsule).state == VerificationState.VERIFIED
 
     case = build_case_workspace(

@@ -134,6 +134,7 @@ def test_live_browser_coordinator_captures_reproduces_and_packages(
     browser.write_bytes(b"deterministic test placeholder")
     monkeypatch.setattr("sova.live.browser.StdioMCPClient", _DeterministicBrowserMCP)
 
+    observed: dict[str, list[dict[str, object]]] = {}
     artifacts = run_live_browser_assessment(
         owned_web_target(origin),
         source,
@@ -141,6 +142,7 @@ def test_live_browser_coordinator_captures_reproduces_and_packages(
         package_runner=runner,
         browser_executable=browser,
         approval_prompt=lambda challenge, _intent: challenge.exact_phrase,
+        event_observer=lambda channel, event: observed.setdefault(channel, []).append(event),
     )
 
     assert artifacts.status == "pass"
@@ -161,6 +163,8 @@ def test_live_browser_coordinator_captures_reproduces_and_packages(
     assert report["authorization"]["freshExactBatchApproval"] is True
     assert report["authorization"]["approvedIntentCountPerRun"] == 7
     assert report["containment"]["nativeSandboxClaim"] is False
+    assert observed["primary"] == TraceReader(artifacts.trace).events()
+    assert observed["reproduction"] == TraceReader(artifacts.reproduction_trace).events()
 
 
 class _ControlFetcher:
@@ -365,6 +369,7 @@ def test_tool_isolated_agent_roles_plan_an_approved_real_browser_campaign(
         ),
     }
 
+    observed: dict[str, list[dict[str, object]]] = {}
     artifacts = run_agent_browser_campaign(
         owned_web_target(origin),
         owned_web_campaign(origin + "/"),
@@ -375,6 +380,7 @@ def test_tool_isolated_agent_roles_plan_an_approved_real_browser_campaign(
         package_runner=runner,
         browser_executable=browser,
         approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
+        event_observer=lambda channel, event: observed.setdefault(channel, []).append(event),
     )
 
     assert artifacts.status == "pass"
@@ -396,6 +402,8 @@ def test_tool_isolated_agent_roles_plan_an_approved_real_browser_campaign(
     rendered = artifacts.report.read_text(encoding="utf-8")
     assert "chat UI" not in rendered
     assert "fixture only" not in rendered
+    assert observed["orchestration"] == TraceReader(artifacts.orchestration_trace).events()
+    assert any(channel.startswith("attempt-") for channel in observed)
 
 
 @pytest.mark.integration

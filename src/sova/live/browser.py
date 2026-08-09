@@ -51,9 +51,23 @@ if TYPE_CHECKING:
     from sova.safety import ActionIntent, ApprovalBatchChallenge
 
 ApprovalPrompt = Callable[["ApprovalBatchChallenge", tuple["ActionIntent", ...]], str]
+BrowserEventObserver = Callable[[str, dict[str, Any]], None]
 ScenarioBatch = tuple[tuple[str, dict[str, Any]], ...]
 
 _LOOPBACK = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def _channel_observer(
+    observer: BrowserEventObserver | None,
+    channel: str,
+) -> Callable[[dict[str, Any]], None] | None:
+    if observer is None:
+        return None
+
+    def emit(event: dict[str, Any]) -> None:
+        observer(channel, event)
+
+    return emit
 
 
 @dataclass(frozen=True, slots=True)
@@ -443,6 +457,7 @@ def run_live_browser_assessment(  # noqa: PLR0913
     browser_executable: Path,
     approval_prompt: ApprovalPrompt,
     control_proof: ControlProof | None = None,
+    event_observer: BrowserEventObserver | None = None,
 ) -> LiveBrowserArtifacts:
     """Run and reproduce a capsule on a real, explicitly authorized website."""
     origins, host, proof, control_status = verified_browser_control(target, control_proof)
@@ -562,6 +577,7 @@ def run_live_browser_assessment(  # noqa: PLR0913
             signing_key=signing_key,
             environment=environment,
             fingerprints=fingerprints,
+            event_observer=_channel_observer(event_observer, "primary"),
         )
         reproduction_session, reproduction_approvals = _authorization_for_run(
             scenario,
@@ -582,6 +598,7 @@ def run_live_browser_assessment(  # noqa: PLR0913
             signing_key=signing_key,
             environment=environment,
             fingerprints=fingerprints,
+            event_observer=_channel_observer(event_observer, "reproduction"),
         )
     primary_verification = TraceReader(trace).verify(require_signature=True)
     reproduction_verification = TraceReader(reproduction).verify(require_signature=True)
@@ -691,6 +708,7 @@ def run_owned_web_vertical_slice(
     package_runner: Path,
     browser_executable: Path,
     approval_prompt: ApprovalPrompt,
+    event_observer: BrowserEventObserver | None = None,
 ) -> LiveBrowserArtifacts:
     """Launch the owned HTTP fixture and exercise the complete real browser spine."""
     destination = destination.resolve()
@@ -707,12 +725,14 @@ def run_owned_web_vertical_slice(
                 package_runner=package_runner,
                 browser_executable=browser_executable,
                 approval_prompt=approval_prompt,
+                event_observer=event_observer,
             )
         finally:
             source.unlink(missing_ok=True)
 
 
 __all__ = [
+    "BrowserEventObserver",
     "LiveBrowserArtifacts",
     "authorize_browser_scenarios",
     "browser_target_origins",

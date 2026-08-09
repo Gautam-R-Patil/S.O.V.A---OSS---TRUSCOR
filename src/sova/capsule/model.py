@@ -284,6 +284,7 @@ def lint_capsule(path: Path) -> list[ValidationIssue]:
         "scenario.core/0.1",
         "trace.core/0.1",
         "detonation.synthetic/0.1",
+        "arena.chamber/0.1",
     }
     issues.extend(
         (

@@ -14,7 +14,7 @@ human text or HTML artifact is the command's purpose.
 | First value | `map`, `check`, `demo`, `safety backends`, `executors receipts` |
 | Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics browser-counterfactual`, `forensics benchmark`, `evidence`, `case build`, `adjudicate`, `compose` |
 | Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse agent-run`, `rehearse export`, `trace command`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `ci`, `self-check` |
-| Registry/community | `registry verify`, `sync`, `contribute`, `probe issue`, `probe verify`, `arena run`, `arena agent-run`, `leaderboard build`, `ctf build` |
+| Registry/community | `registry verify`, `sync`, `contribute`, `probe issue`, `probe verify`, `arena run`, `arena agent-run`, `arena chamber`, `arena web`, `leaderboard build`, `ctf build` |
 | Extensions | `extension discover`, `extension prepare`, `extension run` |
 | Local MCP | `mcp manifest`, `mcp init-control`, `mcp approve`, `mcp serve` |
 | Release and compatibility | `release sbom`, `release checksums`, `release verify-checksums`, `conformance export`, `conformance verify` |
@@ -71,6 +71,14 @@ the verdict.
 synthetic multi-agent message experiment. It grants participants no tools,
 requires an explicit provider-call flag, emits signed trace/capsule evidence,
 and always marks the run custom and non-comparable.
+
+`arena chamber` is the sensor-instrumented environment runner. Agents select
+only operator-declared action IDs; SOVA executes them in an inert event-sourced
+world, evaluates canonical events, streams the already-redacted hash-chained
+trace in real time, and packages the signed trace and replay recipe. `arena
+web` applies provider-backed planning to an exactly authorized website through
+the same human-reviewed browser campaign boundary. See the
+[Arena chamber specification](../specifications/arena-chamber-0.1.md).
 
 `rehearse agent-run` asks one tool-free provider strategist to propose a strict,
 bounded portable plan for an already prepared workspace. It requires an exact

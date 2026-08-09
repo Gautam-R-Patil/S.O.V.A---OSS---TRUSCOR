@@ -36,6 +36,7 @@ from sova.community import (
     issue_probe_document,
     render_replay_clip_document,
     run_agent_arena_document,
+    run_arena_chamber_document,
     run_arena_document,
     verify_probe_response,
 )
@@ -885,6 +886,53 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         help="explicitly permit configured model-provider calls, which may incur cost",
     )
     arena_agent_run.set_defaults(handler=_arena_agent_run)
+    arena_chamber = arena_commands.add_parser(
+        "chamber",
+        help="run an authorized real-time multi-agent chamber with signed evidence",
+    )
+    arena_chamber.add_argument("specification", type=_path)
+    arena_chamber.add_argument("destination", type=_path)
+    arena_chamber.add_argument(
+        "--authorize-contained-fixture",
+        action="store_true",
+        help="confirm the exact self-owned, inert, sink-only built-in environment",
+    )
+    arena_chamber.add_argument(
+        "--allow-provider-calls",
+        action="store_true",
+        help="permit configured model-provider calls, which may incur operator cost",
+    )
+    arena_chamber.add_argument(
+        "--stream-jsonl",
+        action="store_true",
+        help="stream each already-redacted hash-chained event to stdout as it is persisted",
+    )
+    arena_chamber.set_defaults(handler=_arena_chamber)
+    arena_web = arena_commands.add_parser(
+        "web",
+        help=(
+            "run provider-backed Arena roles against one exactly authorized website "
+            "with live signed-event streaming"
+        ),
+    )
+    arena_web.add_argument("manifest", type=_path)
+    arena_web.add_argument("campaign", type=_path)
+    arena_web.add_argument("provider_runtime", type=_path)
+    arena_web.add_argument("destination", type=_path)
+    arena_web.add_argument("--control-proof", type=_path)
+    arena_web.add_argument("--package-runner", type=_path)
+    arena_web.add_argument("--browser-executable", type=_path)
+    arena_web.add_argument(
+        "--allow-provider-calls",
+        action="store_true",
+        help="explicitly permit configured model-provider calls, which may incur cost",
+    )
+    arena_web.add_argument(
+        "--stream-jsonl",
+        action="store_true",
+        help="stream each already-redacted hash-chained event with its trace channel",
+    )
+    arena_web.set_defaults(handler=_arena_web)
 
     leaderboard_parser = commands.add_parser(
         "leaderboard", help="build a verified static local leaderboard"
@@ -1684,6 +1732,91 @@ def _arena_agent_run(args: argparse.Namespace) -> int:
         "traces": [str(path) for path in artifacts.traces],
         "capsules": [str(path) for path in artifacts.capsules],
     }
+    sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
+    return 0 if artifacts.status == "pass" else 2
+
+
+def _arena_chamber(args: argparse.Namespace) -> int:
+    if not args.authorize_contained_fixture:
+        raise FormatError(
+            "SOVA-CHAMBER-NOT-AUTHORIZED",
+            "Arena chamber requires the explicit --authorize-contained-fixture flag",
+        )
+
+    def observe(event: dict[str, Any]) -> None:
+        sys.stdout.buffer.write(canonical_json_bytes(event) + b"\n")
+        sys.stdout.buffer.flush()
+
+    artifacts = run_arena_chamber_document(
+        _load_object(args.specification),
+        args.destination,
+        secret_resolver=os.getenv,
+        contained_fixture_authorized=True,
+        provider_calls_authorized=args.allow_provider_calls,
+        event_observer=observe if args.stream_jsonl else None,
+    )
+    output = {
+        "artifactType": "sova.arena-chamber-cli-result",
+        "schemaVersion": "0.1.0",
+        "status": artifacts.status,
+        "report": str(artifacts.report),
+        "trace": str(artifacts.trace),
+        "capsule": str(artifacts.capsule),
+        "liveEvents": str(artifacts.live_events),
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
+    return 0 if artifacts.status in {"pass", "not-observed"} else 2
+
+
+def _arena_web(args: argparse.Namespace) -> int:
+    if not args.allow_provider_calls:
+        raise FormatError(
+            "SOVA-PROVIDER-CALLS-NOT-ALLOWED",
+            "website Arena planning requires the explicit --allow-provider-calls flag",
+        )
+    _require_live_campaign_terminal()
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    campaign = browser_campaign_from_mapping(_load_object(args.campaign))
+    runtime = provider_runtime_from_mapping(_load_object(args.provider_runtime))
+    proof = (
+        control_proof_from_mapping(_load_object(args.control_proof))
+        if args.control_proof is not None
+        else None
+    )
+    package_runner, browser = _campaign_executables(args)
+
+    def observe(channel: str, event: dict[str, Any]) -> None:
+        envelope = {
+            "artifactType": "sova.arena-live-event",
+            "schemaVersion": "0.1.0",
+            "channel": channel,
+            "event": event,
+        }
+        sys.stdout.buffer.write(canonical_json_bytes(envelope) + b"\n")
+        sys.stdout.buffer.flush()
+
+    artifacts = run_agent_browser_campaign(
+        target,
+        campaign,
+        args.destination,
+        router=provider_model_router(runtime, secret_resolver=os.getenv),
+        max_model_turns=runtime.max_model_turns,
+        max_total_tokens=runtime.max_total_tokens,
+        package_runner=package_runner,
+        browser_executable=browser,
+        approval_prompt=_live_campaign_prompt,
+        control_proof=proof,
+        event_observer=observe if args.stream_jsonl else None,
+    )
+    output = _campaign_output(artifacts.browser)
+    output.update(
+        {
+            "artifactType": "sova.arena-web-cli-result",
+            "schemaVersion": "0.1.0",
+            "agentReport": str(artifacts.report),
+            "agentOrchestrationTrace": str(artifacts.orchestration_trace),
+        }
+    )
     sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
     return 0 if artifacts.status == "pass" else 2
 

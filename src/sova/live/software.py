@@ -73,6 +73,20 @@ SoftwareApprovalPrompt = Callable[
     [ApprovalBatchChallenge, tuple[ActionIntent, ...]],
     str,
 ]
+SoftwareEventObserver = Callable[[str, dict[str, Any]], None]
+
+
+def _channel_observer(
+    observer: SoftwareEventObserver | None,
+    channel: str,
+) -> Callable[[dict[str, Any]], None] | None:
+    if observer is None:
+        return None
+
+    def emit(event: dict[str, Any]) -> None:
+        observer(channel, event)
+
+    return emit
 
 
 @dataclass(frozen=True, slots=True)
@@ -468,6 +482,7 @@ def run_live_software_assessment(  # noqa: PLR0913, PLR0915
     *,
     executable: Path,
     approval_prompt: SoftwareApprovalPrompt,
+    event_observer: SoftwareEventObserver | None = None,
 ) -> LiveSoftwareArtifacts:
     """Run one trusted local program twice in separate credential-stripped copies."""
     basis, authority_reference = _assert_target(target)
@@ -602,6 +617,7 @@ def run_live_software_assessment(  # noqa: PLR0913, PLR0915
                 signing_key=signing_key,
                 environment=environment,
                 fingerprints=fingerprints,
+                event_observer=_channel_observer(event_observer, "primary"),
             )
             reproduction = temporary / "reproduction.sova-trace"
             repeated = run_capsule(
@@ -615,6 +631,7 @@ def run_live_software_assessment(  # noqa: PLR0913, PLR0915
                 signing_key=signing_key,
                 environment=environment,
                 fingerprints=fingerprints,
+                event_observer=_channel_observer(event_observer, "reproduction"),
             )
         trace_verification = TraceReader(trace).verify(require_signature=True)
         reproduction_verification = TraceReader(reproduction).verify(require_signature=True)
@@ -813,6 +830,7 @@ def run_owned_software_vertical_slice(
     destination: Path,
     *,
     approval_prompt: SoftwareApprovalPrompt,
+    event_observer: SoftwareEventObserver | None = None,
 ) -> LiveSoftwareArtifacts:
     """Run the real process/evidence path against SOVA's inert owned fixture."""
     executable = Path(sys.executable).resolve()
@@ -846,6 +864,7 @@ def run_owned_software_vertical_slice(
             destination,
             executable=executable,
             approval_prompt=approval_prompt,
+            event_observer=event_observer,
         )
     finally:
         if fixture_root.exists():
@@ -855,6 +874,7 @@ def run_owned_software_vertical_slice(
 __all__ = [
     "LiveSoftwareArtifacts",
     "SoftwareApprovalPrompt",
+    "SoftwareEventObserver",
     "build_owned_software_capsule",
     "run_live_software_assessment",
     "run_owned_software_vertical_slice",

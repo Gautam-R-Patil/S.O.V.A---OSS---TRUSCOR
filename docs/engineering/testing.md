@@ -54,6 +54,13 @@ no-network provider adapters, target contracts, inert Inspect AI round trips,
 signed probe binding/freshness, deterministic Arena evidence, standard-profile
 leaderboard verification, inert CTF catalogs, and redaction-first replay media.
 
+The real-time Arena chamber adds topology, capability-grant, action-catalogue,
+sensor-health, redacted-observer, live/final stream parity, deterministic-oracle,
+advisory-judge, signed-capsule, and provider-permission tests. Browser and
+trusted-process integration assert that each observed channel equals its
+finalized canonical trace. The installed-browser lane remains opt-in and is
+reported separately from mandatory deterministic CI.
+
 ## Determinism
 
 - The default seed is `20260729`.

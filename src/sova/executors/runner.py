@@ -39,7 +39,7 @@ from sova.safety.authorization import (
 from sova.trace import TraceWriter
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
     from pathlib import Path
 
     from sova.trace.integrity import Ed25519Keypair
@@ -173,6 +173,7 @@ def run_capsule(  # noqa: PLR0912, PLR0913, PLR0915
     environment: dict[str, Any] | None = None,
     fingerprints: dict[str, Any] | None = None,
     capture_profile: str = "standard",
+    event_observer: Callable[[dict[str, Any]], None] | None = None,
 ) -> ScenarioRunResult:
     """Run abstract steps only after exact capability and authorization checks."""
     scenario, artifacts = _load(capsule)
@@ -246,6 +247,7 @@ def run_capsule(  # noqa: PLR0912, PLR0913, PLR0915
             "capabilityDigest": capability_digest,
         },
         signing_key=signing_key,
+        event_observer=event_observer,
     )
     writer.append(
         "run.started",

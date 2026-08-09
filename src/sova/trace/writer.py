@@ -34,6 +34,7 @@ from sova.trace.kinds import EVENT_REGISTRY_VERSION, event_registry_digest, vali
 from sova.trace.redaction import RedactionPolicy, Redactor
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
     from types import TracebackType
 
@@ -90,6 +91,7 @@ class TraceWriter:
         fingerprints: dict[str, Any] | None = None,
         retention: dict[str, Any] | None = None,
         reviewed_for_export: bool = False,
+        event_observer: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         if capture_profile not in _PROFILE_ALLOWED_PREFIXES:
             raise FormatError("SOVA-TRACE-PROFILE", "unsupported capture profile")
@@ -162,6 +164,7 @@ class TraceWriter:
             "expiresAt": None,
             "autoDelete": False,
         }
+        self.event_observer = event_observer
         self.created_at = _now()
         self._sequence = 0
         self._dropped_event_count = 0
@@ -335,6 +338,23 @@ class TraceWriter:
             os.fsync(self._handle.fileno())
         self._previous_hash = event["eventHash"]
         self._sequence += 1
+        if self.event_observer is not None:
+            # Observers receive only the detached, canonical event after redaction,
+            # validation, hash chaining, and persistence to the staging segment.
+            observed = strict_json_loads(encoded[:-1])
+            if not isinstance(observed, dict):  # pragma: no cover - validated invariant
+                raise FormatError("SOVA-TRACE-OBSERVER", "canonical event is not an object")
+            try:
+                self.event_observer(observed)
+            except Exception as error:
+                # Disable a failed observer so callers can still append a terminal
+                # error and seal the already-persisted partial trace.
+                self.event_observer = None
+                raise FormatError(
+                    "SOVA-TRACE-OBSERVER",
+                    "live event observer failed after the event was persisted",
+                    details={"eventId": event["id"]},
+                ) from error
         return str(event["id"])
 
     def add_blob(self, data: bytes) -> ContentDescriptor:

@@ -281,6 +281,9 @@ def test_all_campaign_cli_routes_delegate_with_no_target_tools_in_test(
         assert args[:2] == (target, campaign)
         assert options["router"] is router
         assert options["control_proof"] is proof
+        observer = options.get("event_observer")
+        if observer is not None:
+            observer("orchestration", {"kind": "run.started", "seq": 1})
         return agent
 
     monkeypatch.setattr(cli, "run_agent_browser_campaign", run_agent)
@@ -296,9 +299,65 @@ def test_all_campaign_cli_routes_delegate_with_no_target_tools_in_test(
     output = json.loads(capfd.readouterr().out)
     assert output["agentOrchestrationTrace"].endswith("orchestration.sova-trace")
 
+    arena_args = argparse.Namespace(**vars(agent_args), stream_jsonl=True)
+    assert cli._arena_web(arena_args) == 0
+    streamed = [json.loads(line) for line in capfd.readouterr().out.splitlines()]
+    assert streamed[0] == {
+        "artifactType": "sova.arena-live-event",
+        "channel": "orchestration",
+        "event": {"kind": "run.started", "seq": 1},
+        "schemaVersion": "0.1.0",
+    }
+    assert streamed[-1]["artifactType"] == "sova.arena-web-cli-result"
+    assert streamed[-1]["agentOrchestrationTrace"].endswith("orchestration.sova-trace")
+
+    denied_arena = vars(arena_args) | {"allow_provider_calls": False}
+    with pytest.raises(FormatError, match="explicit --allow-provider-calls"):
+        cli._arena_web(argparse.Namespace(**denied_arena))
+
     browser.status = "not-confirmed"
     assert cli._hunt_browser(external) == 2
     capfd.readouterr()
+
+
+def test_arena_chamber_cli_requires_fixture_authority_and_streams_canonical_events(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    artifacts = SimpleNamespace(
+        status="pass",
+        report=tmp_path / "report.json",
+        trace=tmp_path / "arena.sova-trace",
+        capsule=tmp_path / "arena.sova",
+        live_events=tmp_path / "live-events.jsonl",
+    )
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {"case": "fixture"})
+
+    def run(document: object, destination: Path, **options: Any) -> Any:
+        assert document == {"case": "fixture"}
+        assert destination == tmp_path / "arena"
+        assert options["contained_fixture_authorized"] is True
+        assert options["provider_calls_authorized"] is False
+        options["event_observer"]({"kind": "run.started", "sequence": 0})
+        return artifacts
+
+    monkeypatch.setattr(cli, "run_arena_chamber_document", run)
+    args = argparse.Namespace(
+        specification=tmp_path / "chamber.json",
+        destination=tmp_path / "arena",
+        authorize_contained_fixture=True,
+        allow_provider_calls=False,
+        stream_jsonl=True,
+    )
+    assert cli._arena_chamber(args) == 0
+    output = [json.loads(line) for line in capfd.readouterr().out.splitlines()]
+    assert output[0] == {"kind": "run.started", "sequence": 0}
+    assert output[-1]["artifactType"] == "sova.arena-chamber-cli-result"
+
+    denied = vars(args) | {"authorize_contained_fixture": False}
+    with pytest.raises(FormatError, match="explicit --authorize-contained-fixture"):
+        cli._arena_chamber(argparse.Namespace(**denied))
 
 
 def test_provider_rehearsal_cli_requires_permission_tty_and_delegates(

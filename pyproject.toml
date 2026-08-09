@@ -92,6 +92,7 @@ include = [
   "/SECURITY.md",
   "/TRADEMARKS.md",
   "/docs",
+  "/examples",
   "/src",
 ]
 
