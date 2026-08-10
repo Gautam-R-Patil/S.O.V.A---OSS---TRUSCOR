@@ -2,7 +2,7 @@
 
 # Run an Arena experiment
 
-Arena has three deliberately different lanes. Choose the narrowest lane that
+Arena has five deliberately different lanes. Choose the narrowest lane that
 matches the experiment.
 
 | Need | Command | Executes |
@@ -11,6 +11,7 @@ matches the experiment.
 | Provider or scripted agents exchanging observable messages | `arena agent-run` | models, no environment tools |
 | Agents acting in a shared sensed environment | `arena chamber` | exact declared synthetic actions |
 | Provider roles testing an authorized website | `arena web` | human-approved exact-origin browser batches |
+| Multiple roles sharing one authorized browser identity | `arena swarm-web` | sequential human-approved browser subruns with signed channel evidence |
 
 ## Try the real-time chamber offline
 
@@ -80,6 +81,27 @@ CAPTCHA, anti-bot controls, or platform terms; create accounts; collect
 credentials; or silently escalate scope. An authenticated testing adapter may
 in future consume an operator-prepared disposable session, but authentication
 material must never enter a `.sova`, trace, report, or live stream.
+
+## Run several roles over one prepared browser identity
+
+Provision a profile with `sova session browser-create`, complete any required
+login through `sova session browser-handoff`, then use the strict example at
+`examples/arena/browser-swarm.json`:
+
+```powershell
+sova arena swarm-web website-target.json browser-campaign.json `
+  examples\arena\browser-swarm.json .\arena-swarm-output `
+  --control-proof control-proof.json `
+  --browser-profile-vault .\.sova\browser-profiles `
+  --browser-profile-handle profile:0123456789abcdef0123456789abcdef `
+  --stream-jsonl
+```
+
+Each role can select only its granted operator-authored candidates. Turns use
+one exclusive profile lease and are sequential. The agents share redacted
+observable results, not cookies, credentials, profile paths, or browser tools.
+Add `--allow-provider-calls` only when the swarm document selects provider
+models.
 
 ## Connect a live viewer
 

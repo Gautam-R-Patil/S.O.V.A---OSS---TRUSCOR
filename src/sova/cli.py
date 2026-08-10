@@ -39,6 +39,7 @@ from sova.community import (
     run_agent_arena_document,
     run_arena_chamber_document,
     run_arena_document,
+    run_browser_swarm_document,
     verify_probe_response,
 )
 from sova.composition import (
@@ -1031,6 +1032,32 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         help="stream each already-redacted hash-chained event with its trace channel",
     )
     arena_web.set_defaults(handler=_arena_web)
+    arena_swarm_web = arena_commands.add_parser(
+        "swarm-web",
+        help=(
+            "run bounded model roles sequentially over one authorized, target-bound "
+            "persistent browser identity"
+        ),
+    )
+    arena_swarm_web.add_argument("manifest", type=_path)
+    arena_swarm_web.add_argument("campaign", type=_path)
+    arena_swarm_web.add_argument("specification", type=_path)
+    arena_swarm_web.add_argument("destination", type=_path)
+    arena_swarm_web.add_argument("--control-proof", type=_path)
+    arena_swarm_web.add_argument("--package-runner", type=_path)
+    arena_swarm_web.add_argument("--browser-executable", type=_path)
+    _add_browser_profile_arguments(arena_swarm_web)
+    arena_swarm_web.add_argument(
+        "--allow-provider-calls",
+        action="store_true",
+        help="explicitly permit configured model-provider calls, which may incur cost",
+    )
+    arena_swarm_web.add_argument(
+        "--stream-jsonl",
+        action="store_true",
+        help="stream each redacted event with its coordinator or participant channel",
+    )
+    arena_swarm_web.set_defaults(handler=_arena_swarm_web)
 
     leaderboard_parser = commands.add_parser(
         "leaderboard", help="build a verified static local leaderboard"
@@ -1993,6 +2020,63 @@ def _arena_web(args: argparse.Namespace) -> int:
             "agentOrchestrationTrace": str(artifacts.orchestration_trace),
         }
     )
+    sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
+    return 0 if artifacts.status == "pass" else 2
+
+
+def _arena_swarm_web(args: argparse.Namespace) -> int:
+    _require_live_campaign_terminal()
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    campaign = browser_campaign_from_mapping(_load_object(args.campaign))
+    proof = (
+        control_proof_from_mapping(_load_object(args.control_proof))
+        if args.control_proof is not None
+        else None
+    )
+    package_runner, browser = _campaign_executables(args)
+    if args.browser_profile_vault is None or args.browser_profile_handle is None:
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-PROFILE",
+            "browser swarm requires an explicit target-bound profile vault and handle",
+        )
+
+    def observe(channel: str, event: dict[str, Any]) -> None:
+        envelope = {
+            "artifactType": "sova.browser-swarm-live-event",
+            "schemaVersion": "0.1.0",
+            "channel": channel,
+            "event": event,
+        }
+        sys.stdout.buffer.write(canonical_json_bytes(envelope) + b"\n")
+        sys.stdout.buffer.flush()
+
+    with _browser_profile_lease(args, target) as profile_lease:
+        if profile_lease is None:  # pragma: no cover - rejected above, narrows the type
+            raise AssertionError
+        artifacts = run_browser_swarm_document(
+            _load_object(args.specification),
+            target,
+            campaign,
+            args.destination,
+            package_runner=package_runner,
+            browser_executable=browser,
+            approval_prompt=_live_campaign_prompt,
+            profile_lease=profile_lease,
+            secret_resolver=os.getenv,
+            control_proof=proof,
+            provider_calls_authorized=args.allow_provider_calls,
+            event_observer=observe if args.stream_jsonl else None,
+        )
+    output = {
+        "artifactType": "sova.browser-swarm-cli-result",
+        "schemaVersion": "0.1.0",
+        "status": artifacts.status,
+        "report": str(artifacts.report),
+        "trace": str(artifacts.trace),
+        "capsule": str(artifacts.capsule),
+        "liveEvents": str(artifacts.live_events),
+        "participantRuns": [str(path) for path in artifacts.participant_runs],
+    }
     sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
     return 0 if artifacts.status == "pass" else 2
 

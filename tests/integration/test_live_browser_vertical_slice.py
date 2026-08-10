@@ -11,6 +11,12 @@ from typing import TYPE_CHECKING, Any, Self
 import pytest
 
 from sova.capsule import build_capsule, capsule_manifest_template, scenario_template
+from sova.community import (
+    BrowserSwarmBudget,
+    BrowserSwarmCase,
+    BrowserSwarmParticipant,
+    run_browser_swarm,
+)
 from sova.forensics import BrowserCounterfactualStudy, CausalLayer, run_browser_counterfactual_study
 from sova.formats import strict_json_loads
 from sova.formats.errors import FormatError
@@ -699,6 +705,75 @@ def test_optional_real_playwright_mcp_trigger_hunt(tmp_path: Path) -> None:
     )
     assert artifacts.status == "pass"
     assert len(artifacts.traces) == 4
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    os.environ.get("SOVA_RUN_REAL_BROWSER") != "1",
+    reason="set SOVA_RUN_REAL_BROWSER=1 for the optional installed-browser lane",
+)
+def test_optional_real_executor_backed_browser_swarm(tmp_path: Path) -> None:
+    case = BrowserSwarmCase(
+        "owned-live-swarm",
+        "Owned live executor-backed browser swarm",
+        (
+            BrowserSwarmParticipant("recon", "establish baseline behavior", (0,)),
+            BrowserSwarmParticipant("tester", "exercise declared conditional behavior", (3,)),
+        ),
+    )
+    models = {
+        "recon": ScriptedModel(
+            [
+                ScriptedTurn(
+                    "sova.browser-swarm-participant/0.1.0",
+                    "",
+                    {"candidateIndex": 0, "message": "baseline"},
+                    token_count=1,
+                )
+            ],
+            model_id="fixture-recon",
+        ),
+        "tester": ScriptedModel(
+            [
+                ScriptedTurn(
+                    "sova.browser-swarm-participant/0.1.0",
+                    "",
+                    {"candidateIndex": 3, "message": "ordered trigger"},
+                    token_count=1,
+                )
+            ],
+            model_id="fixture-tester",
+        ),
+    }
+    with OwnedWebFixture() as fixture:
+        target = owned_web_target(fixture.origin)
+        vault = BrowserProfileVault(tmp_path / ".sova" / "browser-profiles")
+        profile = vault.create(identity_id="owned-live-swarm", target=target.digest)
+        with vault.acquire(profile.handle, owner_id="integration-browser-swarm") as lease:
+            artifacts = run_browser_swarm(
+                target,
+                owned_web_campaign(fixture.url),
+                case,
+                models,
+                BrowserSwarmBudget(1, 1, 2, 240, 4096, 2),
+                tmp_path / "real-browser-swarm",
+                package_runner=Path(r"C:\Program Files\nodejs\npx.cmd"),
+                browser_executable=Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+                approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
+                profile_lease=lease,
+                provider_calls_authorized=False,
+            )
+    assert artifacts.status == "pass"
+    assert len(artifacts.participant_runs) == 2
+    assert TraceReader(artifacts.trace).verify(require_signature=True).signature_valid
+    assert verify_artifact(artifacts.capsule).state in {
+        VerificationState.VERIFIED,
+        VerificationState.PARTIAL,
+    }
+    report = strict_json_loads(artifacts.report.read_bytes())
+    assert isinstance(report, dict)
+    assert report["evidence"]["liveChannelStreamMatchesSignedTraces"] is True
+    assert report["scheduler"]["sharedOpaqueSession"] is True
 
 
 @pytest.mark.integration

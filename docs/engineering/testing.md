@@ -61,6 +61,13 @@ trusted-process integration assert that each observed channel equals its
 finalized canonical trace. The installed-browser lane remains opt-in and is
 reported separately from mandatory deterministic CI.
 
+The executor-backed browser swarm adds strict participant and candidate grants,
+shared-profile target binding, per-agent and global budgets, cancellation,
+direct-tool refusal, redaction-before-transfer, unexpected-channel rejection,
+unique signed trace packaging, and CLI tests. Its opt-in installed-Chrome lane
+runs two roles across separate MCP processes and verifies coordinator,
+participant, reproduction, live-stream, and aggregate-capsule evidence.
+
 ## Determinism
 
 - The default seed is `20260729`.

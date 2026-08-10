@@ -8,6 +8,7 @@ import builtins
 import json
 import shutil
 import sys
+from contextlib import nullcontext
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -457,6 +458,64 @@ def test_arena_chamber_cli_requires_fixture_authority_and_streams_canonical_even
     output = [json.loads(line) for line in capfd.readouterr().out.splitlines()]
     assert output[0] == {"kind": "run.started", "sequence": 0}
     assert output[-1]["artifactType"] == "sova.arena-chamber-cli-result"
+
+
+def test_browser_swarm_cli_requires_profile_and_streams_channels(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    _tty(monkeypatch)
+    executable = tmp_path / "executable.exe"
+    executable.write_bytes(b"fixture")
+    target, campaign, proof, lease = object(), object(), object(), object()
+    artifacts = SimpleNamespace(
+        status="pass",
+        report=tmp_path / "report.json",
+        trace=tmp_path / "swarm.sova-trace",
+        capsule=tmp_path / "swarm.sova",
+        live_events=tmp_path / "live-events.jsonl",
+        participant_runs=(tmp_path / "participant",),
+    )
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {})
+    monkeypatch.setattr(cli, "target_manifest_from_mapping", lambda _value: target)
+    monkeypatch.setattr(cli, "browser_campaign_from_mapping", lambda _value: campaign)
+    monkeypatch.setattr(cli, "control_proof_from_mapping", lambda _value: proof)
+    monkeypatch.setattr(cli, "_campaign_executables", lambda _args: (executable, executable))
+    monkeypatch.setattr(cli, "_browser_profile_lease", lambda _args, _target: nullcontext(lease))
+
+    def run(*args: object, **options: Any) -> Any:
+        assert args[1:3] == (target, campaign)
+        assert options["profile_lease"] is lease
+        assert options["control_proof"] is proof
+        assert options["provider_calls_authorized"] is False
+        options["event_observer"]("coordinator", {"kind": "run.started", "sequence": 0})
+        return artifacts
+
+    monkeypatch.setattr(cli, "run_browser_swarm_document", run)
+    args = argparse.Namespace(
+        manifest=tmp_path / "target.json",
+        campaign=tmp_path / "campaign.json",
+        specification=tmp_path / "swarm.json",
+        destination=tmp_path / "output",
+        control_proof=tmp_path / "proof.json",
+        package_runner=None,
+        browser_executable=None,
+        browser_profile_vault=tmp_path / "profiles",
+        browser_profile_handle="profile:" + "a" * 32,
+        allow_provider_calls=False,
+        stream_jsonl=True,
+    )
+    assert cli._arena_swarm_web(args) == 0
+    output = [json.loads(line) for line in capfd.readouterr().out.splitlines()]
+    assert output[0]["artifactType"] == "sova.browser-swarm-live-event"
+    assert output[0]["channel"] == "coordinator"
+    assert output[-1]["artifactType"] == "sova.browser-swarm-cli-result"
+    assert output[-1]["participantRuns"] == [str(tmp_path / "participant")]
+
+    missing = argparse.Namespace(**(vars(args) | {"browser_profile_handle": None}))
+    with pytest.raises(FormatError, match="requires an explicit target-bound profile"):
+        cli._arena_swarm_web(missing)
 
     denied = vars(args) | {"authorize_contained_fixture": False}
     with pytest.raises(FormatError, match="explicit --authorize-contained-fixture"):

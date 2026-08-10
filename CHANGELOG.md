@@ -11,6 +11,14 @@ have independent version ledgers.
 
 ### Added
 
+- An executor-backed `sova arena swarm-web` lane in which bounded scripted or
+  provider-capable roles take sequential turns over one exclusively leased,
+  target-bound browser profile; select only operator-authored candidate grants;
+  share redacted observations rather than credentials; receive fresh human
+  approval for browser subruns; and emit signed coordinator and participant
+  traces, exact live-channel parity, and an offline-verifiable aggregate
+  capsule. An opt-in installed-Chrome two-role fixture test passes across MCP
+  restarts.
 - A live-attested Docker Desktop OCI executor for digest-pinned cached images,
   with no network, host mounts, Docker socket, or image pull; read-only rootfs,
   non-root zero-capability execution, no-new-privileges, CPU/memory/PID/output/

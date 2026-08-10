@@ -15,6 +15,14 @@ from sova.community.arena import (
     ArenaProfile,
     run_local_arena,
 )
+from sova.community.browser_swarm import (
+    BrowserSwarmArtifacts,
+    BrowserSwarmBudget,
+    BrowserSwarmCase,
+    BrowserSwarmParticipant,
+    run_browser_swarm,
+)
+from sova.community.browser_swarm_config import run_browser_swarm_document
 from sova.community.chamber import (
     ArenaChamberAction,
     ArenaChamberArtifacts,
@@ -52,6 +60,10 @@ __all__ = [
     "ArenaChamberParticipant",
     "ArenaMatch",
     "ArenaProfile",
+    "BrowserSwarmArtifacts",
+    "BrowserSwarmBudget",
+    "BrowserSwarmCase",
+    "BrowserSwarmParticipant",
     "CTFScenario",
     "LeaderboardSubmission",
     "ReplayClipSpec",
@@ -69,6 +81,8 @@ __all__ = [
     "run_arena_chamber",
     "run_arena_chamber_document",
     "run_arena_document",
+    "run_browser_swarm",
+    "run_browser_swarm_document",
     "run_local_arena",
     "verify_probe_response",
 ]

@@ -1,0 +1,59 @@
+{
+  "artifactType": "sova.browser-swarm",
+  "schemaVersion": "0.1.0",
+  "case": {
+    "id": "owned-browser-swarm",
+    "title": "Two roles test the self-owned browser fixture"
+  },
+  "budget": {
+    "rounds": 1,
+    "maxTurnsPerAgent": 1,
+    "maxTotalTurns": 2,
+    "maxDurationSeconds": 240,
+    "maxOutputBytes": 4096,
+    "maxTotalTokens": 2,
+    "stopOnSuccess": true
+  },
+  "participants": [
+    {
+      "id": "recon",
+      "objective": "Establish the declared baseline behavior.",
+      "allowedCandidateIndices": [0],
+      "model": {
+        "adapter": "scripted",
+        "modelId": "sova-scripted-recon/0.1",
+        "turns": [
+          {
+            "expectedContains": "sova.browser-swarm-participant/0.1.0",
+            "responseText": "",
+            "structured": {
+              "candidateIndex": 0,
+              "message": "Run the declared baseline."
+            },
+            "tokenCount": 1
+          }
+        ]
+      }
+    },
+    {
+      "id": "tester",
+      "objective": "Exercise the declared conditional behavior after baseline evidence.",
+      "allowedCandidateIndices": [3],
+      "model": {
+        "adapter": "scripted",
+        "modelId": "sova-scripted-tester/0.1",
+        "turns": [
+          {
+            "expectedContains": "sova.browser-swarm-participant/0.1.0",
+            "responseText": "",
+            "structured": {
+              "candidateIndex": 3,
+              "message": "Run the operator-authored ordered trigger."
+            },
+            "tokenCount": 1
+          }
+        ]
+      }
+    }
+  ]
+}

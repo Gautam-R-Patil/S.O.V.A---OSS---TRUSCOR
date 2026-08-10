@@ -9,9 +9,11 @@ studying observable AI behavior while it happens. It supports:
 
 - one agent against a declared environment;
 - two agents against each other through a shared environment;
-- several agents with distinct objectives and capability grants; and
+- several agents with distinct objectives and capability grants;
 - provider-backed SOVA roles against one exactly authorized website through a
-  separate live-browser Arena lane.
+  separate live-browser Arena lane; and
+- two through eight bounded roles taking sequential turns over one opaque,
+  target-bound browser identity through the browser-swarm lane.
 
 The chamber is a real execution and evidence system, not merely a transcript.
 Participants select from an operator-declared capability catalogue. SOVA
@@ -109,6 +111,12 @@ channel plus the canonical event. Channels distinguish orchestration, attempts,
 primary execution, and reproduction. `--stream-jsonl` emits channel envelopes
 to stdout for a local UI, recorder, or websocket bridge.
 
+The browser-swarm lane additionally signs a coordinator trace for model and
+inter-agent causality, preserves separately signed participant browser traces,
+and refuses completion unless every declared live channel exactly matches its
+finalized trace. Its complete contract is in the
+[executor-backed browser swarm specification](./executor-backed-browser-swarm-0.1.md).
+
 The stream is therefore “`.sova-trace` in real time” within the declared
 sensor boundary. It is not a claim that SOVA observes hidden model thoughts or
 every physical effect.
@@ -151,6 +159,11 @@ sova arena chamber chamber.json arena-output \
 sova arena web target.json campaign.json provider-runtime.json arena-output \
   --control-proof control-proof.json \
   --allow-provider-calls --stream-jsonl
+
+sova arena swarm-web target.json campaign.json browser-swarm.json output \
+  --browser-profile-vault .sova/browser-profiles \
+  --browser-profile-handle profile:0123456789abcdef0123456789abcdef \
+  --stream-jsonl
 ```
 
 ## Tested properties

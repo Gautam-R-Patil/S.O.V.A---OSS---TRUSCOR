@@ -85,6 +85,13 @@ web` applies provider-backed planning to an exactly authorized website through
 the same human-reviewed browser campaign boundary. See the
 [Arena chamber specification](../specifications/arena-chamber-0.1.md).
 
+`arena swarm-web` lets two through eight bounded model roles take sequential
+turns over one opaque target-bound browser profile. A role selects only a
+granted operator-authored campaign candidate; SOVA applies fresh human browser
+approval, records per-role signed subtraces plus a signed coordinator trace,
+and packages the exact live-channel evidence. See the
+[browser swarm specification](../specifications/executor-backed-browser-swarm-0.1.md).
+
 `rehearse agent-run` asks one tool-free provider strategist to propose a strict,
 bounded portable plan for an already prepared workspace. It requires an exact
 approval before disclosing the bounded sanitized inventory and another exact

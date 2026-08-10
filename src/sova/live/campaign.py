@@ -39,6 +39,7 @@ from sova.search import (
 from sova.trace import Redactor, TraceReader, generate_ed25519_keypair
 
 if TYPE_CHECKING:
+    from sova.executors import CancellationToken
     from sova.runtime import BrowserProfileLease
     from sova.safety import ControlProof
     from sova.targets import TargetManifest
@@ -449,7 +450,7 @@ def _fingerprint(value: str | None, *, status: str, method: str, source: str) ->
     }
 
 
-def run_browser_campaign(  # noqa: PLR0913, PLR0915
+def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
     target: TargetManifest,
     campaign: BrowserCampaign,
     destination: Path,
@@ -461,8 +462,11 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
     package_cache: Path | None = None,
     event_observer: CampaignEventObserver | None = None,
     profile_lease: BrowserProfileLease | None = None,
+    cancellation: CancellationToken | None = None,
 ) -> BrowserCampaignArtifacts:
     """Search a declared candidate set, reproduce success, and package proof."""
+    if cancellation is not None and cancellation.cancelled:
+        raise FormatError("SOVA-LIVE-CAMPAIGN-CANCELLED", "browser campaign was cancelled")
     if profile_lease is not None:
         profile_lease.require_target(target.digest)
     origins, host, proof, control_status = verified_browser_control(target, control_proof)
@@ -618,6 +622,8 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
             approval_ttl=timedelta(seconds=campaign.max_duration_seconds + 120),
         )
         for index, row in enumerate(rows):
+            if cancellation is not None and cancellation.cancelled:
+                raise FormatError("SOVA-LIVE-CAMPAIGN-CANCELLED", "browser campaign was cancelled")
             if time.monotonic() - started >= campaign.max_duration_seconds:
                 break
             key, candidate, capsule, _scenario = row
@@ -632,6 +638,7 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
                 signing_key=signing_key,
                 environment=environment,
                 fingerprints=fingerprints,
+                cancellation=cancellation,
                 event_observer=_channel_observer(event_observer, key),
             )
             TraceReader(trace).verify(require_signature=True)
@@ -665,6 +672,7 @@ def run_browser_campaign(  # noqa: PLR0913, PLR0915
                 signing_key=signing_key,
                 environment=environment,
                 fingerprints=fingerprints,
+                cancellation=cancellation,
                 event_observer=_channel_observer(event_observer, "reproduction"),
             )
             TraceReader(reproduction_trace).verify(require_signature=True)
