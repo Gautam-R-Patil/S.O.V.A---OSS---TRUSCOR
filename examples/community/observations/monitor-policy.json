@@ -1,0 +1,10 @@
+{
+  "allowedFlakyReproductions": 0,
+  "maxBehaviorChanges": 0,
+  "maxEnvironmentChanges": 0,
+  "maxMethodologyChanges": 0,
+  "observedFlakyReproductions": 0,
+  "profile": "standard",
+  "retention": "bounded-monitor-service"
+}
+

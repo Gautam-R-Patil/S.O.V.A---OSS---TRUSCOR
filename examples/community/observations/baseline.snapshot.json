@@ -1,0 +1,11 @@
+{
+  "approvalSurface": {"required": true},
+  "captureProfile": "standard",
+  "environment": {"kind": "safe-fixture"},
+  "id": "community-monitor-baseline",
+  "methodology": {"oracle": "exact/1"},
+  "observedEffects": ["expected-safe-marker"],
+  "target": {"name": "owned-agent-fixture", "version": "1"},
+  "taxonomy": {"version": "0.1.0"}
+}
+

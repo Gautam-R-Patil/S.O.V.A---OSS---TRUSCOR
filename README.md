@@ -434,6 +434,11 @@ The pre-alpha now includes:
   local sentinel history, CI/SARIF output, and file-integrity self-checks; and
 - a signed, content-addressed, offline registry with pull-only mirror caching
   and human-confirmed local contribution staging.
+- a loopback self-hosted registry/leaderboard reference service with bounded
+  staged uploads, pinned evidence signers, restart-safe verification, signed
+  indexes, SSE updates, and no execution of submitted content;
+- a durable foreground monitor scheduler with non-executable job documents,
+  overlap exclusion, restart recovery, retention, and signed drift evidence;
 - an MCP `2025-11-25` stdio server whose offensive tools require exact,
   expiring, single-use human approval through a separate local control channel;
 - a digest-pinned MCP manifest and `sova check --self` drift check, with
@@ -520,8 +525,10 @@ the real-runtime evidence and every remaining external boundary.
 
 - Behavioral regression diffing.
 - Local sentinel runs.
+- Durable scheduled local snapshot monitoring with signed result traces.
 - CI policy and pull-request evidence.
 - Public, mirrorable registry of reviewed `.sova` artifacts.
+- Self-hosted loopback staging, verification, event, and leaderboard service.
 - Execution-based scanner adjudication.
 - Coordinated disclosure workflow.
 - Reproducible component and model leaderboard.
@@ -593,6 +600,7 @@ sova trace snapshot ./baseline.json --output ./baseline.snapshot.json
 sova trace snapshot ./current.json --output ./current.snapshot.json
 sova diff ./baseline.snapshot.json ./current.snapshot.json
 sova sentinel ./baseline.snapshot.json ./current.snapshot.json ./history.jsonl
+sova monitor serve ./monitor.json ./.sova-monitor --workspace ./observations --once
 sova ci ./baseline.snapshot.json ./current.snapshot.json --sarif ./sova.sarif
 
 # Verify a protected local file baseline
@@ -601,6 +609,13 @@ sova self-check verify . ./integrity.json
 
 # Verify/cache an offline registry mirror and stage a reviewed contribution
 sova registry verify ./registry --trusted-key-id sha256:EXPECTED_KEY
+sova registry init-service ./.sova-community/service.token
+sova registry prepare-upload ./metadata.json ./case.sova ./case.sova-trace \
+  ./upload.json --kind leaderboard
+sova registry serve ./.sova-community/data \
+  --token-file ./.sova-community/service.token \
+  --trusted-key-id sha256:EXPECTED_EVIDENCE_SIGNER \
+  --methodology ./arena-methodology.md
 sova sync ./registry --cache ./.sova-registry-cache
 sova contribute ./contribution.json ./contribution-staging --confirm
 
@@ -880,8 +895,8 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `sova evidence`, `adjudicate`, and `disclose` | Watermarked evidence, SARIF projection/import, bounded scanner labels, human-gated local disclosure preparation, and four report views implemented in [ADR-0020](./docs/decisions/0020-bounded-evidence-adjudication-disclosure.md) |
 | `sova compose` | Typed metadata-only graph, four bounded search strategies, fresh-evidence minimization, element-removal attribution, portable capsule fragment, and deterministic composition-only fixture implemented in [ADR-0021](./docs/decisions/0021-bounded-composition-only-search.md); comparative search superiority remains unproven |
 | `sova rehearse` | Credential-stripped substitute workspace, distinct user/attacker evidence, signed traces, review, and selective export implemented in [ADR-0022](./docs/decisions/0022-substitute-only-rehearsal-and-selective-promotion.md); the built-in backend is not a security sandbox |
-| `sova trace`, `diff`, `sentinel`, `ci`, and `self-check` | Deterministic local recorder, three-axis drift, local monitoring, reusable CI, SARIF/annotations, and protected-baseline integrity checks implemented in [ADR-0023](./docs/decisions/0023-multi-axis-behavior-drift-and-local-regression.md) |
-| Registry, `sync`, adapters, and `contribute` | Offline content-addressed registry, signed index, trust pinning, pull-only mirror cache, adapters, and local contribution staging implemented in [ADR-0024](./docs/decisions/0024-offline-content-addressed-community-registry.md) |
+| `sova trace`, `diff`, `sentinel`, `monitor`, `ci`, and `self-check` | Deterministic local recorder, three-axis drift, one-shot sentinel/CI, and a durable foreground scheduler with workspace-bound declarative jobs, kernel-backed overlap exclusion, restart recovery, bounded retention, and signed result traces; no remote observation, upload, remediation, or uptime claim |
+| Registry, `sync`, adapters, `contribute`, and self-hosted community service | Offline content-addressed registry plus a loopback reference service with token-gated bounded staging, signer-pinned asynchronous verification, atomic promotion, signed live index, SSE events, and standard-profile leaderboard. The bundled HTTP transport is not suitable for an Internet-production deployment |
 | Local MCP | MCP `2025-11-25` stdio, safe tools, three exact-gated tools, out-of-band human approval, manifest pin, and self-check implemented in [ADR-0025](./docs/decisions/0025-local-mcp-out-of-band-authorization.md) |
 | Extension SDK, providers, targets, interoperability | Experimental fail-closed contracts, import-free discovery, machine-local digest-pinned preparation, exact human-approved subprocess execution with signed evidence, and no-network compatibility kit implemented in [ADR-0026](./docs/decisions/0026-fail-closed-extension-and-provider-ecosystem.md); host execution is not a sandbox, and independent adoption plus real-provider transferability remain unproven |
 | Probe, Arena, leaderboard, CTF, replay media | Deterministic standard-profile Arena, provider-capable message Arena, real-time sensor-instrumented multi-agent chamber, authorized provider-backed website Arena, and an installed-Chrome-validated browser-swarm lane with bounded roles sharing one opaque target-bound session are implemented with signed observable evidence; “fully sensed” is bounded to declared healthy sensor families, while arbitrary untrusted-code containment, total host observability, provider-quality comparison, and public comparative results remain unproven |

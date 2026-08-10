@@ -11,6 +11,17 @@ have independent version ledgers.
 
 ### Added
 
+- A loopback-only self-hosted community reference service with secret-safe token
+  initialization, bounded staged uploads, pinned evidence signers, asynchronous
+  verification, restart recovery, atomic content-addressed promotion, a
+  DSSE-signed live index, service-key and sequence verification, SSE updates,
+  standard-profile-only leaderboard rows, duplicate-evidence defenses, and no
+  submitted-content execution. The standard-library transport is explicitly
+  not presented as an Internet-production server.
+- A durable foreground `sova monitor serve` scheduler with exact non-executable
+  job documents, workspace-bound snapshot paths, kernel-backed overlap
+  exclusion, interrupted-run recovery, cooperative cancellation, bounded
+  retention for reports and history, and signed drift-result traces.
 - An executor-backed `sova arena swarm-web` lane in which bounded scripted or
   provider-capable roles take sequential turns over one exclusively leased,
   target-bound browser profile; select only operator-authored candidate grants;

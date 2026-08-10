@@ -30,6 +30,8 @@
 *.key
 *.p12
 *.pfx
+*.token
+service-signing-key.raw
 
 # SOVA local state and potentially sensitive evidence
 /.sova/
@@ -40,6 +42,8 @@
 /artifacts/private/
 /browser-profiles/
 /.playwright-mcp/
+/community-state/
+/monitor-state/
 
 # Only explicitly synthetic, provenance-recorded trace goldens may be public
 !/tests/fixtures/golden/trace/*.sova-trace

@@ -9,7 +9,8 @@ import os
 import re
 import shutil
 import sys
-from contextlib import contextmanager
+import threading
+from contextlib import contextmanager, suppress
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -119,17 +120,28 @@ from sova.local_mcp import (
 from sova.mapping import build_capability_map, write_capability_map, write_tool_snapshot
 from sova.mcp import MELRA_AUDIT_RECEIPT, PLAYWRIGHT_MCP_RECEIPT, WINDOWS_MCP_RECEIPT
 from sova.monitoring import (
+    ContinuousMonitorService,
     build_behavior_snapshot,
     build_integrity_manifest,
     compare_behavior_snapshots,
     evaluate_ci,
+    monitoring_jobs_from_document,
     record_local_process,
     run_sentinel,
     verify_integrity_manifest,
 )
 from sova.onboarding import delete_instance_data, diagnose_instance, initialize_instance
 from sova.providers import provider_model_router, provider_runtime_from_mapping
-from sova.registry import prepare_contribution, sync_registry, verify_registry
+from sova.registry import (
+    CommunityHTTPService,
+    CommunityServiceConfig,
+    create_community_service_token,
+    prepare_community_submission,
+    prepare_contribution,
+    sync_registry,
+    verify_community_service_index,
+    verify_registry,
+)
 from sova.rehearsal import (
     export_approved_changes,
     prepare_rehearsal_environment,
@@ -906,10 +918,64 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         "registry", help="verify a repository-of-files registry entirely offline"
     )
     registry_commands = registry_parser.add_subparsers(dest="registry_command")
+    registry_init = registry_commands.add_parser(
+        "init-service", help="create a private local token for the community service"
+    )
+    registry_init.add_argument("token_file", type=_path)
+    registry_init.set_defaults(handler=_registry_init_service)
+    registry_prepare = registry_commands.add_parser(
+        "prepare-upload", help="build a bounded local upload document without networking"
+    )
+    registry_prepare.add_argument("metadata", type=_path)
+    registry_prepare.add_argument("capsule", type=_path)
+    registry_prepare.add_argument("trace", type=_path)
+    registry_prepare.add_argument("output", type=_path)
+    registry_prepare.add_argument("--kind", choices=("registry", "leaderboard"), required=True)
+    registry_prepare.set_defaults(handler=_registry_prepare_upload)
     registry_verify = registry_commands.add_parser("verify", help="verify index and objects")
     registry_verify.add_argument("root", type=_path)
     registry_verify.add_argument("--trusted-key-id", action="append")
     registry_verify.set_defaults(handler=_registry_verify)
+    registry_serve = registry_commands.add_parser(
+        "serve",
+        help="serve a loopback-only staged registry and verified standard leaderboard",
+    )
+    registry_serve.add_argument("root", type=_path)
+    registry_serve.add_argument("--token-file", type=_path, required=True)
+    registry_serve.add_argument("--trusted-key-id", action="append", required=True)
+    registry_serve.add_argument("--methodology", type=_path, required=True)
+    registry_serve.add_argument("--host", default="127.0.0.1")
+    registry_serve.add_argument("--port", type=int, default=8736)
+    registry_serve.set_defaults(handler=_registry_serve)
+    registry_verify_live = registry_commands.add_parser(
+        "verify-live-index",
+        help="verify a downloaded live index against an out-of-band service-key pin",
+    )
+    registry_verify_live.add_argument("index", type=_path)
+    registry_verify_live.add_argument("--trusted-service-key-id", action="append", required=True)
+    registry_verify_live.add_argument("--minimum-sequence", type=int, default=0)
+    registry_verify_live.set_defaults(handler=_registry_verify_live_index)
+
+    monitor_parser = commands.add_parser(
+        "monitor", help="run or inspect the durable local behavioral monitoring service"
+    )
+    monitor_commands = monitor_parser.add_subparsers(dest="monitor_command")
+    monitor_serve = monitor_commands.add_parser(
+        "serve", help="run declarative snapshot checks in one foreground scheduler"
+    )
+    monitor_serve.add_argument("specification", type=_path)
+    monitor_serve.add_argument("state", type=_path)
+    monitor_serve.add_argument("--workspace", type=_path, required=True)
+    monitor_serve.add_argument("--once", action="store_true")
+    monitor_serve.add_argument("--poll-seconds", type=float, default=0.25)
+    monitor_serve.set_defaults(handler=_monitor_serve)
+    monitor_status = monitor_commands.add_parser(
+        "status", help="inspect durable monitor state without starting the scheduler"
+    )
+    monitor_status.add_argument("specification", type=_path)
+    monitor_status.add_argument("state", type=_path)
+    monitor_status.add_argument("--workspace", type=_path, required=True)
+    monitor_status.set_defaults(handler=_monitor_status)
 
     sync_parser = commands.add_parser(
         "sync", help="pull and atomically cache a verified local registry mirror"
@@ -3127,6 +3193,97 @@ def _registry_verify(args: argparse.Namespace) -> int:
     trusted = frozenset(args.trusted_key_id or [])
     report = verify_registry(args.root, trusted_key_ids=trusted)
     sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _registry_init_service(args: argparse.Namespace) -> int:
+    report = create_community_service_token(args.token_file)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _registry_prepare_upload(args: argparse.Namespace) -> int:
+    if args.output.exists():
+        raise FormatError("SOVA-SERVICE-UPLOAD", "upload output already exists")
+    document = prepare_community_submission(
+        kind=args.kind,
+        metadata=_load_object(args.metadata),
+        capsule=args.capsule,
+        trace=args.trace,
+    )
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_bytes(canonical_json_bytes(document) + b"\n")
+    summary = {
+        "artifactType": "sova.community-upload-prepared",
+        "schemaVersion": "0.1.0",
+        "output": str(args.output.resolve()),
+        "submissionDigest": sha256_digest(canonical_json_bytes(document)),
+        "uploadPerformed": False,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(summary) + b"\n")
+    return 0
+
+
+def _registry_verify_live_index(args: argparse.Namespace) -> int:
+    report = verify_community_service_index(
+        _load_object(args.index),
+        trusted_service_key_ids=frozenset(args.trusted_service_key_id),
+        minimum_sequence=args.minimum_sequence,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _registry_serve(args: argparse.Namespace) -> int:
+    token = args.token_file.read_text(encoding="utf-8").strip()
+    methodology = args.methodology.read_text(encoding="utf-8")
+    config = CommunityServiceConfig(
+        args.root,
+        token,
+        frozenset(args.trusted_key_id),
+        methodology,
+        host=args.host,
+        port=args.port,
+    )
+    service = CommunityHTTPService(config)
+    host, port = service.address
+    sys.stderr.write(
+        f"SOVA community service listening on http://{host}:{port}; "
+        "submitted content is verified but never executed.\n"
+    )
+    with suppress(KeyboardInterrupt):
+        service.serve_forever()
+    return 0
+
+
+def _monitor_service(args: argparse.Namespace) -> ContinuousMonitorService:
+    jobs = monitoring_jobs_from_document(
+        _load_object(args.specification),
+        workspace=args.workspace,
+    )
+    return ContinuousMonitorService(jobs, args.state)
+
+
+def _monitor_serve(args: argparse.Namespace) -> int:
+    service = _monitor_service(args)
+    stop = threading.Event()
+    try:
+        runs = service.serve(
+            stop,
+            max_cycles=1 if args.once else None,
+            poll_seconds=args.poll_seconds,
+        )
+    except KeyboardInterrupt:
+        stop.set()
+        runs = ()
+    for run in runs:
+        sys.stdout.buffer.write(canonical_json_bytes(run) + b"\n")
+    sys.stdout.buffer.write(canonical_json_bytes(service.status()) + b"\n")
+    return 1 if any(run["status"] == "failed" for run in runs) else 0
+
+
+def _monitor_status(args: argparse.Namespace) -> int:
+    sys.stdout.buffer.write(canonical_json_bytes(_monitor_service(args).status()) + b"\n")
     return 0
 
 

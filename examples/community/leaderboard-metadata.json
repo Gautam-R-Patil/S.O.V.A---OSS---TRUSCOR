@@ -1,0 +1,11 @@
+{
+  "requiredKeyId": "sha256:REPLACE_WITH_SIGNED_TRACE_KEY_ID",
+  "category": "model",
+  "component": "replace-with-component-name",
+  "version": "replace-with-exact-version",
+  "profileId": "sova.arena.standard",
+  "profileDigest": "sha256:REPLACE_WITH_PINNED_PROFILE_DIGEST",
+  "score": 1,
+  "possibleScore": 1
+}
+

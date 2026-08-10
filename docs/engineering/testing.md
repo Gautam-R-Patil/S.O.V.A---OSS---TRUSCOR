@@ -68,6 +68,14 @@ unique signed trace packaging, and CLI tests. Its opt-in installed-Chrome lane
 runs two roles across separate MCP processes and verifies coordinator,
 participant, reproduction, live-stream, and aggregate-capsule evidence.
 
+The self-hosted community lane adds exact/bounded upload parsing, wrong-token,
+untrusted-signer, tamper, traversal, secret-metadata, duplicate-evidence,
+orphan-object, service-index rollback, restart, HTTP queue, content-address,
+leaderboard, and SSE tests. The continuous monitor lane adds due-time,
+non-overlap, kernel-lock, interrupted-state recovery, cancellation, signed
+evidence, and report/history retention tests. Both mandatory lanes use only
+loopback or local filesystem fixtures.
+
 ## Determinism
 
 - The default seed is `20260729`.

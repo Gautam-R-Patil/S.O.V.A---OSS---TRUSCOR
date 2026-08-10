@@ -13,8 +13,8 @@ human text or HTML artifact is the command's purpose.
 | Trace/replay | `playback`, `replay modes`, `replay timeline`, `replay study`, `replay clip`, `query`, `compare`, `export`, `recover-trace` |
 | First value | `map`, `check`, `demo`, `safety backends`, `executors receipts` |
 | Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt adaptive-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics browser-counterfactual`, `forensics benchmark`, `evidence`, `case build`, `adjudicate`, `compose` |
-| Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse agent-run`, `rehearse export`, `trace command`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `ci`, `self-check` |
-| Registry/community | `registry verify`, `sync`, `contribute`, `probe issue`, `probe verify`, `arena run`, `arena agent-run`, `arena chamber`, `arena web`, `leaderboard build`, `ctf build` |
+| Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse agent-run`, `rehearse export`, `trace command`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `monitor serve`, `monitor status`, `ci`, `self-check` |
+| Registry/community | `registry init-service`, `registry prepare-upload`, `registry serve`, `registry verify-live-index`, `registry verify`, `sync`, `contribute`, `probe issue`, `probe verify`, `arena run`, `arena agent-run`, `arena chamber`, `arena web`, `arena swarm-web`, `leaderboard build`, `ctf build` |
 | Extensions | `extension discover`, `extension prepare`, `extension run` |
 | Local MCP | `mcp manifest`, `mcp init-control`, `mcp approve`, `mcp serve` |
 | Release and compatibility | `release sbom`, `release checksums`, `release verify-checksums`, `conformance export`, `conformance verify` |
@@ -102,6 +102,21 @@ disposable workspace; all service effects remain inert substitutes.
 exact complete signed trace, then creates a local forensic, replay, evidence,
 monitoring, and contribution-preview workspace. It performs no target action,
 network request, upload, or automatic disclosure approval.
+
+`sova registry serve` runs a loopback-only staged contribution service. It
+requires a private local token and explicit evidence-signer pins, never executes
+submitted content, recovers an interrupted verification queue, and exposes a
+DSSE-signed index plus SSE updates. `registry verify-live-index` requires an
+out-of-band service-key pin and can enforce a minimum sequence. The bundled
+standard-library HTTP transport is a local reference implementation, not an
+Internet-production server. See the [community service
+specification](../specifications/self-hosted-community-service-0.1.md).
+
+`sova monitor serve` schedules only declared local snapshot comparisons. It has
+no command/provider/URL field, rejects overlapping instances through an OS
+lock, recovers interrupted state, prunes reports and history, and writes a
+signed drift-result trace. See the [continuous monitor
+specification](../specifications/continuous-monitor-service-0.1.md).
 
 `sova extension discover` reads entry-point metadata without importing plugin
 code. `extension prepare` creates a local launch document pinned to absolute

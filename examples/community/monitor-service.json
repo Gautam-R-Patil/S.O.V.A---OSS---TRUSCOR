@@ -1,0 +1,15 @@
+{
+  "artifactType": "sova.monitor-service-spec",
+  "schemaVersion": "0.1.0",
+  "jobs": [
+    {
+      "id": "owned-agent-regression",
+      "baseline": "baseline.snapshot.json",
+      "current": "current.snapshot.json",
+      "policy": "monitor-policy.json",
+      "intervalSeconds": 300,
+      "retentionRuns": 100
+    }
+  ]
+}
+
