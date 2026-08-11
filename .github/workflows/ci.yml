@@ -167,7 +167,7 @@ jobs:
           $unitFiles = Get-ChildItem tests/unit/test_*.py |
             Where-Object { $_.Name -ge 'test_held_out_web.py' } |
             ForEach-Object { $_.FullName }
-          uv run --locked python -m pytest @unitFiles
+          uv run --locked python -m pytest --full-trace @unitFiles
 
       - name: Build package
         run: uv build
