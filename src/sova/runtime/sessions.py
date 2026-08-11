@@ -3,12 +3,14 @@
 
 from __future__ import annotations
 
+import ctypes
 import os
 import secrets
 import threading
 import time
+from ctypes import wintypes
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Self, TypedDict
+from typing import TYPE_CHECKING, Any, Self, TypedDict
 
 from sova.formats import canonical_json_bytes, sha256_digest, strict_json_loads
 from sova.formats.errors import FormatError
@@ -19,6 +21,36 @@ if TYPE_CHECKING:
 _MAX_SESSION_TTL_SECONDS = 3600
 _PROFILE_HANDLE_LENGTH = 40
 _PROFILE_LEASE_FILENAME = "sova-profile.lease.json"
+
+
+def _windows_pid_is_alive(pid: int) -> bool:
+    """Query a Windows process without sending a signal or mutating it."""
+    win_dll = getattr(ctypes, "WinDLL", None)
+    if win_dll is None:
+        return True
+    kernel32: Any = win_dll("kernel32", use_last_error=True)
+    process_query_limited_information = 0x1000
+    error_invalid_parameter = 87
+    still_active = 259
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+    kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    inherit_handle = wintypes.BOOL()
+    handle = kernel32.OpenProcess(process_query_limited_information, inherit_handle, pid)
+    if not handle:
+        # Only ERROR_INVALID_PARAMETER proves the PID does not exist. Access
+        # denial and unknown failures remain live so lease recovery fails closed.
+        return ctypes.get_last_error() != error_invalid_parameter
+    try:
+        exit_code = wintypes.DWORD()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            return True
+        return exit_code.value == still_active
+    finally:
+        kernel32.CloseHandle(handle)
 
 
 class _ProfileLeaseMetadata(TypedDict):
@@ -396,6 +428,8 @@ class BrowserProfileVault:
     def _pid_is_alive(pid: int) -> bool:
         if pid <= 0:
             return False
+        if os.name == "nt":
+            return _windows_pid_is_alive(pid)
         try:
             os.kill(pid, 0)
         except ProcessLookupError:

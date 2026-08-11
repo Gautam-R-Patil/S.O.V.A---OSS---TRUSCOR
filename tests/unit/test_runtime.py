@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -903,6 +904,10 @@ def test_browser_profile_leases_are_exclusive_trace_safe_and_recoverable(
 
 def test_browser_profile_pid_liveness_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     assert BrowserProfileVault._pid_is_alive(0) is False
+    if os.name == "nt":
+        assert BrowserProfileVault._pid_is_alive(os.getpid()) is True
+        assert BrowserProfileVault._pid_is_alive(2_147_483_647) is False
+        return
 
     def absent(_pid: int, _signal: int) -> None:
         raise ProcessLookupError
