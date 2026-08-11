@@ -106,16 +106,19 @@ jobs:
           - os: ubuntu-latest
             python: "3.14"
             shard: all
-          - os: windows-latest
+          # The Windows 2025/VS2026 hosted image currently injects an unsolicited
+          # console interrupt into Python subprocess tests. Pin the supported
+          # Windows 2022 image so this compatibility lane remains reproducible.
+          - os: windows-2022
             python: "3.11"
             shard: first
-          - os: windows-latest
+          - os: windows-2022
             python: "3.14"
             shard: first
-          - os: windows-latest
+          - os: windows-2022
             python: "3.11"
             shard: second
-          - os: windows-latest
+          - os: windows-2022
             python: "3.14"
             shard: second
           - os: macos-latest
