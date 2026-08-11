@@ -156,6 +156,24 @@ def _selected(
     return build
 
 
+def _renamed(
+    names: Mapping[str, str],
+    *,
+    constants: Mapping[str, Any] | None = None,
+) -> Callable[[Mapping[str, Any]], dict[str, Any]]:
+    def build(arguments: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            **dict(constants or {}),
+            **{
+                destination: arguments[source]
+                for source, destination in names.items()
+                if source in arguments
+            },
+        }
+
+    return build
+
+
 def _origin(value: str) -> str:
     parsed = urlsplit(value)
     if (
@@ -204,6 +222,9 @@ def _observed_page_urls(result: MCPToolResult | None) -> tuple[str, ...]:
             line.removeprefix("- Page URL:").strip()
             for line in text.splitlines()
             if line.startswith("- Page URL:") and line.removeprefix("- Page URL:").strip()
+        )
+        values.extend(
+            match.group(1) for match in re.finditer(r'RootWebArea[^\r\n]*?\burl="([^"]+)"', text)
         )
     structured = result.structured_content
     if isinstance(structured, Mapping) and isinstance(structured.get("url"), str):
@@ -535,6 +556,125 @@ def playwright_mappings(*, allowed_origins: tuple[str, ...] = ()) -> tuple[ToolM
             idempotent=True,
             evidence=("network-requests",),
             argument_builder=_selected("includeStatic"),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
+    )
+
+
+def _devtools_navigate_builder(
+    allowed_origins: tuple[str, ...],
+) -> Callable[[Mapping[str, Any]], dict[str, Any]]:
+    checked = _navigate_builder(allowed_origins)
+
+    def build(arguments: Mapping[str, Any]) -> dict[str, Any]:
+        return {"type": "url", **checked(arguments)}
+
+    return build
+
+
+def _devtools_wait_builder(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    text = arguments.get("text")
+    if isinstance(text, str) and text:
+        return {"text": [text]}
+    if isinstance(text, list) and text and all(isinstance(item, str) and item for item in text):
+        return {"text": list(text)}
+    raise FormatError("SOVA-MCP-WAIT", "Chrome DevTools wait requires one or more texts")
+
+
+def chrome_devtools_mappings(*, allowed_origins: tuple[str, ...] = ()) -> tuple[ToolMapping, ...]:
+    """Portable browser subset implemented through Chrome DevTools MCP 1.6.0."""
+    snapshot = "take_snapshot"
+    location_validator = _page_origin_validator(allowed_origins)
+    return (
+        ToolMapping(
+            action="browser.snapshot",
+            tool=snapshot,
+            version="0.1",
+            side_effect=SideEffect.READ,
+            idempotent=True,
+            evidence=("accessibility-snapshot",),
+            argument_builder=_selected("verbose"),
+            result_validator=location_validator,
+        ),
+        ToolMapping(
+            action="browser.navigate",
+            tool="navigate_page",
+            version="0.1",
+            side_effect=SideEffect.MUTATE,
+            idempotent=False,
+            evidence=("url", "snapshot"),
+            argument_builder=_devtools_navigate_builder(allowed_origins),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
+        ToolMapping(
+            action="browser.click",
+            tool="click",
+            version="0.1",
+            side_effect=SideEffect.MUTATE,
+            idempotent=False,
+            evidence=("snapshot",),
+            argument_builder=_renamed(
+                {"target": "uid", "doubleClick": "dblClick"},
+                constants={"includeSnapshot": True},
+            ),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
+        ToolMapping(
+            action="browser.type",
+            tool="fill",
+            version="0.1",
+            side_effect=SideEffect.MUTATE,
+            idempotent=False,
+            evidence=("snapshot",),
+            argument_builder=_renamed(
+                {"target": "uid", "text": "value"},
+                constants={"includeSnapshot": True},
+            ),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
+        ToolMapping(
+            action="browser.wait",
+            tool="wait_for",
+            version="0.1",
+            side_effect=SideEffect.READ,
+            idempotent=True,
+            evidence=("snapshot",),
+            argument_builder=_devtools_wait_builder,
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
+        ToolMapping(
+            action="browser.screenshot",
+            tool="take_screenshot",
+            version="0.1",
+            side_effect=SideEffect.READ,
+            idempotent=True,
+            evidence=("screenshot",),
+            argument_builder=_selected("format", "fullPage", "quality", "uid"),
+        ),
+        ToolMapping(
+            action="browser.console",
+            tool="list_console_messages",
+            version="0.1",
+            side_effect=SideEffect.READ,
+            idempotent=True,
+            evidence=("console-messages",),
+            argument_builder=_selected("types", "pageIdx", "pageSize"),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
+        ToolMapping(
+            action="browser.network",
+            tool="list_network_requests",
+            version="0.1",
+            side_effect=SideEffect.READ,
+            idempotent=True,
+            evidence=("network-requests",),
+            argument_builder=_selected("resourceTypes", "pageIdx", "pageSize"),
             post_observe_tool=snapshot,
             result_validator=location_validator,
         ),
@@ -1307,6 +1447,7 @@ __all__ = [
     "MelraExecutorAdapter",
     "MelraTaskState",
     "ToolMapping",
+    "chrome_devtools_mappings",
     "playwright_mappings",
     "windows_mcp_mappings",
 ]

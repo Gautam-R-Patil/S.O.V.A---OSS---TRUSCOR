@@ -18,6 +18,7 @@ human text or HTML artifact is the command's purpose.
 | Extensions | `extension discover`, `extension prepare`, `extension run` |
 | Local MCP | `mcp manifest`, `mcp init-control`, `mcp approve`, `mcp serve` |
 | Release and compatibility | `release sbom`, `release checksums`, `release verify-checksums`, `conformance export`, `conformance verify` |
+| Final-mile acceptance | `acceptance run`, `acceptance evaluate`, `acceptance template` |
 | Authorized targets | `target browser-kit`, `target template`, `target validate`, `target plan`, `target fixture`, `target challenge`, `target prove`, `detonate owned-web-fixture`, `detonate owned-software-fixture`, `detonate browser`, `detonate software`, `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt adaptive-browser` |
 
 `sova target browser-kit ORIGIN DESTINATION` writes an inert, secret-free
@@ -127,8 +128,16 @@ specification](../specifications/self-hosted-community-service-0.1.md).
 `sova monitor serve` schedules only declared local snapshot comparisons. It has
 no command/provider/URL field, rejects overlapping instances through an OS
 lock, recovers interrupted state, prunes reports and history, and writes a
-signed drift-result trace. See the [continuous monitor
-specification](../specifications/continuous-monitor-service-0.1.md).
+signed drift-result trace. Optional `--alert-webhook HTTPS_URL
+--alert-secret-env ENV_NAME` sends a path-free HMAC-authenticated alert and
+requires an exact idempotency acknowledgement. See the [continuous monitor
+specification](../specifications/continuous-monitor-service-0.1.md) and
+[managed-service boundary](../specifications/managed-services-and-hosting-0.1.md).
+
+`sova acceptance run DEST` proves only the credential-free local engineering
+slice. `acceptance template` emits an inconclusive external-receipt skeleton;
+`acceptance evaluate` requires actual distinct environments and organizations
+for the declared stable gates. Self-authored templates never make 1.0 ready.
 
 `sova extension discover` reads entry-point metadata without importing plugin
 code. `extension prepare` creates a local launch document pinned to absolute

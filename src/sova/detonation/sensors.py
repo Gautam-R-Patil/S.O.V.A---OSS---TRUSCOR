@@ -13,6 +13,9 @@ from sova.trace.redaction import Redactor
 
 
 class SensorKind(StrEnum):
+    AUTHORIZATION = "authorization"
+    SAFETY = "safety"
+    ARTIFACT = "artifact"
     TOOL = "tool"
     MCP = "mcp"
     FILESYSTEM = "filesystem"
@@ -26,6 +29,10 @@ class SensorKind(StrEnum):
     INTER_AGENT = "inter-agent"
     DATABASE = "database"
     API = "api"
+    HOST = "host"
+    KERNEL = "kernel"
+    MODEL = "model"
+    EXTERNAL = "external-service"
 
 
 class SensorHealth(StrEnum):

@@ -39,6 +39,11 @@ from sova.live.control import (
     create_website_control_challenge,
 )
 from sova.live.fixture_web import OwnedWebFixture
+from sova.live.held_out_web import (
+    OwnedWebMatrixFixture,
+    WebApplicationClass,
+    build_web_matrix_capsule,
+)
 from sova.live.persistent_session import (
     BrowserHandoffPrompt,
     BrowserSessionHandoffArtifacts,
@@ -70,15 +75,18 @@ __all__ = [
     "LiveBrowserArtifacts",
     "LiveSoftwareArtifacts",
     "OwnedWebFixture",
+    "OwnedWebMatrixFixture",
     "PersistentSessionArtifacts",
     "SoftwareApprovalPrompt",
     "SoftwareEventObserver",
     "UrllibControlFetcher",
+    "WebApplicationClass",
     "WebsiteControlChallenge",
     "adaptive_browser_policy_from_mapping",
     "browser_campaign_from_mapping",
     "build_owned_software_capsule",
     "build_owned_web_capsule",
+    "build_web_matrix_capsule",
     "challenge_from_mapping",
     "collect_website_control_proof",
     "control_proof_from_mapping",

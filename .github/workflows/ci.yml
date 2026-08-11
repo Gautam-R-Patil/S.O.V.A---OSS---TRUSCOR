@@ -62,6 +62,11 @@ jobs:
       - name: Require every registered CLI command handler to execute
         run: uv run --locked python scripts/audit_cli_coverage.py coverage.json
 
+      - name: Run credential-free acceptance lab
+        run: |
+          uv run --locked sova acceptance run .ci-acceptance
+          uv run --locked python -c "import json; report=json.load(open('.ci-acceptance/report.json')); assert report['coreAcceptancePassed'] is True; assert report['stable1Ready'] is False"
+
       - name: Check generated glossary
         run: uv run --locked python scripts/generate_glossary.py --check
 
@@ -131,6 +136,9 @@ jobs:
 
       - name: Exercise CLI
         run: uv run --locked sova --version
+
+      - name: Run platform acceptance lab
+        run: uv run --locked sova acceptance run .platform-acceptance
 
   dco:
     name: DCO

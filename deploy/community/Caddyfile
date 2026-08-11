@@ -1,0 +1,23 @@
+{$SOVA_COMMUNITY_DOMAIN} {
+  encode zstd gzip
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "no-referrer"
+    Permissions-Policy "camera=(), geolocation=(), microphone=()"
+    -Server
+  }
+
+  request_body {
+    max_size 20MB
+  }
+
+  reverse_proxy 127.0.0.1:8736 {
+    header_up X-Forwarded-Proto https
+    health_uri /v1/health
+    health_interval 30s
+    health_timeout 5s
+  }
+}

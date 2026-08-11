@@ -25,6 +25,12 @@ from sova.executors.docker_desktop import (
     attest_docker_desktop,
     docker_desktop_backend_descriptor,
 )
+from sova.executors.gvisor import (
+    GVisorAttestation,
+    GVisorOciExecutor,
+    attest_gvisor,
+    gvisor_backend_descriptor,
+)
 from sova.executors.local import RestrictedLocalExecutor
 from sova.executors.runner import (
     ScenarioRunResult,
@@ -49,6 +55,8 @@ __all__ = [
     "ExecutionContext",
     "Executor",
     "FailureCause",
+    "GVisorAttestation",
+    "GVisorOciExecutor",
     "OutcomeStatus",
     "RestrictedLocalExecutor",
     "ScenarioRunResult",
@@ -58,8 +66,10 @@ __all__ = [
     "SideEffect",
     "action_intent_for_step",
     "attest_docker_desktop",
+    "attest_gvisor",
     "docker_desktop_backend_descriptor",
     "expanded_steps",
+    "gvisor_backend_descriptor",
     "negotiate",
     "run_capsule",
 ]

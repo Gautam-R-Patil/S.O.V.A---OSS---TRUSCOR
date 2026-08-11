@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from sova.formats.errors import FormatError
 from sova.mcp.protocol import StdioServerSpec
 from sova.mcp.receipts import (
+    CHROME_DEVTOOLS_MCP_RECEIPT,
     CUA_DRIVER_AUDIT_RECEIPT,
     MELRA_AUDIT_RECEIPT,
     PLAYWRIGHT_MCP_RECEIPT,
@@ -129,6 +130,93 @@ def playwright_stdio_spec(  # noqa: PLR0913 - launch security inputs remain expl
         # A clean per-run npm cache may need one bounded package fetch before
         # the pinned server can initialize. Tool calls retain their shorter
         # independent deadlines and are never retried after target activity.
+        startup_timeout_seconds=120.0,
+    )
+
+
+def chrome_devtools_stdio_spec(  # noqa: PLR0913
+    *,
+    package_runner: Path,
+    workspace: Path,
+    browser_executable: Path,
+    package_cache: Path | None = None,
+    profile_directory: Path | None = None,
+    profile_vault_root: Path | None = None,
+    headless: bool = True,
+) -> StdioServerSpec:
+    """Create a pinned, telemetry-off Chrome DevTools MCP launch.
+
+    This is an independently implemented browser backend for SOVA executor
+    conformance. It deliberately excludes coordinate vision, extensions,
+    WebMCP, memory debugging, unrestricted file paths, CrUX network lookups,
+    update checks, and upstream usage statistics.
+    """
+    workspace = workspace.resolve()
+    npm_cache = (
+        workspace / ".cache" / "npm-chrome-devtools"
+        if package_cache is None
+        else package_cache.resolve()
+    )
+    local_app_data = workspace / ".cache" / "chrome-devtools-local-app-data"
+    logs = workspace / ".sova" / "chrome-devtools"
+    for directory in (npm_cache, local_app_data, logs):
+        directory.mkdir(parents=True, exist_ok=True)
+    runner = package_runner.resolve()
+    if runner.suffix.casefold() in {".cmd", ".bat"}:
+        node = runner.with_name("node.exe")
+        npx_cli = runner.parent / "node_modules" / "npm" / "bin" / "npx-cli.js"
+        argv = (
+            (_file(node, "Node executable"), _file(npx_cli, "npx CLI"))
+            if node.is_file() and npx_cli.is_file()
+            else (_file(runner, "package runner"),)
+        )
+    else:
+        argv = (_file(runner, "package runner"),)
+    if profile_directory is None:
+        profile_args: tuple[str, ...] = ("--isolated=true",)
+    else:
+        admission_root = workspace if profile_vault_root is None else profile_vault_root.resolve()
+        if not admission_root.is_dir() or admission_root.is_symlink():
+            raise FormatError(
+                "SOVA-MCP-LAUNCH-PATH",
+                "Chrome DevTools profile vault root must be a real existing directory",
+            )
+        profile = _inside(admission_root, profile_directory, "Chrome DevTools profile directory")
+        if not profile.is_dir() or profile.is_symlink():
+            raise FormatError(
+                "SOVA-MCP-LAUNCH-PATH",
+                "Chrome DevTools profile directory must be a real existing directory",
+            )
+        profile_args = (f"--user-data-dir={profile}",)
+    display_args = ("--headless=true",) if headless else ()
+    return StdioServerSpec(
+        "chrome-devtools-mcp",
+        (
+            *argv,
+            "--yes",
+            "--cache",
+            str(npm_cache),
+            f"chrome-devtools-mcp@{CHROME_DEVTOOLS_MCP_RECEIPT.version}",
+            *display_args,
+            *profile_args,
+            f"--executable-path={_file(browser_executable, 'browser executable')}",
+            "--no-usage-statistics",
+            "--no-performance-crux",
+            "--redact-network-headers=true",
+            "--viewport=1440x900",
+            f"--log-file={logs / 'server.log'}",
+        ),
+        workspace,
+        {
+            "CI": "1",
+            "LOCALAPPDATA": str(local_app_data),
+            "CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS": "1",
+            "CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS": "1",
+        },
+        CHROME_DEVTOOLS_MCP_RECEIPT.version,
+        CHROME_DEVTOOLS_MCP_RECEIPT.source,
+        CHROME_DEVTOOLS_MCP_RECEIPT.license,
+        CHROME_DEVTOOLS_MCP_RECEIPT.package_digest,
         startup_timeout_seconds=120.0,
     )
 
@@ -324,6 +412,7 @@ __all__ = [
     "CuaDriverDirectories",
     "MelraDirectories",
     "WindowsMCPDirectories",
+    "chrome_devtools_stdio_spec",
     "cua_driver_stdio_spec",
     "melra_stdio_spec",
     "playwright_stdio_spec",

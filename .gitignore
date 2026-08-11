@@ -44,6 +44,7 @@ service-signing-key.raw
 /.playwright-mcp/
 /community-state/
 /monitor-state/
+/deploy/community/operator/
 
 # Only explicitly synthetic, provenance-recorded trace goldens may be public
 !/tests/fixtures/golden/trace/*.sova-trace
@@ -70,9 +71,11 @@ coverage.json
 htmlcov/
 *.log
 audit-requirements.txt
+/.validation/
 tmp/
 temp/
 .cache/
+.tmp-npm-cache/
 
 # Editors and operating systems
 /.claude/

@@ -50,6 +50,14 @@ claiming that the field set is ready for `1.0`.
 - [authorized target assessment](./authorized-target-assessment-0.1.md)
 - [neutral conformance kit](./conformance-kit-0.1.md)
 - [supply-chain release artifacts](./supply-chain-release-0.1.md)
+- [final-mile acceptance and stable-release gates](./final-mile-acceptance-0.1.md)
+- [browser adapters and held-out website matrix](./browser-adapters-and-web-matrix-0.1.md)
+- [cross-platform accessibility-first desktop execution](./cross-platform-desktop-execution-0.1.md)
+- [gVisor runsc isolation backend](./gvisor-runsc-isolation-0.1.md)
+- [claim-conditioned sensor coverage ledger](./sensor-coverage-ledger-0.1.md)
+- [cross-provider and cross-model experiment matrix](./provider-experiment-matrix-0.1.md)
+- [matched comparative benchmark protocol](./comparative-benchmark-protocol-0.1.md)
+- [managed services and hosting boundary](./managed-services-and-hosting-0.1.md)
 
 The implementation and bounded validation result for the final three surfaces
 is recorded in [Topics 21-23 validation](../engineering/topics-21-23-validation.md).

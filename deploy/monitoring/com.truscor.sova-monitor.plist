@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.truscor.sova-monitor</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/sova/bin/sova</string><string>monitor</string><string>serve</string>
+    <string>/etc/sova-monitor/jobs.json</string><string>/var/lib/sova-monitor/state</string>
+    <string>--workspace</string><string>/var/lib/sova-monitor/workspace</string>
+    <string>--alert-webhook</string><string>REPLACE_WITH_HTTPS_ENDPOINT</string>
+    <string>--alert-secret-env</string><string>SOVA_ALERT_SECRET</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict><key>SOVA_ALERT_SECRET</key><string>LOAD_WITH_A_SECRET_MANAGER_BEFORE_INSTALL</string></dict>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>5</integer>
+  <key>WorkingDirectory</key><string>/var/lib/sova-monitor/workspace</string>
+  <key>StandardOutPath</key><string>/var/log/sova-monitor.log</string>
+  <key>StandardErrorPath</key><string>/var/log/sova-monitor.err.log</string>
+</dict>
+</plist>

@@ -1,0 +1,67 @@
+services:
+  registry:
+    image: ${SOVA_IMAGE:?set SOVA_IMAGE to an immutable digest-pinned image}
+    restart: unless-stopped
+    init: true
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.0
+    ports:
+      - "443:443"
+    volumes:
+      - registry-data:/var/lib/sova
+      - ./operator:/run/sova/operator:ro
+    tmpfs:
+      - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
+    command:
+      - sova
+      - registry
+      - serve
+      - /var/lib/sova
+      - --token-file
+      - /run/sova/operator/service.token
+      - --trusted-key-id
+      - ${SOVA_TRUSTED_EVIDENCE_KEY_ID:?set trusted evidence key id}
+      - --methodology
+      - /run/sova/operator/methodology.md
+      - --host
+      - 127.0.0.1
+      - --port
+      - "8736"
+    healthcheck:
+      test: [CMD, sova, --version]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  edge:
+    image: ${CADDY_IMAGE:?set CADDY_IMAGE to an immutable digest-pinned image}
+    restart: unless-stopped
+    network_mode: service:registry
+    depends_on:
+      registry:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      SOVA_COMMUNITY_DOMAIN: ${SOVA_COMMUNITY_DOMAIN:?set public domain}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    tmpfs:
+      - /tmp:size=32m,mode=1777,noexec,nosuid,nodev
+
+volumes:
+  registry-data: {}
+  caddy-data: {}
+  caddy-config: {}

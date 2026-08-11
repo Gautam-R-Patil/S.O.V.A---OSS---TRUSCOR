@@ -36,6 +36,8 @@ from sova.mcp import (
     StdioServerSpec,
     ToolMapping,
     WindowsMCPDirectories,
+    chrome_devtools_mappings,
+    chrome_devtools_stdio_spec,
     cua_driver_stdio_spec,
     melra_stdio_spec,
     playwright_mappings,
@@ -274,6 +276,110 @@ def test_playwright_adapter_rejects_observed_cross_origin_redirect(tmp_path: Pat
         "playwright",
         client,
         playwright_mappings(allowed_origins=("https://owned.example",)),
+    )
+    outcome = adapter.execute(
+        ActionRequest(
+            "navigate",
+            "browser.navigate",
+            {"url": "https://owned.example/start"},
+            5,
+        ),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.FAILED
+    assert outcome.error_code == "SOVA-MCP-BROWSER-ORIGIN-DRIFT"
+
+
+def test_chrome_devtools_adapter_maps_portable_actions_and_checks_final_origin(
+    tmp_path: Path,
+) -> None:
+    snapshot = (
+        '# take_snapshot response\nuid=1_0 RootWebArea "Owned" url="https://owned.example/after"'
+    )
+    client = FakeMCPClient(
+        ("navigate_page", "take_snapshot", "fill", "click", "wait_for"),
+        [
+            MCPToolResult(
+                content=({"type": "text", "text": "navigated"},),
+                structured_content=None,
+                is_error=False,
+            ),
+            MCPToolResult(
+                content=({"type": "text", "text": snapshot},),
+                structured_content=None,
+                is_error=False,
+            ),
+            MCPToolResult(
+                content=({"type": "text", "text": snapshot},),
+                structured_content=None,
+                is_error=False,
+            ),
+            MCPToolResult(
+                content=({"type": "text", "text": snapshot},),
+                structured_content=None,
+                is_error=False,
+            ),
+        ],
+    )
+    adapter = MCPExecutorAdapter(
+        "chrome-devtools",
+        client,
+        chrome_devtools_mappings(allowed_origins=("https://owned.example",)),
+    )
+    outcome = adapter.execute(
+        ActionRequest(
+            "navigate",
+            "browser.navigate",
+            {"url": "https://owned.example/start"},
+            5,
+        ),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.SUCCEEDED
+    assert client.calls[0] == (
+        "navigate_page",
+        {"type": "url", "url": "https://owned.example/start"},
+    )
+    typed = adapter.execute(
+        ActionRequest(
+            "type",
+            "browser.type",
+            {"target": "1_4", "text": "blue owl"},
+            5,
+        ),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert typed.status == OutcomeStatus.SUCCEEDED
+    assert client.calls[2] == (
+        "fill",
+        {"includeSnapshot": True, "uid": "1_4", "value": "blue owl"},
+    )
+
+
+def test_chrome_devtools_adapter_rejects_observed_cross_origin_redirect(tmp_path: Path) -> None:
+    escaped = 'uid=1_0 RootWebArea "Escaped" url="https://attacker.example/"'
+    client = FakeMCPClient(
+        ("navigate_page", "take_snapshot"),
+        [
+            MCPToolResult(
+                content=({"type": "text", "text": "navigated"},),
+                structured_content=None,
+                is_error=False,
+            ),
+            MCPToolResult(
+                content=({"type": "text", "text": escaped},),
+                structured_content=None,
+                is_error=False,
+            ),
+        ],
+    )
+    adapter = MCPExecutorAdapter(
+        "chrome-devtools",
+        client,
+        chrome_devtools_mappings(allowed_origins=("https://owned.example",)),
     )
     outcome = adapter.execute(
         ActionRequest(
@@ -600,7 +706,7 @@ def test_cua_provider_failure_does_not_escalate_without_typed_reason(tmp_path: P
     assert [name for name, _arguments in client.calls] == ["start_session", "scroll"]
 
 
-def test_pinned_open_source_launch_specs_are_fail_closed(tmp_path: Path) -> None:
+def test_pinned_open_source_launch_specs_are_fail_closed(tmp_path: Path) -> None:  # noqa: PLR0915
     runner = tmp_path / "npx.cmd"
     node = tmp_path / "node.exe"
     melra_cli = tmp_path / "melra-cli.js"
@@ -624,6 +730,24 @@ def test_pinned_open_source_launch_specs_are_fail_closed(tmp_path: Path) -> None
     assert "--block-service-workers" in playwright.argv
     assert playwright.startup_timeout_seconds == 120
     assert playwright.environment["PLAYWRIGHT_BROWSERS_PATH"].startswith(str(tmp_path))
+
+    devtools = chrome_devtools_stdio_spec(
+        package_runner=runner,
+        workspace=tmp_path,
+        browser_executable=browser,
+    )
+    assert "chrome-devtools-mcp@1.6.0" in devtools.argv
+    assert "--isolated=true" in devtools.argv
+    assert "--headless=true" in devtools.argv
+    assert "--no-usage-statistics" in devtools.argv
+    assert "--no-performance-crux" in devtools.argv
+    assert "--redact-network-headers=true" in devtools.argv
+    assert not any("--allow-unrestricted-paths" in item for item in devtools.argv)
+    assert devtools.environment["CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS"] == "1"
+    assert devtools.package_digest == (
+        "sha512-VZX6f/OjQSYhy2BGGRs+y3LsrsAQAz/HwZCWKBLVyST/4r/3zjVEjjVW7gMCVbRD"
+        "uspnVdcp5hQDPrQ5UFrdZw=="
+    )
 
     profile = tmp_path / ".sova" / "browser-profiles" / "persistent"
     profile.mkdir(parents=True)

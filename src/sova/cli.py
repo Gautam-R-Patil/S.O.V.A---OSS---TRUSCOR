@@ -17,6 +17,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sova import __version__
+from sova.acceptance import (
+    acceptance_receipt_template,
+    default_release_gates,
+    evaluate_release_readiness,
+    load_receipts,
+    run_offline_acceptance_lab,
+)
 from sova.assessment import (
     build_assessment_plan,
     create_browser_test_kit,
@@ -127,6 +134,7 @@ from sova.mapping import build_capability_map, write_capability_map, write_tool_
 from sova.mcp import MELRA_AUDIT_RECEIPT, PLAYWRIGHT_MCP_RECEIPT, WINDOWS_MCP_RECEIPT
 from sova.monitoring import (
     ContinuousMonitorService,
+    WebhookAlertNotifier,
     build_behavior_snapshot,
     build_integrity_manifest,
     compare_behavior_snapshots,
@@ -273,6 +281,35 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     release_verify.add_argument("root", type=_path)
     release_verify.add_argument("manifest", type=_path)
     release_verify.set_defaults(handler=_release_verify_checksums)
+
+    acceptance_parser = commands.add_parser(
+        "acceptance", help="run core acceptance and evaluate stable-release evidence gates"
+    )
+    acceptance_commands = acceptance_parser.add_subparsers(dest="acceptance_command")
+    acceptance_run = acceptance_commands.add_parser(
+        "run", help="run the credential-free offline acceptance lab"
+    )
+    acceptance_run.add_argument("destination", type=_path)
+    acceptance_run.add_argument(
+        "--receipts",
+        type=_path,
+        help="optional directory of strict external acceptance receipts",
+    )
+    acceptance_run.set_defaults(handler=_acceptance_run)
+    acceptance_evaluate = acceptance_commands.add_parser(
+        "evaluate", help="evaluate strict receipts against every stable-1.0 gate"
+    )
+    acceptance_evaluate.add_argument("receipts", type=_path)
+    acceptance_evaluate.set_defaults(handler=_acceptance_evaluate)
+    acceptance_template = acceptance_commands.add_parser(
+        "template", help="write an inconclusive receipt template for one gate"
+    )
+    acceptance_template.add_argument(
+        "gate",
+        choices=tuple(gate.id for gate in default_release_gates()),
+    )
+    acceptance_template.add_argument("destination", type=_path)
+    acceptance_template.set_defaults(handler=_acceptance_template)
 
     conformance_parser = commands.add_parser(
         "conformance", help="export or verify the neutral SOVA compatibility kit"
@@ -1030,6 +1067,14 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     monitor_serve.add_argument("--workspace", type=_path, required=True)
     monitor_serve.add_argument("--once", action="store_true")
     monitor_serve.add_argument("--poll-seconds", type=float, default=0.25)
+    monitor_serve.add_argument(
+        "--alert-webhook",
+        help="deliver failed runs to one HTTPS webhook (loopback HTTP allowed for fixtures)",
+    )
+    monitor_serve.add_argument(
+        "--alert-secret-env",
+        help="environment-variable name containing at least 32 bytes of webhook secret",
+    )
     monitor_serve.set_defaults(handler=_monitor_serve)
     monitor_status = monitor_commands.add_parser(
         "status", help="inspect durable monitor state without starting the scheduler"
@@ -1317,6 +1362,36 @@ def _release_verify_checksums(args: argparse.Namespace) -> int:
     report = verify_checksums(args.root, args.manifest)
     sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
     return 0 if report["accepted"] else 1
+
+
+def _acceptance_run(args: argparse.Namespace) -> int:
+    receipts = load_receipts(args.receipts) if args.receipts is not None else ()
+    artifacts = run_offline_acceptance_lab(args.destination, receipts=receipts)
+    sys.stdout.buffer.write(canonical_json_bytes(artifacts.to_mapping()) + b"\n")
+    return 0 if artifacts.status == "pass" else 1
+
+
+def _acceptance_evaluate(args: argparse.Namespace) -> int:
+    report = evaluate_release_readiness(load_receipts(args.receipts)).to_mapping()
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0 if report["readyForStable1"] else 3
+
+
+def _acceptance_template(args: argparse.Namespace) -> int:
+    document = acceptance_receipt_template(str(args.gate))
+    args.destination.parent.mkdir(parents=True, exist_ok=True)
+    args.destination.write_bytes(canonical_json_bytes(document) + b"\n")
+    sys.stdout.buffer.write(
+        canonical_json_bytes(
+            {
+                "status": "template-only",
+                "gateId": document["gateId"],
+                "destination": str(args.destination.resolve()),
+            }
+        )
+        + b"\n"
+    )
+    return 0
 
 
 def _conformance_export(args: argparse.Namespace) -> int:
@@ -3473,7 +3548,22 @@ def _monitor_service(args: argparse.Namespace) -> ContinuousMonitorService:
         _load_object(args.specification),
         workspace=args.workspace,
     )
-    return ContinuousMonitorService(jobs, args.state)
+    endpoint = getattr(args, "alert_webhook", None)
+    secret_name = getattr(args, "alert_secret_env", None)
+    if (endpoint is None) != (secret_name is None):
+        raise FormatError(
+            "SOVA-ALERT-CONFIG",
+            "alert webhook and secret environment variable must be supplied together",
+        )
+    notifier = None
+    if endpoint is not None and secret_name is not None:
+        if re.fullmatch(r"[A-Z][A-Z0-9_]{0,127}", secret_name) is None:
+            raise FormatError("SOVA-ALERT-CONFIG", "alert secret environment name is invalid")
+        secret = os.environ.get(secret_name)
+        if secret is None:
+            raise FormatError("SOVA-ALERT-SECRET", "alert webhook secret is unavailable")
+        notifier = WebhookAlertNotifier(endpoint, secret.encode())
+    return ContinuousMonitorService(jobs, args.state, notifier=notifier)
 
 
 def _monitor_serve(args: argparse.Namespace) -> int:

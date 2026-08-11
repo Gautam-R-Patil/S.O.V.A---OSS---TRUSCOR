@@ -7,6 +7,7 @@ from sova.mcp.adapter import (
     MelraExecutorAdapter,
     MelraTaskState,
     ToolMapping,
+    chrome_devtools_mappings,
     playwright_mappings,
     windows_mcp_mappings,
 )
@@ -20,6 +21,7 @@ from sova.mcp.protocol import (
     StdioServerSpec,
 )
 from sova.mcp.receipts import (
+    CHROME_DEVTOOLS_MCP_RECEIPT,
     CUA_DRIVER_AUDIT_RECEIPT,
     MELRA_AUDIT_RECEIPT,
     PLAYWRIGHT_MCP_RECEIPT,
@@ -30,6 +32,7 @@ from sova.mcp.specs import (
     CuaDriverDirectories,
     MelraDirectories,
     WindowsMCPDirectories,
+    chrome_devtools_stdio_spec,
     cua_driver_stdio_spec,
     melra_stdio_spec,
     playwright_stdio_spec,
@@ -37,6 +40,7 @@ from sova.mcp.specs import (
 )
 
 __all__ = [
+    "CHROME_DEVTOOLS_MCP_RECEIPT",
     "CUA_DRIVER_AUDIT_RECEIPT",
     "MELRA_AUDIT_RECEIPT",
     "PLAYWRIGHT_MCP_RECEIPT",
@@ -58,6 +62,8 @@ __all__ = [
     "ToolMapping",
     "UnavailableCapabilityExecutor",
     "WindowsMCPDirectories",
+    "chrome_devtools_mappings",
+    "chrome_devtools_stdio_spec",
     "cua_driver_stdio_spec",
     "melra_stdio_spec",
     "playwright_mappings",

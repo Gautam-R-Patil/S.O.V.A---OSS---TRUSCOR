@@ -90,6 +90,32 @@ PLAYWRIGHT_MCP_RECEIPT = ExternalExecutorReceipt(
     ),
 )
 
+CHROME_DEVTOOLS_MCP_RECEIPT = ExternalExecutorReceipt(
+    name="chrome-devtools-mcp",
+    version="1.6.0",
+    source="https://github.com/ChromeDevTools/chrome-devtools-mcp",
+    commit="f621d0052fd241dca76e7f615b20e9d320ba965f",
+    package_digest=(
+        "sha512-VZX6f/OjQSYhy2BGGRs+y3LsrsAQAz/HwZCWKBLVyST/4r/3zjVEjjVW7gMCVbRD"
+        "uspnVdcp5hQDPrQ5UFrdZw=="
+    ),
+    dependency_lock_digest=None,
+    license="Apache-2.0",
+    protocol="MCP stdio",
+    status="independent-browser-conformance-backend",
+    limitations=(
+        "Chrome DevTools MCP is an executor and observation source, not containment or an "
+        "independent truth oracle.",
+        "It supports Google Chrome and Chrome for Testing; other Chromium browsers are not "
+        "part of its official compatibility claim.",
+        "SOVA disables upstream usage statistics, update checks, CrUX lookups, unrestricted "
+        "paths, experimental vision, extensions, WebMCP, and memory-debugging categories.",
+        "A persistent or already-running browser can contain sensitive authenticated state; "
+        "SOVA uses isolated profiles by default and requires a separately admitted vault for "
+        "persistence.",
+    ),
+)
+
 WINDOWS_MCP_RECEIPT = ExternalExecutorReceipt(
     name="windows-mcp",
     version="0.8.2",
@@ -111,6 +137,7 @@ WINDOWS_MCP_RECEIPT = ExternalExecutorReceipt(
 
 
 __all__ = [
+    "CHROME_DEVTOOLS_MCP_RECEIPT",
     "CUA_DRIVER_AUDIT_RECEIPT",
     "MELRA_AUDIT_RECEIPT",
     "PLAYWRIGHT_MCP_RECEIPT",

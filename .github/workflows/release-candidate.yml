@@ -1,22 +1,29 @@
-name: Release candidate
+name: Signed release candidate
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
+    inputs:
+      acknowledge_experimental:
+        description: Type I UNDERSTAND THIS IS NOT 1.0
+        required: true
+        type: string
 
 permissions:
-  attestations: write
   contents: read
   id-token: write
+  attestations: write
+  artifact-metadata: write
+
+concurrency:
+  group: release-candidate-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build without publishing
+  package-sign-attest:
+    if: inputs.acknowledge_experimental == 'I UNDERSTAND THIS IS NOT 1.0'
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Check out exact source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
@@ -29,34 +36,49 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Synchronize and test
+      - name: Synchronize exact environment
+        run: uv sync --locked
+
+      - name: Require repository and stable-gate tests
         run: |
-          uv sync --locked
           uv run --locked python -m pytest
           uv run --locked python scripts/check_repository.py
+          uv run --locked sova acceptance run .candidate-acceptance
+          test "$(python -c 'import json; print(json.load(open(".candidate-acceptance/stable-readiness.json"))["readyForStable1"])')" = "False"
 
-      - name: Check tag and package version
-        if: startsWith(github.ref, 'refs/tags/')
-        run: uv run --locked python scripts/check_release_version.py "${GITHUB_REF_NAME}"
-
-      - name: Build candidate
-        run: uv build
-
-      - name: Generate deterministic SBOM and candidate checksums
+      - name: Build distributions and release metadata
         run: |
+          uv build
           uv run --locked sova release sbom uv.lock dist/sova-oss.cdx.json --scope runtime
           uv run --locked sova release checksums dist dist/SHA256SUMS
           uv run --locked sova release verify-checksums dist dist/SHA256SUMS
 
-      - name: Attest candidate provenance
+      - name: Keyless-sign candidate artifacts with Sigstore
+        uses: sigstore/gh-action-sigstore-python@5b79a39c381910c090341a2c9b0bf022c8b387e1 # v3.4.0
+        with:
+          inputs: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/sova-oss.cdx.json
+            dist/SHA256SUMS
+          verify: true
+          verify-cert-identity: https://github.com/${{ github.repository }}/.github/workflows/release-candidate.yml@${{ github.ref }}
+          verify-oidc-issuer: https://token.actions.githubusercontent.com
+          upload-signing-artifacts: true
+          release-signing-artifacts: false
+
+      - name: Create GitHub build-provenance attestation
         uses: actions/attest@c32b4b8b198b65d0bd9d63490e847ff7b53989d4 # v4.0.0
         with:
-          subject-path: dist/*
+          subject-checksums: dist/SHA256SUMS
 
-      - name: Retain candidate for review
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - name: Upload candidate bundle for founder review
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: sova-oss-release-candidate
-          path: dist/
+          name: sova-oss-experimental-candidate-${{ github.sha }}
+          path: |
+            dist/
+            .candidate-acceptance/report.json
+            .candidate-acceptance/stable-readiness.json
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14

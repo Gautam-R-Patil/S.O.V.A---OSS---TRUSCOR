@@ -1,0 +1,27 @@
+[Unit]
+Description=SOVA OSS continuous behavioral monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sova
+Group=sova
+WorkingDirectory=/var/lib/sova-monitor/workspace
+EnvironmentFile=/etc/sova-monitor/environment
+ExecStart=/opt/sova/bin/sova monitor serve /etc/sova-monitor/jobs.json /var/lib/sova-monitor/state --workspace /var/lib/sova-monitor/workspace --alert-webhook ${SOVA_ALERT_WEBHOOK} --alert-secret-env SOVA_ALERT_SECRET
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sova-monitor
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

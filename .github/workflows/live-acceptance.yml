@@ -1,0 +1,84 @@
+name: Optional live acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_browser_matrix:
+        description: Run installed-Chrome self-owned website matrix
+        required: true
+        default: true
+        type: boolean
+      run_gvisor:
+        description: Run gVisor on a preconfigured self-hosted runner
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-matrix:
+    if: inputs.run_browser_matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.3"
+          python-version: "3.11"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Synchronize exact environment
+        run: uv sync --locked
+
+      - name: Locate preinstalled browser tools
+        run: |
+          echo "SOVA_NPX_PATH=$(command -v npx)" >> "$GITHUB_ENV"
+          echo "SOVA_BROWSER_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+
+      - name: Run four-class real browser matrix
+        env:
+          SOVA_RUN_REAL_BROWSER: "1"
+        run: uv run --locked python -m pytest -q tests/integration/test_held_out_web_live_optional.py
+
+  gvisor:
+    if: inputs.run_gvisor
+    runs-on: [self-hosted, linux, x64, sova-gvisor]
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.3"
+          python-version: "3.11"
+
+      - name: Verify preconfigured runsc runtime
+        run: |
+          command -v docker
+          docker info --format '{{json .Runtimes}}' | grep -q 'runsc'
+
+      - name: Run digest-pinned gVisor conformance
+        env:
+          SOVA_RUN_REAL_GVISOR: "1"
+          SOVA_GVISOR_TEST_IMAGE: ${{ vars.SOVA_GVISOR_TEST_IMAGE }}
+        run: |
+          test -n "$SOVA_GVISOR_TEST_IMAGE"
+          uv sync --locked
+          uv run --locked python -m pytest -q tests/unit/test_gvisor_executor.py

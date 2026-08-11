@@ -21,6 +21,7 @@ from sova.trace import TraceWriter, generate_ed25519_keypair
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from sova.monitoring.alerts import AlertNotifier
     from sova.monitoring.model import BehaviorSnapshot
 
 _SAFE_ID = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{0,95})$")
@@ -210,7 +211,13 @@ def monitoring_jobs_from_document(
 class ContinuousMonitorService:
     """Runs deterministic snapshot comparisons on schedule in one foreground process."""
 
-    def __init__(self, jobs: Sequence[MonitoringJob], state_root: Path) -> None:
+    def __init__(
+        self,
+        jobs: Sequence[MonitoringJob],
+        state_root: Path,
+        *,
+        notifier: AlertNotifier | None = None,
+    ) -> None:
         if not jobs:
             raise FormatError("SOVA-MONITOR-JOBS", "at least one monitor job is required")
         self.jobs = {job.identifier: job for job in jobs}
@@ -224,6 +231,7 @@ class ContinuousMonitorService:
         self._state = self._load_state()
         self._recover_interrupted()
         self._lock_descriptor: int | None = None
+        self._notifier = notifier
 
     def _blank_state(self) -> dict[str, Any]:
         return {
@@ -472,6 +480,17 @@ class ContinuousMonitorService:
                 "trustPolicy": "included-key-integrity-only",
                 "notification": "local-artifact-and-foreground-output",
             }
+            if self._notifier is not None and result["status"] == "failed":
+                alert = {
+                    "artifactType": "sova.monitor-alert",
+                    "schemaVersion": "0.1.0",
+                    "runId": run_id,
+                    "jobId": identity,
+                    "status": result["status"],
+                    "triggers": result["triggers"],
+                    "traceDigest": trace_digest,
+                }
+                result["alertDelivery"] = self._notifier.notify(alert)
             (run_root / "run.json").write_bytes(canonical_json_bytes(result) + b"\n")
         except Exception:
             with self._mutex:

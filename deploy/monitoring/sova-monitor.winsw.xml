@@ -1,0 +1,12 @@
+<service>
+  <id>sova-monitor</id>
+  <name>SOVA OSS Continuous Monitor</name>
+  <description>Runs explicitly configured SOVA behavioral checks and acknowledged alerts.</description>
+  <executable>C:\Program Files\SOVA\sova.exe</executable>
+  <arguments>monitor serve C:\ProgramData\SOVA\jobs.json C:\ProgramData\SOVA\state --workspace C:\ProgramData\SOVA\workspace --alert-webhook %SOVA_ALERT_WEBHOOK% --alert-secret-env SOVA_ALERT_SECRET</arguments>
+  <startmode>Automatic</startmode>
+  <onfailure action="restart" delay="5 sec" />
+  <resetfailure>1 hour</resetfailure>
+  <stoptimeout>30 sec</stoptimeout>
+  <log mode="roll-by-size"><sizeThreshold>10240</sizeThreshold><keepFiles>8</keepFiles></log>
+</service>
