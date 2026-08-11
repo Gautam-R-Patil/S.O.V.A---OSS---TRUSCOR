@@ -158,7 +158,7 @@ jobs:
           $unitFiles = Get-ChildItem tests/unit/test_*.py |
             Where-Object { $_.Name -lt 'test_held_out_web.py' } |
             ForEach-Object { $_.FullName }
-          uv run --locked python -m pytest tests/compat tests/failure tests/integration tests/performance @unitFiles
+          .venv\Scripts\python.exe -m pytest tests/compat tests/failure tests/integration tests/performance @unitFiles
 
       - name: Run Windows test shard 2
         if: matrix.shard == 'second'
@@ -167,7 +167,7 @@ jobs:
           $unitFiles = Get-ChildItem tests/unit/test_*.py |
             Where-Object { $_.Name -ge 'test_held_out_web.py' } |
             ForEach-Object { $_.FullName }
-          uv run --locked python -m pytest --full-trace @unitFiles
+          .venv\Scripts\python.exe -m pytest --full-trace @unitFiles
 
       - name: Build package
         run: uv build
