@@ -182,7 +182,10 @@ jobs:
           $unitFiles = Get-ChildItem tests/unit/test_*.py |
             Where-Object { $_.Name -lt 'test_held_out_web.py' } |
             ForEach-Object { $_.FullName }
-          .venv\Scripts\python.exe -m pytest tests/compat tests/failure tests/integration tests/performance @unitFiles
+          & .venv\Scripts\python.exe -m pytest tests/compat tests/failure tests/integration tests/performance @unitFiles
+          $testExit = $LASTEXITCODE
+          Write-Output "PYTEST_EXIT=$testExit"
+          exit $testExit
 
       - name: Run Windows test shard 2a1
         if: matrix.shard == 'second-a1'
@@ -196,7 +199,10 @@ jobs:
               $_.Name -ne 'test_topics_18_20_edges.py'
             } |
             ForEach-Object { $_.FullName }
-          .venv\Scripts\python.exe -m pytest @unitFiles
+          & .venv\Scripts\python.exe -m pytest @unitFiles
+          $testExit = $LASTEXITCODE
+          Write-Output "PYTEST_EXIT=$testExit"
+          exit $testExit
 
       - name: Run Windows test shard 2a2
         if: matrix.shard == 'second-a2'
@@ -210,7 +216,10 @@ jobs:
               $_.Name -ne 'test_topics_18_20_edges.py'
             } |
             ForEach-Object { $_.FullName }
-          .venv\Scripts\python.exe -m pytest @unitFiles
+          & .venv\Scripts\python.exe -m pytest @unitFiles
+          $testExit = $LASTEXITCODE
+          Write-Output "PYTEST_EXIT=$testExit"
+          exit $testExit
 
       - name: Run Windows test shard 2b
         if: matrix.shard == 'second-b'
@@ -222,19 +231,28 @@ jobs:
               $_.Name -ne 'test_topics_18_20_edges.py'
             } |
             ForEach-Object { $_.FullName }
-          .venv\Scripts\python.exe -m pytest @unitFiles
+          & .venv\Scripts\python.exe -m pytest @unitFiles
+          $testExit = $LASTEXITCODE
+          Write-Output "PYTEST_EXIT=$testExit"
+          exit $testExit
 
       - name: Run Windows extension interoperability shard
         if: matrix.shard == 'extensions'
         shell: pwsh
         run: |
-          .venv\Scripts\python.exe -m pytest --full-trace tests/unit/test_topic_22_extensions_interop.py
+          & .venv\Scripts\python.exe -m pytest --full-trace tests/unit/test_topic_22_extensions_interop.py
+          $testExit = $LASTEXITCODE
+          Write-Output "PYTEST_EXIT=$testExit"
+          exit $testExit
 
       - name: Run Windows process-control shard
         if: matrix.shard == 'process-control'
         shell: pwsh
         run: |
-          .venv\Scripts\python.exe -m pytest --full-trace tests/unit/test_topics_18_20_edges.py
+          & .venv\Scripts\python.exe -m pytest --full-trace tests/unit/test_topics_18_20_edges.py
+          $testExit = $LASTEXITCODE
+          Write-Output "PYTEST_EXIT=$testExit"
+          exit $testExit
 
       - name: Build package
         run: uv build
