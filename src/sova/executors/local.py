@@ -44,6 +44,14 @@ _BACKGROUND_CLEANUP_ATTEMPTS = 100
 _BACKGROUND_CLEANUP_RETRY_SECONDS = 0.01
 
 
+def _process_creation_flags() -> int:
+    if os.name != "nt":
+        return 0
+    return int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)) | int(
+        getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    )
+
+
 class _CleanupResource(Protocol):
     def cleanup(self) -> None: ...
 
@@ -488,9 +496,7 @@ class RestrictedLocalExecutor:
                 error_code=error.issue.code,
                 limitations=("Secret-provider failures never include secret values.",),
             )
-        creationflags = (
-            int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)) if os.name == "nt" else 0
-        )
+        creationflags = _process_creation_flags()
         return _PreparedProcess(
             (executable, *argv[1:]),
             cwd,
