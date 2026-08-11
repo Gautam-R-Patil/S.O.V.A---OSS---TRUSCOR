@@ -89,27 +89,41 @@ jobs:
         run: uv run --isolated --no-project --python 3.11 --with "$(find dist -name '*.whl' -print -quit)" sova --version
 
   platform:
-    name: Platform (${{ matrix.os }}, Python ${{ matrix.python }})
+    name: Platform (${{ matrix.os }}, Python ${{ matrix.python }}, ${{ matrix.shard }})
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             python: "3.11"
+            shard: all
           - os: ubuntu-latest
             python: "3.12"
+            shard: all
           - os: ubuntu-latest
             python: "3.13"
+            shard: all
           - os: ubuntu-latest
             python: "3.14"
+            shard: all
           - os: windows-latest
             python: "3.11"
+            shard: first
           - os: windows-latest
             python: "3.14"
+            shard: first
+          - os: windows-latest
+            python: "3.11"
+            shard: second
+          - os: windows-latest
+            python: "3.14"
+            shard: second
           - os: macos-latest
             python: "3.11"
+            shard: all
           - os: macos-latest
             python: "3.14"
+            shard: all
     runs-on: ${{ matrix.os }}
     steps:
       - name: Check out repository
@@ -129,23 +143,22 @@ jobs:
         run: uv sync --locked
 
       - name: Run complete test suite
-        if: ${{ !(matrix.os == 'windows-latest' && matrix.python == '3.14') }}
+        if: matrix.shard == 'all'
         run: uv run --locked python -m pytest
 
-      - name: Run Windows Python 3.14 test shard 1
-        if: ${{ matrix.os == 'windows-latest' && matrix.python == '3.14' }}
+      - name: Run Windows test shard 1
+        if: matrix.shard == 'first'
         shell: pwsh
         run: |
-          # The hosted Python 3.14.6 runner sends an unexplained KeyboardInterrupt
-          # to a pytest process after about 66 seconds. Run the same complete set
-          # in two fresh processes; no test is omitted or marked optional.
+          # Each Windows shard receives a fresh hosted runner. Together the two
+          # partitions remain exhaustive; no test is omitted or marked optional.
           $unitFiles = Get-ChildItem tests/unit/test_*.py |
             Where-Object { $_.Name -lt 'test_held_out_web.py' } |
             ForEach-Object { $_.FullName }
           uv run --locked python -m pytest tests/compat tests/failure tests/integration tests/performance @unitFiles
 
-      - name: Run Windows Python 3.14 test shard 2
-        if: ${{ matrix.os == 'windows-latest' && matrix.python == '3.14' }}
+      - name: Run Windows test shard 2
+        if: matrix.shard == 'second'
         shell: pwsh
         run: |
           $unitFiles = Get-ChildItem tests/unit/test_*.py |
