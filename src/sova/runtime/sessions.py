@@ -43,7 +43,10 @@ def _windows_pid_is_alive(pid: int) -> bool:
     if not handle:
         # Only ERROR_INVALID_PARAMETER proves the PID does not exist. Access
         # denial and unknown failures remain live so lease recovery fails closed.
-        return ctypes.get_last_error() != error_invalid_parameter
+        get_last_error = getattr(ctypes, "get_last_error", None)
+        if get_last_error is None:
+            return True
+        return bool(get_last_error() != error_invalid_parameter)
     try:
         exit_code = wintypes.DWORD()
         if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
