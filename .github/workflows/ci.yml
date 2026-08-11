@@ -129,7 +129,29 @@ jobs:
         run: uv sync --locked
 
       - name: Run complete test suite
+        if: ${{ !(matrix.os == 'windows-latest' && matrix.python == '3.14') }}
         run: uv run --locked python -m pytest
+
+      - name: Run Windows Python 3.14 test shard 1
+        if: ${{ matrix.os == 'windows-latest' && matrix.python == '3.14' }}
+        shell: pwsh
+        run: |
+          # The hosted Python 3.14.6 runner sends an unexplained KeyboardInterrupt
+          # to a pytest process after about 66 seconds. Run the same complete set
+          # in two fresh processes; no test is omitted or marked optional.
+          $unitFiles = Get-ChildItem tests/unit/test_*.py |
+            Where-Object { $_.Name -lt 'test_held_out_web.py' } |
+            ForEach-Object { $_.FullName }
+          uv run --locked python -m pytest tests/compat tests/failure tests/integration tests/performance @unitFiles
+
+      - name: Run Windows Python 3.14 test shard 2
+        if: ${{ matrix.os == 'windows-latest' && matrix.python == '3.14' }}
+        shell: pwsh
+        run: |
+          $unitFiles = Get-ChildItem tests/unit/test_*.py |
+            Where-Object { $_.Name -ge 'test_held_out_web.py' } |
+            ForEach-Object { $_.FullName }
+          uv run --locked python -m pytest @unitFiles
 
       - name: Build package
         run: uv build
