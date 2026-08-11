@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import io
+import ssl
 import sys
 import urllib.error
 import urllib.request
@@ -210,6 +211,15 @@ def test_transport_and_fake_failure_normalization(monkeypatch: MonkeyPatch) -> N
 
 
 def test_pinned_transport_success_limit_http_and_network_paths(monkeypatch: MonkeyPatch) -> None:
+    # This is a mandatory no-network unit test. Do not enumerate the host trust
+    # store merely to construct the HTTPS handler before build_opener is faked.
+    fake_tls_context = object()
+    monkeypatch.setattr(
+        ssl,
+        "create_default_context",
+        lambda: fake_tls_context,
+    )
+
     class Response:
         def __init__(self, body: bytes) -> None:
             self.body = body
