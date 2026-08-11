@@ -215,11 +215,20 @@ jobs:
               $_.Name -ne 'test_topic_22_extensions_interop.py' -and
               $_.Name -ne 'test_topics_18_20_edges.py'
             } |
-            ForEach-Object { $_.FullName }
-          & .venv\Scripts\python.exe -m pytest @unitFiles
-          $testExit = $LASTEXITCODE
-          Write-Output "PYTEST_EXIT=$testExit"
-          exit $testExit
+            Sort-Object Name
+          # These modules exercise loopback servers, process control, and runtime
+          # shutdown paths. A fresh interpreter per module makes leaked shutdown
+          # state visible while preserving the exhaustive Windows test set.
+          foreach ($unitFile in $unitFiles) {
+            Write-Output "PYTEST_FILE=$($unitFile.Name)"
+            & .venv\Scripts\python.exe -m pytest --full-trace $unitFile.FullName
+            $testExit = $LASTEXITCODE
+            Write-Output "PYTEST_EXIT=$testExit"
+            if ($testExit -ne 0) {
+              exit $testExit
+            }
+          }
+          exit 0
 
       - name: Run Windows test shard 2b
         if: matrix.shard == 'second-b'
