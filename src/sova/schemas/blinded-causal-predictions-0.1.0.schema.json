@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schema/blinded-causal-predictions/0.1.0",
+  "title": "SOVA blinded causal predictions 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactType", "schemaVersion", "studyId", "taskDigest", "answerCommitment", "method", "answerKeyLoaded", "predictions", "limitations"],
+  "properties": {
+    "artifactType": {"const": "sova.blinded-causal-predictions"},
+    "schemaVersion": {"const": "0.1.0"},
+    "studyId": {"type": "string", "minLength": 1, "maxLength": 256},
+    "taskDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "answerCommitment": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "method": {"const": "sova.paired-intervention-attribution/0.1.0"},
+    "answerKeyLoaded": {"const": false},
+    "predictions": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"$ref": "#/$defs/prediction"}},
+    "limitations": {"type": "array", "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 1024}}
+  },
+  "$defs": {
+    "layer": {"enum": ["base-model", "system-prompt-or-policy", "orchestration", "tool-description-or-implementation", "permission-or-approval", "memory-or-retrieval", "downstream-handoff-or-subagent", "environment-or-external-service"]},
+    "prediction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["caseId", "predictedLayer", "supportedLayers", "confidence", "abstained", "report"],
+      "properties": {
+        "caseId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "predictedLayer": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/layer"}]},
+        "supportedLayers": {"type": "array", "maxItems": 8, "uniqueItems": true, "items": {"$ref": "#/$defs/layer"}},
+        "confidence": {"type": ["string", "null"], "pattern": "^(0(\\.[0-9]+)?|1(\\.0+)?)$"},
+        "abstained": {"type": "boolean"},
+        "report": {"type": "object"}
+      }
+    }
+  }
+}

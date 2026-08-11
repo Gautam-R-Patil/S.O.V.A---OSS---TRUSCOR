@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schema/blinded-causal-score/0.1.0",
+  "title": "SOVA blinded causal score 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactType", "schemaVersion", "studyId", "taskDigest", "answerCommitment",
+    "answerCommitmentVerified", "evaluatedCases", "top1Correct", "top1Accuracy",
+    "top1Interval", "decisionCorrect", "decisionAccuracy", "decisionInterval",
+    "coverage", "selectiveAccuracy", "falseAttributionRate", "expectedAbstentions",
+    "correctAbstentions", "macroF1", "brierScoreSupportedPredictions", "perLayer",
+    "thresholds", "gates", "passed", "reviewer", "answerKeyAttestationPresent",
+    "reviewerKeyPinVerified", "reviewerKeyId",
+    "independentReviewerIdentityCryptographicallyVerified", "errors", "limitations"
+  ],
+  "properties": {
+    "artifactType": {"const": "sova.blinded-causal-score"},
+    "schemaVersion": {"const": "0.1.0"},
+    "studyId": {"type": "string", "minLength": 1, "maxLength": 256},
+    "taskDigest": {"$ref": "#/$defs/digest"},
+    "answerCommitment": {"$ref": "#/$defs/digest"},
+    "answerCommitmentVerified": {"const": true},
+    "evaluatedCases": {"$ref": "#/$defs/count"},
+    "top1Correct": {"$ref": "#/$defs/count"},
+    "top1Accuracy": {"$ref": "#/$defs/ratioString"},
+    "top1Interval": {"$ref": "#/$defs/interval"},
+    "decisionCorrect": {"$ref": "#/$defs/count"},
+    "decisionAccuracy": {"$ref": "#/$defs/ratioString"},
+    "decisionInterval": {"$ref": "#/$defs/interval"},
+    "coverage": {"$ref": "#/$defs/ratioString"},
+    "selectiveAccuracy": {"$ref": "#/$defs/ratioString"},
+    "falseAttributionRate": {"$ref": "#/$defs/ratioString"},
+    "expectedAbstentions": {"$ref": "#/$defs/count"},
+    "correctAbstentions": {"$ref": "#/$defs/count"},
+    "macroF1": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ratioString"}]},
+    "brierScoreSupportedPredictions": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ratioString"}]},
+    "perLayer": {
+      "type": "array", "minItems": 8, "maxItems": 8,
+      "items": {"$ref": "#/$defs/layerScore"}
+    },
+    "thresholds": {"$ref": "#/$defs/thresholds"},
+    "gates": {"$ref": "#/$defs/gates"},
+    "passed": {"type": "boolean"},
+    "reviewer": {"$ref": "#/$defs/reviewer"},
+    "answerKeyAttestationPresent": {"type": "boolean"},
+    "reviewerKeyPinVerified": {"type": "boolean"},
+    "reviewerKeyId": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/digest"}]},
+    "independentReviewerIdentityCryptographicallyVerified": {"const": false},
+    "errors": {
+      "type": "array", "maxItems": 10000,
+      "items": {"$ref": "#/$defs/error"}
+    },
+    "limitations": {
+      "type": "array", "minItems": 1, "maxItems": 64,
+      "items": {"type": "string", "minLength": 1, "maxLength": 1024}
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "ratioString": {"type": "string", "pattern": "^(0(\\.[0-9]+)?|1(\\.0+)?)$"},
+    "ratio": {
+      "oneOf": [
+        {"type": "number", "minimum": 0, "maximum": 1},
+        {"$ref": "#/$defs/ratioString"}
+      ]
+    },
+    "layer": {
+      "enum": [
+        "base-model", "system-prompt-or-policy", "orchestration",
+        "tool-description-or-implementation", "permission-or-approval",
+        "memory-or-retrieval", "downstream-handoff-or-subagent",
+        "environment-or-external-service"
+      ]
+    },
+    "interval": {
+      "type": "object", "additionalProperties": false,
+      "required": ["method", "low", "high"],
+      "properties": {
+        "method": {"const": "wilson-95"},
+        "low": {"$ref": "#/$defs/ratioString"},
+        "high": {"$ref": "#/$defs/ratioString"}
+      }
+    },
+    "thresholds": {
+      "type": "object", "additionalProperties": false,
+      "required": ["minimumCases", "minimumDecisionAccuracy", "maximumFalseAttributionRate", "minimumCoverage"],
+      "properties": {
+        "minimumCases": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "minimumDecisionAccuracy": {"$ref": "#/$defs/ratio"},
+        "maximumFalseAttributionRate": {"$ref": "#/$defs/ratio"},
+        "minimumCoverage": {"$ref": "#/$defs/ratio"}
+      }
+    },
+    "gates": {
+      "type": "object", "additionalProperties": false,
+      "required": ["minimumCases", "minimumDecisionAccuracy", "maximumFalseAttributionRate", "minimumCoverage"],
+      "properties": {
+        "minimumCases": {"type": "boolean"},
+        "minimumDecisionAccuracy": {"type": "boolean"},
+        "maximumFalseAttributionRate": {"type": "boolean"},
+        "minimumCoverage": {"type": "boolean"}
+      }
+    },
+    "reviewer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "name", "organization", "independenceDeclared"],
+      "properties": {
+        "kind": {"type": "string", "minLength": 1, "maxLength": 128},
+        "name": {"type": "string", "minLength": 1, "maxLength": 256},
+        "organization": {"type": "string", "minLength": 1, "maxLength": 256},
+        "independenceDeclared": {"type": "boolean"}
+      }
+    },
+    "layerScore": {
+      "type": "object", "additionalProperties": false,
+      "required": ["layer", "truePositive", "falsePositive", "falseNegative", "precision", "recall", "f1"],
+      "properties": {
+        "layer": {"$ref": "#/$defs/layer"},
+        "truePositive": {"$ref": "#/$defs/count"},
+        "falsePositive": {"$ref": "#/$defs/count"},
+        "falseNegative": {"$ref": "#/$defs/count"},
+        "precision": {"$ref": "#/$defs/ratioString"},
+        "recall": {"$ref": "#/$defs/ratioString"},
+        "f1": {"$ref": "#/$defs/ratioString"}
+      }
+    },
+    "error": {
+      "type": "object", "additionalProperties": false,
+      "required": ["caseId", "groundTruth", "expectedAbstention", "predictedLayer"],
+      "properties": {
+        "caseId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "groundTruth": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": {"$ref": "#/$defs/layer"}},
+        "expectedAbstention": {"type": "boolean"},
+        "predictedLayer": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/layer"}]}
+      }
+    }
+  }
+}

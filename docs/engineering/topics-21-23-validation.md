@@ -44,6 +44,11 @@ module or any affected function name enters `src/sova`; the exception expires
 as soon as a compatible fixed release is available. This is an applicability
 decision, not a claim that the installed dependency contains no known issue.
 
+**Resolution (2026-08-11):** stable `cryptography 50.0.0` is now available.
+SOVA upgraded its runtime constraint and lock, removed the CI audit exception,
+and re-ran the complete compatibility and dependency-audit gates. The paragraph
+above remains as the historical record of the earlier validation.
+
 The skipped test is the optional official Codex subscription lane. Its visible
 reason was `Not logged in`; it is not a mandatory product dependency. No live
 provider call, paid service, account creation, credential inspection, or model

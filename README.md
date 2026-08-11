@@ -419,7 +419,9 @@ The pre-alpha now includes:
   `unsupported`);
 - three separately named replay operations: inert playback, fresh controlled
   re-execution, and repeated semantic reproduction;
-- side-by-side, scrubbable, XSS-safe trace visualization;
+- an evidence-native, XSS-safe replay application with play/pause, speed,
+  sensor lanes, search, recorded-link navigation, synchronized comparison, and
+  a bounded integrity-checked loopback live tail;
 - numerator/denominator, Wilson uncertainty, condition sensitivity, and
   optional calibrated-judge reporting;
 - a bounded MCP stdio client, pinned open-source launch recipes, capability
@@ -462,6 +464,10 @@ The pre-alpha now includes:
   turns over one target-bound opaque browser identity, share only redacted
   observations, and produce signed coordinator and participant traces plus a
   portable aggregate capsule.
+- a three-phase blinded causal-validation protocol with label-free frozen
+  predictions, committed and optionally DSSE-pinned answer keys, stochastic
+  CPU-only fixtures, abstention-aware metrics, and explicit external-study
+  limits.
 
 These are implemented engineering capabilities, not a claim that the current
 generic search algorithm is novel or superior on real systems.
@@ -558,6 +564,7 @@ sova verify ./run.sova-trace
 sova playback ./run.sova-trace
 sova replay modes
 sova replay timeline ./run.sova-trace ./replay.html --comparison ./fresh-run.sova-trace
+sova replay serve ./run.sova-trace --duration-seconds 30
 sova replay study ./run.sova-trace ./trial-1.sova-trace ./trial-2.sova-trace
 
 # Inspect pinned external-backend receipts and run the inert search comparison
@@ -569,6 +576,9 @@ sova forensics reconstruct ./incident.sova-trace
 sova forensics attribute ./counterfactual-study.json
 sova forensics browser-counterfactual ./target.json ./browser-study.json ./cf-output
 sova forensics benchmark
+sova forensics blind-fixture ./task.json ./.sova/private/answer-key.json
+sova forensics blind-run ./task.json ./predictions.json
+sova forensics blind-score ./task.json ./predictions.json ./.sova/private/answer-key.json ./score.json
 
 # Build watermarked self-assessment evidence and interoperable SARIF
 sova evidence ./evidence.json --format technical
@@ -890,7 +900,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Persistent browser sessions | Exact-target-bound opaque profiles, cross-process exclusive leases, bounded stale recovery, manual headful authentication/CAPTCHA handoff, campaign reuse, and installed-Chrome two-process fixture persistence are implemented; profile state remains sensitive local executor material, is not SOVA-encrypted, and is never embedded in capsules or traces |
 | MELRA/CUA adapters | MELRA `0.3.0-alpha.10` browser/terminal/computer probe and same-process session reuse passed live; checksum-pinned CUA `0.12.6` bounded reads passed, while live desktop mutation remains visibly blocked on this runner |
 | Sleeper demonstration | Implemented with named narrow baselines, two-dimensional search, signed discovery/reproduction traces, `.sova`, independent offline verification, and reset evidence |
-| `sova forensics` | Evidence-linked reconstruction, reviewed-trial attribution, and repeated authorized real-browser message-removal interventions with signed evidence; general causal accuracy remains unproven |
+| `sova forensics` | Evidence-linked reconstruction, reviewed-trial attribution, repeated authorized real-browser message-removal interventions, and a strict blinded task/prediction/score protocol with commitment and optional reviewer-key verification; the bundled stochastic study passes its declared software-validation gates, while real-system causal accuracy and reviewer independence remain externally unproven |
 | `sova case build` | Exact trace/capsule binding plus one offline forensic, replay, evidence, monitoring, and blocked contribution-preview workspace; no re-execution, network, upload, or automatic disclosure |
 | `sova evidence`, `adjudicate`, and `disclose` | Watermarked evidence, SARIF projection/import, bounded scanner labels, human-gated local disclosure preparation, and four report views implemented in [ADR-0020](./docs/decisions/0020-bounded-evidence-adjudication-disclosure.md) |
 | `sova compose` | Typed metadata-only graph, four bounded search strategies, fresh-evidence minimization, element-removal attribution, portable capsule fragment, and deterministic composition-only fixture implemented in [ADR-0021](./docs/decisions/0021-bounded-composition-only-search.md); comparative search superiority remains unproven |

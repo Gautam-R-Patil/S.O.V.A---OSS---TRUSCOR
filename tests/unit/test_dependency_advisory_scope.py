@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Regression guards for narrowly scoped dependency-advisory decisions."""
+"""Regression guards for previously relevant dependency-advisory surfaces."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def test_pkcs7_decryption_advisory_surface_is_absent_from_shipped_source() -> None:
-    """Keep GHSA-g6cj-pr64-35w5 unreachable while its audit exception exists."""
+    """Keep unused PKCS#7 decryption out after retiring the former exception."""
     source_root = Path(__file__).resolve().parents[2] / "src" / "sova"
     forbidden = (
         "cryptography.hazmat.primitives.serialization.pkcs7",

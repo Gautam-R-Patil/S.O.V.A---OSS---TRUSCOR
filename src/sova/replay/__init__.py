@@ -18,6 +18,12 @@ from sova.replay.model import (
 )
 from sova.replay.render import render_timeline_html
 from sova.replay.semantic import calibrate_judge, semantic_reproduction_study, wilson_interval
+from sova.replay.service import (
+    ReplayHTTPService,
+    ReplayServiceConfig,
+    ReplaySnapshot,
+    read_replay_snapshot,
+)
 from sova.replay.verification import verify_artifact
 
 __all__ = [
@@ -26,7 +32,10 @@ __all__ = [
     "ConditionDrift",
     "ControlledReexecutionReport",
     "JudgeCalibration",
+    "ReplayHTTPService",
     "ReplayMode",
+    "ReplayServiceConfig",
+    "ReplaySnapshot",
     "ReproductionClass",
     "SemanticReproductionReport",
     "SemanticTrial",
@@ -35,6 +44,7 @@ __all__ = [
     "VerificationState",
     "calibrate_judge",
     "controlled_reexecute",
+    "read_replay_snapshot",
     "render_timeline_html",
     "semantic_reproduction_study",
     "verify_artifact",

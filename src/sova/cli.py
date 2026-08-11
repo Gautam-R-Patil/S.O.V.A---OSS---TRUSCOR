@@ -77,11 +77,17 @@ from sova.forensics import (
     CausalLayer,
     CounterfactualTrial,
     assess_counterfactuals,
+    blinded_study_from_mapping,
     browser_counterfactual_from_mapping,
+    create_blinded_reviewer_keypair,
+    create_stochastic_blinded_fixture,
     reconstruct_events,
     reconstruct_trace,
     run_attribution_ground_truth_fixture,
+    run_blinded_attribution_study,
     run_browser_counterfactual_study,
+    score_blinded_attribution_study,
+    sign_blinded_answer_key,
 )
 from sova.formats import (
     PackageReader,
@@ -152,7 +158,9 @@ from sova.rehearsal import (
 )
 from sova.release import verify_checksums, write_checksums, write_cyclonedx_sbom
 from sova.replay import (
+    ReplayHTTPService,
     ReplayMode,
+    ReplayServiceConfig,
     VerificationState,
     render_timeline_html,
     semantic_reproduction_study,
@@ -181,6 +189,9 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
     from sova.targets import TargetManifest
+
+_MIN_REPLAY_SERVICE_DURATION = 0.1
+_MAX_REPLAY_SERVICE_DURATION = 86_400
 
 
 def _path(value: str) -> Path:
@@ -463,6 +474,17 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     replay_timeline.add_argument("--comparison", type=_path)
     replay_timeline.add_argument("--counterfactual")
     replay_timeline.set_defaults(handler=_replay_timeline)
+    replay_serve = replay_commands.add_parser(
+        "serve", help="serve the inert replay application and a live trace tail on loopback"
+    )
+    replay_serve.add_argument("source", type=_path)
+    replay_serve.add_argument("--port", type=int, default=0)
+    replay_serve.add_argument(
+        "--duration-seconds",
+        type=float,
+        help="optional bounded service duration; otherwise stop with Ctrl-C",
+    )
+    replay_serve.set_defaults(handler=_replay_serve)
     replay_study = replay_commands.add_parser(
         "study", help="measure observable-outcome reproduction across fresh traces"
     )
@@ -746,6 +768,46 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     browser_cf_parser.add_argument("--package-runner", type=_path)
     browser_cf_parser.add_argument("--browser-executable", type=_path)
     browser_cf_parser.set_defaults(handler=_forensics_browser_counterfactual)
+    blind_fixture = forensics_commands.add_parser(
+        "blind-fixture",
+        help="create a reproducible stochastic fixture and separate committed answer key",
+    )
+    blind_fixture.add_argument("task", type=_path)
+    blind_fixture.add_argument("answer_key", type=_path)
+    blind_fixture.add_argument("--seed", type=int, default=20260809)
+    blind_fixture.add_argument("--cases", type=int, default=16)
+    blind_fixture.add_argument("--trials-per-layer", type=int, default=16)
+    blind_fixture.set_defaults(handler=_forensics_blind_fixture)
+    blind_run = forensics_commands.add_parser(
+        "blind-run", help="run attribution without loading the committed answer key"
+    )
+    blind_run.add_argument("task", type=_path)
+    blind_run.add_argument("predictions", type=_path)
+    blind_run.set_defaults(handler=_forensics_blind_run)
+    blind_score = forensics_commands.add_parser(
+        "blind-score", help="verify the answer commitment and score frozen predictions"
+    )
+    blind_score.add_argument("task", type=_path)
+    blind_score.add_argument("predictions", type=_path)
+    blind_score.add_argument("answer_key", type=_path)
+    blind_score.add_argument("output", type=_path)
+    blind_score.add_argument("--reviewer-public-key", type=_path)
+    blind_score.add_argument("--required-reviewer-key-id")
+    blind_score.set_defaults(handler=_forensics_blind_score)
+    blind_keygen = forensics_commands.add_parser(
+        "blind-keygen", help="create separate raw Ed25519 reviewer key files"
+    )
+    blind_keygen.add_argument("private_key", type=_path)
+    blind_keygen.add_argument("public_key", type=_path)
+    blind_keygen.set_defaults(handler=_forensics_blind_keygen)
+    blind_sign = forensics_commands.add_parser(
+        "blind-sign-key", help="DSSE-sign a frozen answer key with reviewer-held key files"
+    )
+    blind_sign.add_argument("answer_key", type=_path)
+    blind_sign.add_argument("private_key", type=_path)
+    blind_sign.add_argument("public_key", type=_path)
+    blind_sign.add_argument("output", type=_path)
+    blind_sign.set_defaults(handler=_forensics_blind_sign_key)
 
     evidence_parser = commands.add_parser(
         "evidence", help="build a bounded, watermarked self-assessment evidence bundle"
@@ -1913,6 +1975,39 @@ def _replay_timeline(args: argparse.Namespace) -> int:
     return 0
 
 
+def _replay_serve(args: argparse.Namespace) -> int:
+    duration = args.duration_seconds
+    if duration is not None and not (
+        _MIN_REPLAY_SERVICE_DURATION <= duration <= _MAX_REPLAY_SERVICE_DURATION
+    ):
+        raise FormatError(
+            "SOVA-REPLAY-SERVICE-DURATION",
+            "replay service duration must be between 0.1 seconds and one day",
+        )
+    service = ReplayHTTPService(ReplayServiceConfig(source=args.source, port=args.port)).start()
+    report = {
+        "artifactType": "sova.replay-service-started",
+        "schemaVersion": "0.1.0",
+        "url": service.url,
+        "loopbackOnly": True,
+        "executesRecordedActions": False,
+        "productionHttpServer": False,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    sys.stdout.flush()
+    try:
+        if duration is None:
+            while True:
+                threading.Event().wait(1)
+        else:
+            threading.Event().wait(duration)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        service.stop()
+    return 0
+
+
 def _replay_study(args: argparse.Namespace) -> int:
     conditions = tuple(args.condition) if args.condition else None
     report = semantic_reproduction_study(
@@ -2697,6 +2792,123 @@ def _forensics_browser_counterfactual(args: argparse.Namespace) -> int:
                 "report": str(artifacts.report),
                 "capsule": str(artifacts.capsule),
                 "traces": [str(path) for path in artifacts.traces],
+            }
+        )
+        + b"\n"
+    )
+    return 0
+
+
+def _write_all_descriptor(descriptor: int, content: bytes) -> None:
+    offset = 0
+    while offset < len(content):
+        written = os.write(descriptor, content[offset:])
+        if written <= 0:
+            raise OSError
+        offset += written
+    os.fsync(descriptor)
+
+
+def _write_new_document(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor: int | None = None
+    created = False
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+        descriptor = os.open(path, flags, 0o644)
+        created = True
+        _write_all_descriptor(descriptor, canonical_json_bytes(value) + b"\n")
+    except FileExistsError as error:
+        raise FormatError("SOVA-CLI-DESTINATION", "destination already exists") from error
+    except BaseException:
+        if descriptor is not None:
+            os.close(descriptor)
+            descriptor = None
+        if created:
+            path.unlink(missing_ok=True)
+        raise
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
+def _forensics_blind_fixture(args: argparse.Namespace) -> int:
+    task, key = create_stochastic_blinded_fixture(
+        seed=args.seed,
+        case_count=args.cases,
+        trials_per_layer=args.trials_per_layer,
+    )
+    if args.task.resolve() == args.answer_key.resolve():
+        raise FormatError(
+            "SOVA-BLIND-SEPARATION", "task and answer key require separate destinations"
+        )
+    task_written = False
+    try:
+        _write_new_document(args.task, task)
+        task_written = True
+        _write_new_document(args.answer_key, key)
+    except BaseException:
+        if task_written:
+            args.task.unlink(missing_ok=True)
+        raise
+    sys.stdout.buffer.write(
+        canonical_json_bytes(
+            {
+                "artifactType": "sova.blinded-causal-fixture-created",
+                "task": str(args.task),
+                "answerKey": str(args.answer_key),
+                "answerKeyLoadedDuringPrediction": False,
+                "realAgentEvidence": False,
+            }
+        )
+        + b"\n"
+    )
+    return 0
+
+
+def _forensics_blind_run(args: argparse.Namespace) -> int:
+    study = blinded_study_from_mapping(_load_object(args.task))
+    predictions = run_blinded_attribution_study(study)
+    _write_new_document(args.predictions, predictions)
+    sys.stdout.buffer.write(canonical_json_bytes(predictions) + b"\n")
+    return 0
+
+
+def _forensics_blind_score(args: argparse.Namespace) -> int:
+    study = blinded_study_from_mapping(_load_object(args.task))
+    result = score_blinded_attribution_study(
+        study,
+        _load_object(args.predictions),
+        _load_object(args.answer_key),
+        reviewer_public_key=(
+            args.reviewer_public_key.read_bytes() if args.reviewer_public_key is not None else None
+        ),
+        required_reviewer_key_id=args.required_reviewer_key_id,
+    )
+    _write_new_document(args.output, result)
+    sys.stdout.buffer.write(canonical_json_bytes(result) + b"\n")
+    return 0 if result["passed"] else 3
+
+
+def _forensics_blind_keygen(args: argparse.Namespace) -> int:
+    result = create_blinded_reviewer_keypair(args.private_key, args.public_key)
+    sys.stdout.buffer.write(canonical_json_bytes(result) + b"\n")
+    return 0
+
+
+def _forensics_blind_sign_key(args: argparse.Namespace) -> int:
+    signed = sign_blinded_answer_key(
+        _load_object(args.answer_key),
+        args.private_key.read_bytes(),
+        args.public_key.read_bytes(),
+    )
+    _write_new_document(args.output, signed)
+    sys.stdout.buffer.write(
+        canonical_json_bytes(
+            {
+                "artifactType": "sova.blinded-causal-answer-key-signed",
+                "output": str(args.output),
+                "privateKeyPrinted": False,
             }
         )
         + b"\n"

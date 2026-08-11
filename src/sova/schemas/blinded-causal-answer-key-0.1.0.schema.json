@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schema/blinded-causal-answer-key/0.1.0",
+  "title": "SOVA blinded causal answer key 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactType", "schemaVersion", "studyId", "taskDigest", "answerCommitment", "labels", "reviewer", "attestation"],
+  "properties": {
+    "artifactType": {"const": "sova.blinded-causal-answer-key"},
+    "schemaVersion": {"const": "0.1.0"},
+    "studyId": {"type": "string", "minLength": 1, "maxLength": 256},
+    "taskDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "answerCommitment": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "labels": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"$ref": "#/$defs/label"}},
+    "reviewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "organization", "independenceDeclared"],
+      "properties": {
+        "kind": {"type": "string", "minLength": 1, "maxLength": 128},
+        "name": {"type": "string", "minLength": 1, "maxLength": 256},
+        "organization": {"type": "string", "minLength": 1, "maxLength": 256},
+        "independenceDeclared": {"type": "boolean"}
+      }
+    },
+    "attestation": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/dsse"}]}
+  },
+  "$defs": {
+    "layer": {"enum": ["base-model", "system-prompt-or-policy", "orchestration", "tool-description-or-implementation", "permission-or-approval", "memory-or-retrieval", "downstream-handoff-or-subagent", "environment-or-external-service"]},
+    "label": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["caseId", "groundTruth", "expectedAbstention"],
+      "properties": {
+        "caseId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "groundTruth": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": {"$ref": "#/$defs/layer"}},
+        "expectedAbstention": {"type": "boolean"}
+      }
+    },
+    "dsse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["payloadType", "payload", "signatures"],
+      "properties": {
+        "payloadType": {"const": "application/vnd.sova.blinded-causal-answer-key+json;version=0.1"},
+        "payload": {"type": "string", "minLength": 1, "maxLength": 16777216},
+        "signatures": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["keyid", "sig"], "properties": {"keyid": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "sig": {"type": "string", "minLength": 1, "maxLength": 256}}}}
+      }
+    }
+  }
+}

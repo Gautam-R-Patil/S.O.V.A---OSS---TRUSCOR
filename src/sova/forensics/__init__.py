@@ -8,6 +8,16 @@ from sova.forensics.benchmark import (
     evaluate_attribution_benchmark,
     passive_frequency_ranking,
 )
+from sova.forensics.blinded import (
+    BlindedCase,
+    BlindedStudy,
+    blinded_study_from_mapping,
+    create_blinded_reviewer_keypair,
+    create_stochastic_blinded_fixture,
+    run_blinded_attribution_study,
+    score_blinded_attribution_study,
+    sign_blinded_answer_key,
+)
 from sova.forensics.browser_counterfactual import (
     BrowserCounterfactualArtifacts,
     BrowserCounterfactualStudy,
@@ -31,6 +41,8 @@ __all__ = [
     "AttributionBenchmarkResult",
     "AttributionReport",
     "AttributionState",
+    "BlindedCase",
+    "BlindedStudy",
     "BrowserCounterfactualArtifacts",
     "BrowserCounterfactualStudy",
     "CausalLayer",
@@ -39,11 +51,17 @@ __all__ = [
     "ReconstructionReport",
     "TimelineEntry",
     "assess_counterfactuals",
+    "blinded_study_from_mapping",
     "browser_counterfactual_from_mapping",
+    "create_blinded_reviewer_keypair",
+    "create_stochastic_blinded_fixture",
     "evaluate_attribution_benchmark",
     "passive_frequency_ranking",
     "reconstruct_events",
     "reconstruct_trace",
     "run_attribution_ground_truth_fixture",
+    "run_blinded_attribution_study",
     "run_browser_counterfactual_study",
+    "score_blinded_attribution_study",
+    "sign_blinded_answer_key",
 ]

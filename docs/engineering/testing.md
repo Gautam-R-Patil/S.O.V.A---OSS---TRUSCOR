@@ -76,6 +76,21 @@ non-overlap, kernel-lock, interrupted-state recovery, cancellation, signed
 evidence, and report/history retention tests. Both mandatory lanes use only
 loopback or local filesystem fixtures.
 
+The evidence-replay lane adds sealed/live-prefix separation, incomplete-line
+tolerance, schema/hash/sequence/identifier/parent/redaction rejection, source
+and event limits, symlink refusal, hostile HTML/script payloads, exact Host
+checks, capability routes, SSE resume/keepalive/sealing, client limits, and
+read-only HTTP behavior. A real Chrome acceptance run separately checks
+play/pause, speed, filtering, recorded-link navigation, layout, and console
+errors; it does not replace the offline hostile-input suite.
+
+The blinded-causal lane adds exact task/key/prediction/score schemas, malformed
+trial and label matrices, stochastic paired interventions, frozen prediction
+separation, commitment substitution rejection, wrong-prediction and full-
+abstention metrics, DSSE key pinning, Windows binary-exact key persistence,
+partial-key rollback, and CLI overwrite refusal. Its built-in fixture is
+software-validation evidence rather than real-agent causal accuracy.
+
 ## Determinism
 
 - The default seed is `20260729`.

@@ -22,6 +22,10 @@ _SCHEMA_FILES = {
     "sova.forensic-reconstruction": "forensic-reconstruction-0.1.0.schema.json",
     "sova.evidence": "evidence-0.1.0.schema.json",
     "sova.composition-report": "composition-report-0.1.0.schema.json",
+    "sova.blinded-causal-study": "blinded-causal-study-0.1.0.schema.json",
+    "sova.blinded-causal-answer-key": "blinded-causal-answer-key-0.1.0.schema.json",
+    "sova.blinded-causal-predictions": "blinded-causal-predictions-0.1.0.schema.json",
+    "sova.blinded-causal-score": "blinded-causal-score-0.1.0.schema.json",
 }
 
 

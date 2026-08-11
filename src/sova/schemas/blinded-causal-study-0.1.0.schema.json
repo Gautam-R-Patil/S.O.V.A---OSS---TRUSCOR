@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schema/blinded-causal-study/0.1.0",
+  "title": "SOVA blinded causal study 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactType", "schemaVersion", "studyId", "title", "randomization", "answerCommitment", "thresholds", "cases", "limitations"],
+  "properties": {
+    "artifactType": {"const": "sova.blinded-causal-study"},
+    "schemaVersion": {"const": "0.1.0"},
+    "studyId": {"type": "string", "minLength": 1, "maxLength": 256},
+    "title": {"type": "string", "minLength": 1, "maxLength": 512},
+    "randomization": {"type": "object", "maxProperties": 32},
+    "answerCommitment": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimumCases", "minimumDecisionAccuracy", "maximumFalseAttributionRate", "minimumCoverage"],
+      "properties": {
+        "minimumCases": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "minimumDecisionAccuracy": {"$ref": "#/$defs/ratio"},
+        "maximumFalseAttributionRate": {"$ref": "#/$defs/ratio"},
+        "minimumCoverage": {"$ref": "#/$defs/ratio"}
+      }
+    },
+    "cases": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"$ref": "#/$defs/case"}},
+    "limitations": {"type": "array", "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 1024}}
+  },
+  "$defs": {
+    "ratio": {"oneOf": [{"type": "number", "minimum": 0, "maximum": 1}, {"type": "string", "pattern": "^(0(\\.[0-9]+)?|1(\\.0+)?)$"}]},
+    "layer": {"enum": ["base-model", "system-prompt-or-policy", "orchestration", "tool-description-or-implementation", "permission-or-approval", "memory-or-retrieval", "downstream-handoff-or-subagent", "environment-or-external-service"]},
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["caseId", "originalTrace", "candidateLayers", "trials"],
+      "properties": {
+        "caseId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "originalTrace": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "candidateLayers": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": {"$ref": "#/$defs/layer"}},
+        "trials": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"$ref": "#/$defs/trial"}}
+      }
+    },
+    "trial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trialId", "layer", "changedLayers", "baselineOutcome", "interventionOutcome", "contextEquivalent", "evidenceComplete", "originalTrace", "counterfactualTrace", "executionStatus", "limitation"],
+      "properties": {
+        "trialId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "layer": {"$ref": "#/$defs/layer"},
+        "changedLayers": {"type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": {"$ref": "#/$defs/layer"}},
+        "baselineOutcome": {"type": ["boolean", "null"]},
+        "interventionOutcome": {"type": ["boolean", "null"]},
+        "contextEquivalent": {"type": "boolean"},
+        "evidenceComplete": {"type": "boolean"},
+        "originalTrace": {"type": ["string", "null"], "maxLength": 1024},
+        "counterfactualTrace": {"type": ["string", "null"], "maxLength": 1024},
+        "executionStatus": {"enum": ["completed", "impossible"]},
+        "limitation": {"type": ["string", "null"], "maxLength": 1024}
+      }
+    }
+  }
+}

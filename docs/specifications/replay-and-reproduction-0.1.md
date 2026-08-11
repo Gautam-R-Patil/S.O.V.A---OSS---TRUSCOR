@@ -80,13 +80,20 @@ labeled cases. Model-judge output is not deterministic execution evidence.
 - `sova playback TRACE`: canonical text event timeline.
 - `sova query TRACE`: filters by family prefix, actor, and sequence interval.
 - `sova replay timeline SOURCE OUTPUT [--comparison TRACE]`: self-contained,
-  inert, scrubbable, side-by-side HTML. Payloads are inserted with
-  `textContent`, not executed as markup.
+  inert, scrubbable, side-by-side HTML with play/pause, speed, sensor lanes,
+  recorded links, search, and synchronized evidence details. Payloads are
+  inserted with `textContent`, not executed as markup.
+- `sova replay serve SOURCE [--port PORT]`: bounded loopback live-tail service
+  with a random capability URL, Host-header pinning, finite SSE responses, and
+  no action-execution endpoint. A live prefix is visibly unsealed until the
+  finalized trace passes full verification.
 - `sova replay study REFERENCE TRIAL... [--condition LABEL]`: machine-readable
   semantic report.
 - `sova replay modes`: machine-readable mode definitions.
 
-Captioned video export is intentionally deferred to Topic 23.
+Captioned Y4M video export is available through `sova replay clip`; the
+interactive evidence application is specified separately in
+[evidence replay application 0.1](./evidence-replay-application-0.1.md).
 
 ## Gates
 

@@ -74,7 +74,7 @@ jobs:
       - name: Audit Python dependencies
         run: |
           uv export --locked --quiet --format requirements.txt --all-groups --no-emit-project --output-file audit-requirements.txt
-          uv run --locked pip-audit --strict --progress-spinner off --cache-dir .cache/pip-audit --requirement audit-requirements.txt --no-deps --disable-pip --ignore-vuln GHSA-g6cj-pr64-35w5
+          uv run --locked pip-audit --strict --progress-spinner off --vulnerability-service osv --requirement audit-requirements.txt --no-deps --disable-pip
 
       - name: Build source and wheel distributions
         run: uv build

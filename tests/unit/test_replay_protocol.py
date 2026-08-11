@@ -132,8 +132,8 @@ def test_visual_timeline_is_inert_scrubbable_filtered_and_xss_safe(tmp_path: Pat
     assert 'type="range"' in rendered
     assert "drawFilters" in rendered
     assert "Inert playback only" in rendered
-    assert "primaryPayload" in rendered
-    assert "comparisonPayload" in rendered
+    assert 'id="lanes"' in rendered
+    assert "Synchronized comparison" in rendered
     assert "</script><script>alert(1)" not in rendered
     assert "\\u003c/script\\u003e" in rendered
     with pytest.raises(FormatError):
@@ -276,7 +276,7 @@ def test_cli_outputs_precise_verify_and_replay_states(
         == 0
     )
     assert capsys.readouterr().out.strip() == str(html_path)
-    assert "comparisonPayload" in html_path.read_text(encoding="utf-8")
+    assert "Synchronized comparison" in html_path.read_text(encoding="utf-8")
     unsupported = tmp_path / "unsupported.bin"
     assert main(["verify", str(unsupported)]) == 4
     assert json.loads(capsys.readouterr().out)["state"] == "unsupported"

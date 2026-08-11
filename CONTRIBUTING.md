@@ -91,7 +91,7 @@ uv run ruff check .
 uv run mypy
 uv run python -m pytest --cov=sova --cov-branch
 uv export --locked --quiet --format requirements.txt --all-groups --no-emit-project --output-file audit-requirements.txt
-uv run pip-audit --strict --cache-dir .cache/pip-audit --requirement audit-requirements.txt --no-deps --disable-pip
+uv run pip-audit --strict --vulnerability-service osv --requirement audit-requirements.txt --no-deps --disable-pip
 uv run python scripts/generate_glossary.py --check
 uv run python scripts/generate_taxonomy.py --check
 uv run python scripts/check_repository.py

@@ -10,9 +10,9 @@ human text or HTML artifact is the command's purpose.
 |---|---|
 | Setup | `init`, `doctor`, `data delete` |
 | Capsule | `inspect`, `validate`, `lint`, `verify`, `migrate`, `compat`, `format`, `hash`, `template`, `pack` |
-| Trace/replay | `playback`, `replay modes`, `replay timeline`, `replay study`, `replay clip`, `query`, `compare`, `export`, `recover-trace` |
+| Trace/replay | `playback`, `replay modes`, `replay timeline`, `replay serve`, `replay study`, `replay clip`, `query`, `compare`, `export`, `recover-trace` |
 | First value | `map`, `check`, `demo`, `safety backends`, `executors receipts` |
-| Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt adaptive-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics browser-counterfactual`, `forensics benchmark`, `evidence`, `case build`, `adjudicate`, `compose` |
+| Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt adaptive-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics browser-counterfactual`, `forensics benchmark`, `forensics blind-fixture`, `forensics blind-run`, `forensics blind-score`, `forensics blind-keygen`, `forensics blind-sign-key`, `evidence`, `case build`, `adjudicate`, `compose` |
 | Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse agent-run`, `rehearse export`, `trace command`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `monitor serve`, `monitor status`, `ci`, `self-check` |
 | Registry/community | `registry init-service`, `registry prepare-upload`, `registry serve`, `registry verify-live-index`, `registry verify`, `sync`, `contribute`, `probe issue`, `probe verify`, `arena run`, `arena agent-run`, `arena chamber`, `arena web`, `arena swarm-web`, `leaderboard build`, `ctf build` |
 | Extensions | `extension discover`, `extension prepare`, `extension run` |
@@ -54,6 +54,18 @@ only that the finite declared candidate set was exhausted.
 
 Trace playback, controlled re-execution, and semantic reproduction are distinct
 operations. No command claims to capture hidden chain-of-thought.
+
+`sova replay serve TRACE` is a foreground, read-only, loopback reference
+service for a sealed trace or its integrity-valid live prefix. It uses a random
+unlogged capability URL, exact Host-header checks, finite SSE updates, and no
+action endpoint. The URL can still leak through browser history or a compromised
+local host, and the bundled HTTP server is not an Internet-production service.
+
+The blinded forensics commands enforce a three-phase task, prediction, and
+scoring workflow. `blind-run` has no answer-key argument. `blind-score` verifies
+the committed answer core and can require a DSSE reviewer-key pin. The supplied
+stochastic fixture validates software and statistics only; it does not establish
+real-agent accuracy or independently verify reviewer identity.
 
 `sova trace command TRACE --working-directory DIR -- EXECUTABLE ARG...` is the
 interactive front door for one local shell-free command. It resolves and

@@ -75,6 +75,15 @@ baseline cases. These test the implementation and its abstention behavior. Real
 model/environment calibration, independent labels, and strongest published
 attribution baselines remain Research Gate 15-B work.
 
+The implemented [blinded causal-validation
+protocol](./blinded-causal-validation-0.1.md) now freezes label-free prediction
+artifacts before commitment-checked scoring, supports DSSE reviewer-key pins,
+reports Wilson intervals, coverage, false attribution, F1, calibration, and
+abstention, and passes a stochastic synthetic fixture. This closes the missing
+software/protocol path, not the external-independent-study gate: the bundled
+fixture is not real-agent evidence, and a key signature does not prove reviewer
+identity or independence.
+
 `sova forensics benchmark` runs five deterministic labeled cases: two clean
 single-layer causes, one confounded case, one stochastic case, and one
 missing-sensor case. The frozen acceptance result has 0.4 raw top-one accuracy,

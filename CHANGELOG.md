@@ -9,8 +9,22 @@ have independent version ledgers.
 
 ## [Unreleased]
 
+### Security
+
+- Upgraded the runtime dependency to `cryptography 50.x` after the fixed stable
+  release became available, retired the temporary PKCS#7 advisory exception,
+  and restored a strict no-ignored-advisory dependency audit.
+
 ### Added
 
+- An evidence-native replay application with play/pause, speed controls,
+  sensor-family lanes, search, causal/correlation navigation, synchronized
+  comparison, hostile-content-safe rendering, integrity-validated live trace
+  prefixes, and a bounded loopback SSE service.
+- A strict three-phase blinded causal-validation protocol with separate
+  label-free tasks and committed answer keys, DSSE reviewer-key pinning,
+  stochastic CPU-only fixtures, abstention-aware metrics and confidence
+  intervals, explicit external-review limits, and four pinned JSON Schemas.
 - A loopback-only self-hosted community reference service with secret-safe token
   initialization, bounded staged uploads, pinned evidence signers, asynchronous
   verification, restart recovery, atomic content-addressed promotion, a
