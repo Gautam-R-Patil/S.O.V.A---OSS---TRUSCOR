@@ -315,7 +315,10 @@ def test_replay_http_head_resume_keepalive_routes_and_client_limit(tmp_path: Pat
 
         status, _headers, keepalive = _request(service.url + "events?after=0")
         assert status == 200 and keepalive == b": keepalive\n\n"
-        assert service._clients.acquire(blocking=False)
+        # The response body can reach the client just before the handler's finally
+        # block releases the slot. Wait for that release before deliberately
+        # occupying the only slot to test the 503 path.
+        assert service._clients.acquire(timeout=2)
         try:
             assert _request(service.url)[0] == 503
         finally:
