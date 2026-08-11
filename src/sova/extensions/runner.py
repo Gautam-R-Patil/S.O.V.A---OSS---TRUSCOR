@@ -109,6 +109,11 @@ class SubprocessExtensionRunner:
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            # Extension processes must not share the controller's Windows
+            # console-control channel. Protocol I/O remains on explicit pipes.
+            creationflags=(
+                int(getattr(subprocess, "CREATE_NO_WINDOW", 0)) if os.name == "nt" else 0
+            ),
         )
         if process.stdin is None or process.stdout is None or process.stderr is None:
             process.kill()
