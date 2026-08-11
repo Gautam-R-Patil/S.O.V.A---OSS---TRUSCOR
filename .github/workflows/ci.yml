@@ -121,6 +121,12 @@ jobs:
           - os: windows-2022
             python: "3.14"
             shard: second
+          - os: windows-2022
+            python: "3.11"
+            shard: extensions
+          - os: windows-2022
+            python: "3.14"
+            shard: extensions
           - os: macos-latest
             python: "3.11"
             shard: all
@@ -153,7 +159,7 @@ jobs:
         if: matrix.shard == 'first'
         shell: pwsh
         run: |
-          # Each Windows shard receives a fresh hosted runner. Together the two
+          # Each Windows shard receives a fresh hosted runner. Together the three
           # partitions remain exhaustive; no test is omitted or marked optional.
           $unitFiles = Get-ChildItem tests/unit/test_*.py |
             Where-Object { $_.Name -lt 'test_held_out_web.py' } |
@@ -165,9 +171,18 @@ jobs:
         shell: pwsh
         run: |
           $unitFiles = Get-ChildItem tests/unit/test_*.py |
-            Where-Object { $_.Name -ge 'test_held_out_web.py' } |
+            Where-Object {
+              $_.Name -ge 'test_held_out_web.py' -and
+              $_.Name -ne 'test_topic_22_extensions_interop.py'
+            } |
             ForEach-Object { $_.FullName }
-          .venv\Scripts\python.exe -m pytest --full-trace @unitFiles
+          .venv\Scripts\python.exe -m pytest @unitFiles
+
+      - name: Run Windows extension interoperability shard
+        if: matrix.shard == 'extensions'
+        shell: pwsh
+        run: |
+          .venv\Scripts\python.exe -m pytest --full-trace tests/unit/test_topic_22_extensions_interop.py
 
       - name: Build package
         run: uv build
