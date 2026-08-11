@@ -165,7 +165,7 @@ def _fixture_window(
 
 
 def _exact_foreground_available(hwnd: int) -> bool:
-    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32 = getattr(ctypes, "WinDLL")("user32", use_last_error=True)  # noqa: B009
     user32.GetForegroundWindow.restype = wintypes.HWND
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
@@ -177,7 +177,7 @@ def _exact_foreground_available(hwnd: int) -> bool:
 
 
 def _window_owner(hwnd: int) -> int:
-    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    user32 = getattr(ctypes, "WinDLL")("user32", use_last_error=True)  # noqa: B009
     owner = wintypes.DWORD()
     user32.GetWindowThreadProcessId(wintypes.HWND(hwnd), ctypes.byref(owner))
     return int(owner.value)
