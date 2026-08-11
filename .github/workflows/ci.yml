@@ -117,10 +117,16 @@ jobs:
             shard: first
           - os: windows-2022
             python: "3.11"
-            shard: second
+            shard: second-a
           - os: windows-2022
             python: "3.14"
-            shard: second
+            shard: second-a
+          - os: windows-2022
+            python: "3.11"
+            shard: second-b
+          - os: windows-2022
+            python: "3.14"
+            shard: second-b
           - os: windows-2022
             python: "3.11"
             shard: extensions
@@ -165,21 +171,34 @@ jobs:
         if: matrix.shard == 'first'
         shell: pwsh
         run: |
-          # Each Windows shard receives a fresh hosted runner. Together the four
+          # Each Windows shard receives a fresh hosted runner. Together the five
           # partitions remain exhaustive; no test is omitted or marked optional.
           $unitFiles = Get-ChildItem tests/unit/test_*.py |
             Where-Object { $_.Name -lt 'test_held_out_web.py' } |
             ForEach-Object { $_.FullName }
           .venv\Scripts\python.exe -m pytest tests/compat tests/failure tests/integration tests/performance @unitFiles
 
-      - name: Run Windows test shard 2
-        if: matrix.shard == 'second'
+      - name: Run Windows test shard 2a
+        if: matrix.shard == 'second-a'
         shell: pwsh
         run: |
           $unitFiles = Get-ChildItem tests/unit/test_*.py |
             Where-Object {
               $_.Name -ge 'test_held_out_web.py' -and
+              $_.Name -lt 'test_topic_23_community.py' -and
               $_.Name -ne 'test_topic_22_extensions_interop.py' -and
+              $_.Name -ne 'test_topics_18_20_edges.py'
+            } |
+            ForEach-Object { $_.FullName }
+          .venv\Scripts\python.exe -m pytest @unitFiles
+
+      - name: Run Windows test shard 2b
+        if: matrix.shard == 'second-b'
+        shell: pwsh
+        run: |
+          $unitFiles = Get-ChildItem tests/unit/test_*.py |
+            Where-Object {
+              $_.Name -ge 'test_topic_23_community.py' -and
               $_.Name -ne 'test_topics_18_20_edges.py'
             } |
             ForEach-Object { $_.FullName }
