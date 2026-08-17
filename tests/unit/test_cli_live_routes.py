@@ -182,6 +182,9 @@ def test_owned_fixture_detonation_routes_approval_and_outputs_artifacts(
     def run(destination: Path, **options: Any) -> Any:
         assert options["package_runner"] == executable
         assert options["browser_executable"] == executable
+        assert options["headless"] is False
+        assert options["record_video"] is True
+        assert options["browser_cache"] == tmp_path / "browser-cache"
         prompt = options["approval_prompt"]
         assert prompt(SimpleNamespace(exact_phrase="APPROVE"), (_intent(),)) == "APPROVE"
         return SimpleNamespace(
@@ -190,6 +193,7 @@ def test_owned_fixture_detonation_routes_approval_and_outputs_artifacts(
             reproduction_trace=destination / "fresh.sova-trace",
             evidence_capsule=destination / "evidence.sova",
             report=destination / "report.json",
+            visual_replays=(destination / "visual-replay-01.webm",),
         )
 
     monkeypatch.setattr(cli, "_detected_path", lambda *_args, **_kwargs: executable)
@@ -198,6 +202,9 @@ def test_owned_fixture_detonation_routes_approval_and_outputs_artifacts(
         destination=tmp_path / "result",
         package_runner=None,
         browser_executable=None,
+        headed=True,
+        record_video=True,
+        playwright_browser_cache=tmp_path / "browser-cache",
     )
     assert cli._detonate_owned_web_fixture(args) == 0
     assert json.loads(capfd.readouterr().out)["status"] == "pass"
@@ -223,6 +230,9 @@ def test_external_browser_detonation_parses_optional_proof_and_failure_state(
 
     def run(received_target: object, _capsule: Path, destination: Path, **options: Any) -> Any:
         assert received_target is target and options["control_proof"] is proof
+        assert options["headless"] is False
+        assert options["record_video"] is True
+        assert options["browser_cache"] == tmp_path / "browser-cache"
         assert (
             options["approval_prompt"](SimpleNamespace(exact_phrase="APPROVE"), (_intent(),))
             == "APPROVE"
@@ -233,6 +243,7 @@ def test_external_browser_detonation_parses_optional_proof_and_failure_state(
             reproduction_trace=destination / "fresh.sova-trace",
             evidence_capsule=destination / "evidence.sova",
             report=destination / "report.json",
+            visual_replays=(destination / "visual-replay-01.webm",),
         )
 
     monkeypatch.setattr(cli, "run_live_browser_assessment", run)
@@ -243,6 +254,9 @@ def test_external_browser_detonation_parses_optional_proof_and_failure_state(
         destination=tmp_path / "result",
         package_runner=None,
         browser_executable=None,
+        headed=True,
+        record_video=True,
+        playwright_browser_cache=tmp_path / "browser-cache",
     )
     assert cli._detonate_browser(args) == 1
     assert json.loads(capfd.readouterr().out)["status"] == "not-confirmed"

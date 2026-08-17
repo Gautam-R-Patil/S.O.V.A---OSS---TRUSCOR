@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import platform
 import secrets
 from collections.abc import Callable
@@ -48,6 +49,7 @@ from sova.trace import TraceReader, generate_ed25519_keypair
 
 if TYPE_CHECKING:
     from sova.executors import Capability
+    from sova.mcp import MCPClient
     from sova.runtime import BrowserProfileLease
     from sova.safety import ActionIntent, ApprovalBatchChallenge
 
@@ -56,6 +58,16 @@ BrowserEventObserver = Callable[[str, dict[str, Any]], None]
 ScenarioBatch = tuple[tuple[str, dict[str, Any]], ...]
 
 _LOOPBACK = frozenset({"localhost", "127.0.0.1", "::1"})
+_MAX_VISUAL_REPLAY_BYTES = 128 * 1024 * 1024
+_MAX_VISUAL_REPLAYS = 4
+_VISUAL_RECORDING_TOOLS = frozenset(
+    {
+        "browser_start_video",
+        "browser_stop_video",
+        "browser_video_chapter",
+        "browser_video_show_actions",
+    }
+)
 
 
 def _channel_observer(
@@ -82,6 +94,80 @@ class LiveBrowserArtifacts:
     evidence_capsule: Path
     report: Path
     status: str
+    visual_replays: tuple[Path, ...] = ()
+
+
+def _collect_visual_replays(destination: Path) -> tuple[Path, ...]:
+    output_path = destination / ".sova" / "playwright-output"
+    if output_path.is_symlink() or not output_path.is_dir():
+        raise FormatError(
+            "SOVA-LIVE-VIDEO-MISSING",
+            "visual replay was requested but the browser output directory is missing",
+        )
+    output = output_path.resolve()
+    candidates = tuple(sorted(output.rglob("*.webm")))
+    if not candidates:
+        raise FormatError(
+            "SOVA-LIVE-VIDEO-MISSING",
+            "visual replay was requested but Playwright produced no finalized WebM recording",
+        )
+    if len(candidates) > _MAX_VISUAL_REPLAYS:
+        raise FormatError("SOVA-LIVE-VIDEO-LIMIT", "too many browser recordings were produced")
+    materialized: list[Path] = []
+    for index, source in enumerate(candidates, 1):
+        if source.is_symlink():
+            raise FormatError("SOVA-LIVE-VIDEO-PATH", "browser recording must not be a link")
+        resolved = source.resolve()
+        try:
+            resolved.relative_to(output)
+        except ValueError as error:
+            raise FormatError(
+                "SOVA-LIVE-VIDEO-PATH",
+                "browser recording escaped the admitted output directory",
+            ) from error
+        if not resolved.is_file():
+            raise FormatError("SOVA-LIVE-VIDEO-PATH", "browser recording is not a regular file")
+        size = resolved.stat().st_size
+        if size <= 0 or size > _MAX_VISUAL_REPLAY_BYTES:
+            raise FormatError(
+                "SOVA-LIVE-VIDEO-LIMIT",
+                "browser recording is empty or exceeds the 128 MiB evidence budget",
+            )
+        with resolved.open("rb") as handle:
+            data = handle.read(_MAX_VISUAL_REPLAY_BYTES + 1)
+        if len(data) != size or len(data) > _MAX_VISUAL_REPLAY_BYTES:
+            raise FormatError(
+                "SOVA-LIVE-VIDEO-LIMIT",
+                "browser recording changed during bounded evidence collection",
+            )
+        target = destination / f"visual-replay-{index:02d}.webm"
+        target.write_bytes(data)
+        materialized.append(target)
+    return tuple(materialized)
+
+
+def _require_visual_recording_tools(client: MCPClient) -> None:
+    available = {tool.name for tool in client.list_tools()}
+    missing = sorted(_VISUAL_RECORDING_TOOLS - available)
+    if missing:
+        raise FormatError(
+            "SOVA-LIVE-VIDEO-UNAVAILABLE",
+            "the pinned browser backend did not advertise the required recording tools",
+            details={"missing": missing},
+        )
+
+
+def _call_visual_recording_tool(
+    client: MCPClient,
+    name: str,
+    arguments: dict[str, Any],
+) -> None:
+    result = client.call_tool(name, arguments, timeout_seconds=30)
+    if result.is_error:
+        raise FormatError(
+            "SOVA-LIVE-VIDEO-FAILED",
+            f"browser recording tool failed: {name}",
+        )
 
 
 def _origin(value: str) -> tuple[str, str]:
@@ -449,7 +535,7 @@ def _fingerprint(
     }
 
 
-def run_live_browser_assessment(  # noqa: PLR0913
+def run_live_browser_assessment(  # noqa: PLR0913, PLR0915 - evidence phases stay explicit
     target: TargetManifest,
     source_capsule: Path,
     destination: Path,
@@ -460,6 +546,9 @@ def run_live_browser_assessment(  # noqa: PLR0913
     control_proof: ControlProof | None = None,
     event_observer: BrowserEventObserver | None = None,
     profile_lease: BrowserProfileLease | None = None,
+    headless: bool = True,
+    record_video: bool = False,
+    browser_cache: Path | None = None,
 ) -> LiveBrowserArtifacts:
     """Run and reproduce a capsule on a real, explicitly authorized website."""
     if profile_lease is not None:
@@ -482,7 +571,8 @@ def run_live_browser_assessment(  # noqa: PLR0913
         "ephemeralProfile": profile_lease is None,
         "profileMode": "ephemeral" if profile_lease is None else "opaque-exclusive-durable",
         "profileEvidence": None if profile_lease is None else profile_lease.trace_mapping(),
-        "headless": True,
+        "headless": headless,
+        "visualRecording": record_video,
         "serviceWorkersBlocked": True,
         "allowedOrigins": list(origins),
         "nativeSandboxClaim": False,
@@ -496,6 +586,9 @@ def run_live_browser_assessment(  # noqa: PLR0913
         allowed_origins=origins,
         profile_directory=(None if profile_lease is None else profile_lease.path_for_executor()),
         profile_vault_root=(None if profile_lease is None else profile_lease.root_for_executor()),
+        headless=headless,
+        record_video=record_video,
+        browser_cache=browser_cache,
     )
     signing_key = generate_ed25519_keypair()
     code_digest = sha256_digest(
@@ -514,6 +607,15 @@ def run_live_browser_assessment(  # noqa: PLR0913
             "license": spec.license,
         }
     ]
+    if record_video:
+        dependencies.append(
+            {
+                "name": "playwright-ffmpeg",
+                "version": "revision-1011",
+                "source": "https://github.com/microsoft/playwright/tree/main/packages/playwright-core",
+                "license": "LGPL-2.1-or-later",
+            }
+        )
     environment = {
         "platform": platform.platform(),
         "python": platform.python_version(),
@@ -567,47 +669,84 @@ def run_live_browser_assessment(  # noqa: PLR0913
             playwright_mappings(allowed_origins=origins),
         ) as executor,
     ):
-        primary_session, primary_approvals = _authorization_for_run(
-            scenario,
-            executor.capabilities(),
-            host=host,
-            proof=proof,
-            containment_digest=containment_digest,
-            approval_prompt=approval_prompt,
-        )
-        primary = run_capsule(
-            source_copy,
-            trace,
-            executor=executor,
-            workspace=destination,
-            authorization_session=primary_session,
-            approvals=primary_approvals,
-            signing_key=signing_key,
-            environment=environment,
-            fingerprints=fingerprints,
-            event_observer=_channel_observer(event_observer, "primary"),
-        )
-        reproduction_session, reproduction_approvals = _authorization_for_run(
-            scenario,
-            executor.capabilities(),
-            host=host,
-            proof=proof,
-            containment_digest=containment_digest,
-            approval_prompt=approval_prompt,
-        )
-        repeated = run_capsule(
-            source_copy,
-            reproduction,
-            executor=executor,
-            workspace=destination,
-            authorization_session=reproduction_session,
-            approvals=reproduction_approvals,
-            source_trace_digest=sha256_digest(trace.read_bytes()),
-            signing_key=signing_key,
-            environment=environment,
-            fingerprints=fingerprints,
-            event_observer=_channel_observer(event_observer, "reproduction"),
-        )
+        recording_started = False
+        try:
+            if record_video:
+                _require_visual_recording_tools(client)
+                _call_visual_recording_tool(
+                    client,
+                    "browser_start_video",
+                    {
+                        "filename": ".sova/playwright-output/sova-browser-session.webm",
+                        "size": {"width": 1280, "height": 720},
+                    },
+                )
+                recording_started = True
+            primary_session, primary_approvals = _authorization_for_run(
+                scenario,
+                executor.capabilities(),
+                host=host,
+                proof=proof,
+                containment_digest=containment_digest,
+                approval_prompt=approval_prompt,
+            )
+            primary = run_capsule(
+                source_copy,
+                trace,
+                executor=executor,
+                workspace=destination,
+                authorization_session=primary_session,
+                approvals=primary_approvals,
+                signing_key=signing_key,
+                environment=environment,
+                fingerprints=fingerprints,
+                event_observer=_channel_observer(event_observer, "primary"),
+            )
+            if record_video:
+                _call_visual_recording_tool(
+                    client,
+                    "browser_video_chapter",
+                    {
+                        "title": "Controlled reproduction",
+                        "description": "Fresh execution of the same portable behavior scenario.",
+                        "duration": 1000,
+                    },
+                )
+                _call_visual_recording_tool(
+                    client,
+                    "browser_video_show_actions",
+                    {"duration": 650, "position": "top-right", "cursor": "pointer"},
+                )
+            reproduction_session, reproduction_approvals = _authorization_for_run(
+                scenario,
+                executor.capabilities(),
+                host=host,
+                proof=proof,
+                containment_digest=containment_digest,
+                approval_prompt=approval_prompt,
+            )
+            repeated = run_capsule(
+                source_copy,
+                reproduction,
+                executor=executor,
+                workspace=destination,
+                authorization_session=reproduction_session,
+                approvals=reproduction_approvals,
+                source_trace_digest=sha256_digest(trace.read_bytes()),
+                signing_key=signing_key,
+                environment=environment,
+                fingerprints=fingerprints,
+                event_observer=_channel_observer(event_observer, "reproduction"),
+            )
+            if record_video:
+                _call_visual_recording_tool(client, "browser_stop_video", {})
+                recording_started = False
+        except BaseException:
+            if recording_started:
+                with contextlib.suppress(Exception):
+                    _call_visual_recording_tool(client, "browser_stop_video", {})
+            raise
+    visual_replays = _collect_visual_replays(destination) if record_video else ()
     primary_verification = TraceReader(trace).verify(require_signature=True)
     reproduction_verification = TraceReader(reproduction).verify(require_signature=True)
     comparison = compare_observable_outcomes(trace, reproduction, kinds=("oracle.completed",))
@@ -628,11 +767,13 @@ def run_live_browser_assessment(  # noqa: PLR0913
         }
     ]
     evidence_manifest["limitations"] = scenario["limitations"]
+    attachments = {"target.json": canonical_json_bytes(target.to_mapping())}
+    attachments.update({path.name: path.read_bytes() for path in visual_replays})
     build_capsule(
         evidence_capsule,
         evidence_manifest,
         scenario=scenario,
-        attachments={"target.json": canonical_json_bytes(target.to_mapping())},
+        attachments=attachments,
         traces=[trace, reproduction],
     )
     status = (
@@ -689,6 +830,18 @@ def run_live_browser_assessment(  # noqa: PLR0913
             "trace": trace.name,
             "reproductionTrace": reproduction.name,
             "evidenceCapsule": evidence_capsule.name,
+            "visualReplays": [
+                {
+                    "path": item.name,
+                    "mediaType": "video/webm",
+                    "digest": sha256_digest(item.read_bytes()),
+                    "size": item.stat().st_size,
+                    "scope": "combined-primary-and-reproduction-browser-session",
+                    "synchronization": "chapter-separated-session-not-event-time-attested",
+                    "operatorOptIn": True,
+                }
+                for item in visual_replays
+            ],
         },
         "claims": {
             "liveBrowserExecuted": True,
@@ -701,6 +854,15 @@ def run_live_browser_assessment(  # noqa: PLR0913
             *scenario["limitations"],
             "Playwright's origin filter is defense in depth, not a standalone security boundary.",
             "A valid trace signature identifies the included key, not an external legal identity.",
+            *(
+                (
+                    "The visual replay records browser pixels for primary and reproduction "
+                    "sessions with a chapter boundary; individual event-to-frame timing is "
+                    "not attested.",
+                )
+                if record_video
+                else ()
+            ),
             *(
                 (
                     "The local browser profile may contain authentication material and is "
@@ -720,16 +882,20 @@ def run_live_browser_assessment(  # noqa: PLR0913
         evidence_capsule,
         report_path,
         status,
+        visual_replays,
     )
 
 
-def run_owned_web_vertical_slice(
+def run_owned_web_vertical_slice(  # noqa: PLR0913 - visual capture policy stays explicit
     destination: Path,
     *,
     package_runner: Path,
     browser_executable: Path,
     approval_prompt: ApprovalPrompt,
     event_observer: BrowserEventObserver | None = None,
+    headless: bool = True,
+    record_video: bool = False,
+    browser_cache: Path | None = None,
 ) -> LiveBrowserArtifacts:
     """Launch the owned HTTP fixture and exercise the complete real browser spine."""
     destination = destination.resolve()
@@ -747,6 +913,9 @@ def run_owned_web_vertical_slice(
                 browser_executable=browser_executable,
                 approval_prompt=approval_prompt,
                 event_observer=event_observer,
+                headless=headless,
+                record_video=record_video,
+                browser_cache=browser_cache,
             )
         finally:
             source.unlink(missing_ok=True)

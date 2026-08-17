@@ -57,12 +57,30 @@ the default workflow.
 The first live runner is deliberately narrow and directly testable:
 
 ```console
-sova detonate owned-web-fixture ./live-browser-proof
+sova detonate owned-web-fixture ./live-browser-proof --headed --record-video \
+  --playwright-browser-cache ./.cache/playwright-browsers
 sova verify --require-signature ./live-browser-proof/run.sova-trace
 sova verify --require-signature ./live-browser-proof/reproduction.sova-trace
 sova inspect ./live-browser-proof/evidence.sova
 sova playback ./live-browser-proof/run.sova-trace
+sova replay capsule ./live-browser-proof/evidence.sova ./live-browser-proof/replay.html
 ```
+
+Video recording is explicit opt-in. Before the first recorded run, install the
+FFmpeg runtime required by the pinned Playwright backend into the same local
+browser cache (PowerShell shown):
+
+```powershell
+$videoCache = (New-Item -ItemType Directory -Force .\.cache\playwright-browsers).FullName
+$env:PLAYWRIGHT_BROWSERS_PATH = $videoCache
+npx.cmd --yes playwright-core@1.62.0-alpha-1783623505000 install ffmpeg
+```
+
+The runtime is Playwright's approximately 1.3 MiB FFmpeg build (LGPL-2.1) and
+is not committed to SOVA. The version above is the transitive runtime used by
+the pinned `@playwright/mcp@0.0.78`; it must be reviewed whenever that pin
+changes. `--playwright-browser-cache` keeps the runtime in a caller-selected
+cache instead of a user-global directory.
 
 SOVA launches a real HTTP server on loopback, starts pinned Playwright MCP with
 an ephemeral headless browser profile, limits admitted navigation to the exact
@@ -71,13 +89,23 @@ exact approval phrase for that batch, issues a separate signed one-use token
 for every action, executes a two-turn planted behavior, judges the final
 accessibility snapshot, repeats the
 scenario with fresh authority, compares the observable oracle result, captures
-accessibility, console, network, and screenshot digest/size sensor evidence, signs
-both traces, and embeds them in an evidence capsule.
+accessibility, console, network, and screenshot digest/size sensor evidence,
+optionally records the headed browser pixels as WebM, signs both traces, and
+embeds the traces and typed visual replay in an evidence capsule.
 
 Raw screenshot pixels are not written into the trace. The adapter validates the
 bounded binary response, computes SHA-256 and byte-size evidence, then discards
 the pixels. This minimizes disclosure risk; it is not visual redaction and does
 not prove that an executor did not retain its own copy.
+
+The optional WebM is intentionally different: it preserves the reviewed
+browser session so a human can watch the interaction. It may contain target
+content, identifiers, or secrets visible on screen, so use isolated accounts,
+review it before export, and apply the declared retention policy. It is
+session/chapter-level visual evidence, not cryptographically attested
+frame-to-event synchronization. `sova replay capsule` verifies every capsule
+object, materializes selected members only in a temporary directory, embeds the
+video in one self-contained inert HTML page, and removes the temporary files.
 
 This proves the live browser/evidence path on SOVA's own target. It is not a VM
 sandbox, a production-site test, a jailbreak-superiority result, or evidence
@@ -95,7 +123,8 @@ sova target challenge website-target.json website-challenge.json
 # Publish the exact token at the proofUrl shown in website-challenge.json.
 sova target prove website-target.json website-challenge.json website-proof.json
 sova detonate browser website-target.json scenario.sova website-proof-output \
-  --control-proof website-proof.json
+  --control-proof website-proof.json --headed --record-video \
+  --playwright-browser-cache ./.cache/playwright-browsers
 ```
 
 `target challenge` makes no network request. `target prove` performs one

@@ -166,10 +166,12 @@ from sova.rehearsal import (
 )
 from sova.release import verify_checksums, write_checksums, write_cyclonedx_sbom
 from sova.replay import (
+    CapsuleReplaySelection,
     ReplayHTTPService,
     ReplayMode,
     ReplayServiceConfig,
     VerificationState,
+    render_capsule_timeline,
     render_timeline_html,
     semantic_reproduction_study,
     verify_artifact,
@@ -386,6 +388,9 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     detonate_fixture.add_argument("destination", type=_path)
     detonate_fixture.add_argument("--package-runner", type=_path)
     detonate_fixture.add_argument("--browser-executable", type=_path)
+    detonate_fixture.add_argument("--playwright-browser-cache", type=_path)
+    detonate_fixture.add_argument("--headed", action="store_true")
+    detonate_fixture.add_argument("--record-video", action="store_true")
     detonate_fixture.set_defaults(handler=_detonate_owned_web_fixture)
     detonate_software_fixture = detonate_commands.add_parser(
         "owned-software-fixture",
@@ -403,6 +408,9 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     detonate_browser.add_argument("--control-proof", type=_path)
     detonate_browser.add_argument("--package-runner", type=_path)
     detonate_browser.add_argument("--browser-executable", type=_path)
+    detonate_browser.add_argument("--playwright-browser-cache", type=_path)
+    detonate_browser.add_argument("--headed", action="store_true")
+    detonate_browser.add_argument("--record-video", action="store_true")
     _add_browser_profile_arguments(detonate_browser)
     detonate_browser.set_defaults(handler=_detonate_browser)
     detonate_software = detonate_commands.add_parser(
@@ -510,7 +518,31 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     replay_timeline.add_argument("destination", type=_path)
     replay_timeline.add_argument("--comparison", type=_path)
     replay_timeline.add_argument("--counterfactual")
+    replay_timeline.add_argument(
+        "--media",
+        type=_path,
+        help="optional reviewed local WebM/MP4 session recording to embed in the replay",
+    )
     replay_timeline.set_defaults(handler=_replay_timeline)
+    replay_capsule = replay_commands.add_parser(
+        "capsule", help="render verified trace and video evidence directly from a .sova capsule"
+    )
+    replay_capsule.add_argument("source", type=_path)
+    replay_capsule.add_argument("destination", type=_path)
+    replay_capsule.add_argument(
+        "--primary-trace", help="exact internal package path shown by sova inspect"
+    )
+    comparison_group = replay_capsule.add_mutually_exclusive_group()
+    comparison_group.add_argument(
+        "--comparison-trace", help="exact internal package path shown by sova inspect"
+    )
+    comparison_group.add_argument("--no-comparison", action="store_true")
+    media_group = replay_capsule.add_mutually_exclusive_group()
+    media_group.add_argument(
+        "--media-object", help="exact internal visual-replay path shown by sova inspect"
+    )
+    media_group.add_argument("--no-media", action="store_true")
+    replay_capsule.set_defaults(handler=_replay_capsule)
     replay_serve = replay_commands.add_parser(
         "serve", help="serve the inert replay application and a live trace tail on loopback"
     )
@@ -1532,6 +1564,9 @@ def _detonate_owned_web_fixture(args: argparse.Namespace) -> int:
         package_runner=package_runner,
         browser_executable=browser,
         approval_prompt=prompt,
+        headless=not args.headed,
+        record_video=args.record_video,
+        browser_cache=args.playwright_browser_cache,
     )
     sys.stdout.write(
         json.dumps(
@@ -1542,6 +1577,7 @@ def _detonate_owned_web_fixture(args: argparse.Namespace) -> int:
                 "reproductionTrace": str(artifacts.reproduction_trace),
                 "evidenceCapsule": str(artifacts.evidence_capsule),
                 "report": str(artifacts.report),
+                "visualReplays": [str(path) for path in artifacts.visual_replays],
             },
             sort_keys=True,
         )
@@ -1612,6 +1648,9 @@ def _detonate_browser(args: argparse.Namespace) -> int:
             approval_prompt=prompt,
             control_proof=proof,
             profile_lease=profile_lease,
+            headless=not args.headed,
+            record_video=args.record_video,
+            browser_cache=args.playwright_browser_cache,
         )
     sys.stdout.buffer.write(
         canonical_json_bytes(
@@ -1621,6 +1660,7 @@ def _detonate_browser(args: argparse.Namespace) -> int:
                 "reproductionTrace": str(artifacts.reproduction_trace),
                 "evidenceCapsule": str(artifacts.evidence_capsule),
                 "report": str(artifacts.report),
+                "visualReplays": [str(path) for path in artifacts.visual_replays],
             }
         )
         + b"\n"
@@ -2045,8 +2085,25 @@ def _replay_timeline(args: argparse.Namespace) -> int:
         args.destination,
         comparison=args.comparison,
         counterfactual=args.counterfactual,
+        media=args.media,
     )
     sys.stdout.write(f"{args.destination}\n")
+    return 0
+
+
+def _replay_capsule(args: argparse.Namespace) -> int:
+    report = render_capsule_timeline(
+        args.source,
+        args.destination,
+        selection=CapsuleReplaySelection(
+            primary_trace=args.primary_trace,
+            comparison_trace=args.comparison_trace,
+            media_object=args.media_object,
+            no_comparison=args.no_comparison,
+            no_media=args.no_media,
+        ),
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
     return 0
 
 

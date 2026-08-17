@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import base64
 import http.client
 import json
 from typing import TYPE_CHECKING, Any
@@ -10,13 +11,16 @@ from urllib.parse import urlsplit
 
 import pytest
 
+from sova.capsule import build_capsule, capsule_manifest_template
 from sova.cli import main
-from sova.formats import canonical_json_bytes
+from sova.formats import PackageReader, PackageWriter, canonical_json_bytes
 from sova.formats.errors import FormatError
 from sova.replay import (
+    CapsuleReplaySelection,
     ReplayHTTPService,
     ReplayServiceConfig,
     read_replay_snapshot,
+    render_capsule_timeline,
     render_timeline_html,
 )
 from sova.replay import service as replay_service
@@ -105,6 +109,251 @@ def test_rich_static_replay_has_controls_lanes_links_and_hostile_content_safety(
     assert "</script><script>alert('fixture')" not in rendered
     assert "\\u003c/script\\u003e\\u003cscript\\u003ealert('fixture')" in rendered
     assert "Content-Security-Policy" in rendered
+
+
+def test_static_replay_embeds_reviewed_browser_video_without_executing_trace_content(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "recorded.sova-trace"
+    _trace(source)
+    media = tmp_path / "browser-session.webm"
+    payload = b"\x1a\x45\xdf\xa3sova-replay-video"
+    media.write_bytes(payload)
+    destination = tmp_path / "recorded-replay.html"
+
+    render_timeline_html(source, destination, media=media)
+
+    rendered = destination.read_text(encoding="utf-8")
+    assert 'id="sessionVideo"' in rendered
+    assert "Recorded browser session" in rendered
+    assert "event-time synchronization is not attested" in rendered
+    assert f"data:video/webm;base64,{base64.b64encode(payload).decode('ascii')}" in rendered
+    assert "media-src 'self' data:" in rendered
+
+
+def test_static_replay_refuses_empty_unsupported_and_linked_media(tmp_path: Path) -> None:
+    source = tmp_path / "media-policy.sova-trace"
+    _trace(source)
+    empty = tmp_path / "empty.webm"
+    empty.write_bytes(b"")
+    unsupported = tmp_path / "recording.html"
+    unsupported.write_text("not video", encoding="utf-8")
+    mislabeled = tmp_path / "mislabeled.webm"
+    mislabeled.write_bytes(b"not webm")
+
+    with pytest.raises(FormatError, match="empty or exceeds"):
+        render_timeline_html(source, tmp_path / "empty.html", media=empty)
+    with pytest.raises(FormatError, match="WebM or MP4"):
+        render_timeline_html(source, tmp_path / "unsupported.html", media=unsupported)
+    with pytest.raises(FormatError, match="EBML signature"):
+        render_timeline_html(source, tmp_path / "mislabeled.html", media=mislabeled)
+
+    real = tmp_path / "real.webm"
+    real.write_bytes(b"video")
+    linked = tmp_path / "linked.webm"
+    try:
+        linked.symlink_to(real)
+    except OSError:
+        return
+    with pytest.raises(FormatError, match="must not be a link"):
+        render_timeline_html(source, tmp_path / "linked.html", media=linked)
+
+
+def test_capsule_replay_selects_run_reproduction_and_embedded_video(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run = tmp_path / "run.sova-trace"
+    reproduction = tmp_path / "reproduction.sova-trace"
+    _trace(run)
+    _trace(reproduction)
+    video = b"\x1a\x45\xdf\xa3capsule-video"
+    manifest = capsule_manifest_template(
+        title="Recorded behavior", summary="Capsule-native replay fixture.", author="Tests"
+    )
+    manifest["license"] = "Apache-2.0"
+    manifest["safety"]["impact"] = "none"
+    capsule = tmp_path / "recorded.sova"
+    build_capsule(
+        capsule,
+        manifest,
+        attachments={"browser-session.webm": video},
+        traces=[reproduction, run],
+    )
+    destination = tmp_path / "capsule-replay.html"
+
+    assert main(["replay", "capsule", str(capsule), str(destination)]) == 0
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["primaryTrace"] == "traces/run.sova-trace"
+    assert report["comparisonTrace"] == "traces/reproduction.sova-trace"
+    assert report["visualReplay"].startswith("blobs/sha256/")
+    assert report["executesRecordedActions"] is False
+    rendered = destination.read_text(encoding="utf-8")
+    assert "Synchronized comparison" in rendered
+    assert f"data:video/webm;base64,{base64.b64encode(video).decode('ascii')}" in rendered
+
+
+def test_capsule_replay_requires_explicit_choices_when_evidence_is_ambiguous(
+    tmp_path: Path,
+) -> None:
+    traces = []
+    for name in ("run.sova-trace", "alternate-a.sova-trace", "alternate-b.sova-trace"):
+        path = tmp_path / name
+        _trace(path)
+        traces.append(path)
+    manifest = capsule_manifest_template(
+        title="Ambiguous evidence", summary="Selection fixture.", author="Tests"
+    )
+    manifest["license"] = "Apache-2.0"
+    manifest["safety"]["impact"] = "none"
+    capsule = tmp_path / "ambiguous.sova"
+    build_capsule(capsule, manifest, traces=traces)
+
+    with pytest.raises(FormatError, match="multiple comparison traces"):
+        render_capsule_timeline(capsule, tmp_path / "ambiguous.html")
+
+    report = render_capsule_timeline(
+        capsule,
+        tmp_path / "selected.html",
+        selection=CapsuleReplaySelection(
+            comparison_trace="traces/alternate-a.sova-trace", no_media=True
+        ),
+    )
+    assert report["comparisonTrace"] == "traces/alternate-a.sova-trace"
+    with pytest.raises(FormatError, match="source capsule"):
+        render_capsule_timeline(capsule, capsule)
+
+
+def test_capsule_replay_selection_and_missing_evidence_fail_closed(tmp_path: Path) -> None:
+    manifest = capsule_manifest_template(
+        title="Selection failures", summary="Exercise exact evidence choices.", author="Tests"
+    )
+    empty_capsule = tmp_path / "no-trace.sova"
+    build_capsule(empty_capsule, manifest)
+    with pytest.raises(FormatError, match="no verified trace"):
+        render_capsule_timeline(empty_capsule, tmp_path / "no-trace.html")
+
+    trace = tmp_path / "run.sova-trace"
+    _trace(trace)
+    capsule = tmp_path / "one-trace.sova"
+    build_capsule(capsule, manifest, traces=[trace])
+    with pytest.raises(FormatError, match="was not found"):
+        render_capsule_timeline(
+            capsule,
+            tmp_path / "missing-selection.html",
+            selection=CapsuleReplaySelection(primary_trace="traces/missing.sova-trace"),
+        )
+    with pytest.raises(FormatError, match="no-comparison"):
+        render_capsule_timeline(
+            capsule,
+            tmp_path / "conflicting-comparison.html",
+            selection=CapsuleReplaySelection(
+                comparison_trace="traces/run.sova-trace", no_comparison=True
+            ),
+        )
+    with pytest.raises(FormatError, match="no-media"):
+        render_capsule_timeline(
+            capsule,
+            tmp_path / "conflicting-media.html",
+            selection=CapsuleReplaySelection(media_object="blobs/missing", no_media=True),
+        )
+    with pytest.raises(FormatError, match="must be different"):
+        render_capsule_timeline(
+            capsule,
+            tmp_path / "same-comparison.html",
+            selection=CapsuleReplaySelection(
+                primary_trace="traces/run.sova-trace",
+                comparison_trace="traces/run.sova-trace",
+            ),
+        )
+
+    report = render_capsule_timeline(
+        capsule,
+        tmp_path / "primary-only.html",
+        selection=CapsuleReplaySelection(no_comparison=True, no_media=True),
+    )
+    assert report["comparisonTrace"] is None
+    assert report["visualReplay"] is None
+
+
+def test_capsule_replay_requires_explicit_media_and_refuses_bad_declared_type(
+    tmp_path: Path,
+) -> None:
+    trace = tmp_path / "run.sova-trace"
+    _trace(trace)
+    manifest = capsule_manifest_template(
+        title="Media selection", summary="Multiple recording fixture.", author="Tests"
+    )
+    capsule = tmp_path / "multiple-media.sova"
+    build_capsule(
+        capsule,
+        manifest,
+        traces=[trace],
+        attachments={
+            "first.webm": b"\x1a\x45\xdf\xa3first",
+            "second.webm": b"\x1a\x45\xdf\xa3second",
+        },
+    )
+    with pytest.raises(FormatError, match="multiple visual recordings"):
+        render_capsule_timeline(capsule, tmp_path / "ambiguous-media.html")
+    media_path = next(
+        item.path
+        for item in PackageReader(capsule).verify("sova.capsule")
+        if item.role == "visual-replay"
+    )
+    report = render_capsule_timeline(
+        capsule,
+        tmp_path / "selected-media.html",
+        selection=CapsuleReplaySelection(media_object=media_path),
+    )
+    assert report["visualReplay"] == media_path
+
+    bad_capsule = tmp_path / "bad-declared-media.sova"
+    writer = PackageWriter(manifest)
+    writer.add_bytes(
+        role="trace",
+        path="traces/run.sova-trace",
+        media_type="application/vnd.sova.trace+zip",
+        data=trace.read_bytes(),
+    )
+    writer.add_bytes(
+        role="visual-replay",
+        path="blobs/sha256/bad-media",
+        media_type="application/octet-stream",
+        data=b"not declared as video",
+    )
+    writer.write(bad_capsule)
+    with pytest.raises(FormatError, match="must declare video/webm or video/mp4"):
+        render_capsule_timeline(bad_capsule, tmp_path / "bad-media.html")
+
+
+def test_replay_media_path_mp4_and_link_guards_are_deterministic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trace = tmp_path / "media-guards.sova-trace"
+    _trace(trace)
+    with pytest.raises(FormatError, match="regular file"):
+        render_timeline_html(trace, tmp_path / "missing.html", media=tmp_path / "missing.webm")
+
+    mp4 = tmp_path / "session.mp4"
+    mp4.write_bytes(b"\x00\x00\x00\x14ftypisom")
+    render_timeline_html(trace, tmp_path / "mp4.html", media=mp4)
+    assert "data:video/mp4;base64" in (tmp_path / "mp4.html").read_text(encoding="utf-8")
+    invalid_mp4 = tmp_path / "invalid.mp4"
+    invalid_mp4.write_bytes(b"not an mp4")
+    with pytest.raises(FormatError, match="ISO base signature"):
+        render_timeline_html(trace, tmp_path / "invalid-mp4.html", media=invalid_mp4)
+
+    linked = tmp_path / "forced-linked.webm"
+    linked.write_bytes(b"\x1a\x45\xdf\xa3linked")
+    original = type(linked).is_symlink
+
+    def pretend_link(path: Path) -> bool:
+        return path == linked or original(path)
+
+    monkeypatch.setattr(type(linked), "is_symlink", pretend_link)
+    with pytest.raises(FormatError, match="must not be a link"):
+        render_timeline_html(trace, tmp_path / "forced-link.html", media=linked)
 
 
 def test_live_prefix_is_validated_then_transitions_to_sealed_trace(tmp_path: Path) -> None:

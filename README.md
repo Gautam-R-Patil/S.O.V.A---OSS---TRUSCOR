@@ -422,6 +422,8 @@ The pre-alpha now includes:
 - an evidence-native, XSS-safe replay application with play/pause, speed,
   sensor lanes, search, recorded-link navigation, synchronized comparison, and
   a bounded integrity-checked loopback live tail;
+- explicit opt-in headed-browser WebM capture, typed visual-replay packaging,
+  and direct `sova replay capsule` rendering into one inert self-contained page;
 - numerator/denominator, Wilson uncertainty, condition sensitivity, and
   optional calibrated-judge reporting;
 - a bounded MCP stdio client, pinned open-source launch recipes, capability
@@ -563,7 +565,9 @@ sova demo sleeper ./sova-demo
 sova verify ./run.sova-trace
 sova playback ./run.sova-trace
 sova replay modes
-sova replay timeline ./run.sova-trace ./replay.html --comparison ./fresh-run.sova-trace
+sova replay timeline ./run.sova-trace ./replay.html \
+  --comparison ./fresh-run.sova-trace --media ./browser-session.webm
+sova replay capsule ./evidence.sova ./capsule-replay.html
 sova replay serve ./run.sova-trace --duration-seconds 30
 sova replay study ./run.sova-trace ./trial-1.sova-trace ./trial-2.sova-trace
 
@@ -697,7 +701,10 @@ sova target fixture software ./software-fixture
 # Exercise a real browser against SOVA's self-owned loopback website.
 # Every run displays its closed action set and requires an exact approval phrase.
 # Each approved action then consumes a distinct signed one-use token.
-sova detonate owned-web-fixture ./live-browser-proof
+# Install the pinned Playwright FFmpeg runtime once as documented in
+# docs/guides/authorized-target-testing.md before adding --record-video.
+sova detonate owned-web-fixture ./live-browser-proof --headed --record-video \
+  --playwright-browser-cache ./.cache/playwright-browsers
 
 # Exercise a real local process against two clean copies of SOVA's owned fixture.
 # The exact actions and host-process limitations require a human approval phrase.
@@ -713,7 +720,8 @@ sova target challenge ./website-target.json ./website-challenge.json
 # Host the emitted token at its exact proofUrl, then verify it without redirects.
 sova target prove ./website-target.json ./website-challenge.json ./website-proof.json
 sova detonate browser ./website-target.json ./scenario.sova ./website-proof \
-  --control-proof ./website-proof.json
+  --control-proof ./website-proof.json --headed --record-video \
+  --playwright-browser-cache ./.cache/playwright-browsers
 
 # If the controlled target requires login, provision an opaque profile bound
 # to the exact targetDigest, then complete login/CAPTCHA yourself in a headful
@@ -899,7 +907,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `sova map` | Air-gapped typed inventory, provenance-separated reach closures, map schema, and tool-definition drift implemented in [ADR-0013](./docs/decisions/0013-provenance-separated-capability-map.md) |
 | SOVA Runtime | Provider-neutral isolated roles, standard/custom profiles, evidence firewall, local minimized experience, opaque sessions, and verified executor fallback implemented in [ADR-0014](./docs/decisions/0014-evidence-firewalled-runtime.md) |
 | `sova check` | Bundled synthetic and authorized live-browser checks with finite candidate sets, exact human approval, signed traces, controlled reproduction, and honest confirmed/not-observed/inconclusive states |
-| `sova detonate` | Real Playwright/Chrome website execution plus bounded trusted local-process execution on two credential-stripped copies; both require exact human approval and produce signed primary/reproduction traces plus evidence capsules. A four-class static/SPA/authenticated/popup owned-site matrix passed real Chrome. Windows/macOS Appium and Linux AT-SPI application-bound adapters exist at the executor API, but general native-desktop detonation still requires platform drivers, owned fixtures, and CLI integration |
+| `sova detonate` | Real Playwright/Chrome website execution plus bounded trusted local-process execution on two credential-stripped copies; both require exact human approval and produce signed primary/reproduction traces plus evidence capsules. Browser detonation supports explicit opt-in headed WebM recording packaged as typed visual replay and rendered directly from the capsule. A four-class static/SPA/authenticated/popup owned-site matrix passed real Chrome. Windows/macOS Appium and Linux AT-SPI application-bound adapters exist at the executor API, but general native-desktop detonation still requires platform drivers, owned fixtures, and CLI integration |
 | `sova hunt` | Bounded operator-authored or provider-assisted candidate search executes in real Playwright/Chrome, records snapshot/console/network observations, detects near misses, reproduces the winning recipe under fresh approval, and emits signed traces plus an offline-verifiable discovery capsule; deterministic tests verify isolated roles, while a real external-provider acceptance run remains optional and unclaimed |
 | Persistent browser sessions | Exact-target-bound opaque profiles, cross-process exclusive leases, bounded stale recovery, manual headful authentication/CAPTCHA handoff, campaign reuse, and installed-Chrome two-process fixture persistence are implemented; profile state remains sensitive local executor material, is not SOVA-encrypted, and is never embedded in capsules or traces |
 | MELRA/CUA adapters | MELRA `0.3.0-alpha.10` browser/terminal/computer probe and same-process session reuse passed live; checksum-pinned CUA `0.12.6` bounded reads passed, while live desktop mutation remains visibly blocked on this runner |

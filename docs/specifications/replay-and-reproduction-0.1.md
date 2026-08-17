@@ -79,10 +79,16 @@ labeled cases. Model-judge output is not deterministic execution evidence.
 
 - `sova playback TRACE`: canonical text event timeline.
 - `sova query TRACE`: filters by family prefix, actor, and sequence interval.
-- `sova replay timeline SOURCE OUTPUT [--comparison TRACE]`: self-contained,
+- `sova replay timeline SOURCE OUTPUT [--comparison TRACE] [--media VIDEO]`:
+  self-contained,
   inert, scrubbable, side-by-side HTML with play/pause, speed, sensor lanes,
   recorded links, search, and synchronized evidence details. Payloads are
   inserted with `textContent`, not executed as markup.
+- `sova replay capsule CAPSULE OUTPUT`: verifies the complete capsule, chooses
+  its canonical `run.sova-trace`, optional `reproduction.sova-trace`, and typed
+  visual-replay object, then writes the same inert application without exposing
+  a manual archive extraction step. Ambiguous evidence requires exact object
+  selection flags.
 - `sova replay serve SOURCE [--port PORT]`: bounded loopback live-tail service
   with a random capability URL, Host-header pinning, finite SSE responses, and
   no action-execution endpoint. A live prefix is visibly unsealed until the

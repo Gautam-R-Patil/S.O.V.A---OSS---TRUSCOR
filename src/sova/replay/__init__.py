@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Three explicitly separate SOVA replay modes."""
 
+from sova.replay.capsule import CapsuleReplaySelection, render_capsule_timeline
 from sova.replay.controlled import controlled_reexecute
 from sova.replay.model import (
     ArtifactVerification,
@@ -28,6 +29,7 @@ from sova.replay.verification import verify_artifact
 
 __all__ = [
     "ArtifactVerification",
+    "CapsuleReplaySelection",
     "CheckState",
     "ConditionDrift",
     "ControlledReexecutionReport",
@@ -45,6 +47,7 @@ __all__ = [
     "calibrate_judge",
     "controlled_reexecute",
     "read_replay_snapshot",
+    "render_capsule_timeline",
     "render_timeline_html",
     "semantic_reproduction_study",
     "verify_artifact",

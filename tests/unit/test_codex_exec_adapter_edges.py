@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
+import time
 from typing import TYPE_CHECKING
 
 import pytest
@@ -12,6 +15,7 @@ from sova.adapters.codex_exec import (
     CodexExecAdapter,
     CommandResult,
     _map_codex_event,
+    _subprocess_runner,
 )
 from sova.formats.errors import FormatError
 from sova.trace import TraceWriter
@@ -158,3 +162,22 @@ def test_fixture_path_with_private_component_is_rejected(tmp_path: Path) -> None
     with pytest.raises(FormatError) as error:
         CodexExecAdapter._validate_fixture_directory(fixture)
     assert error.value.issue.code == "SOVA-CODEX-UNSAFE-FIXTURE"
+
+
+def test_real_runner_timeout_stops_descendants_holding_output_pipes(tmp_path: Path) -> None:
+    child = "import time; time.sleep(60)"
+    parent = (
+        "import subprocess,sys,time; "
+        "subprocess.Popen([sys.executable,'-c',sys.argv[1]]); "
+        "time.sleep(60)"
+    )
+    started = time.monotonic()
+    with pytest.raises(FormatError) as error:
+        _subprocess_runner(
+            [sys.executable, "-c", parent, child],
+            cwd=tmp_path,
+            environment=os.environ,
+            timeout_seconds=1,
+        )
+    assert error.value.issue.code == "SOVA-CODEX-TIMEOUT"
+    assert time.monotonic() - started < 15

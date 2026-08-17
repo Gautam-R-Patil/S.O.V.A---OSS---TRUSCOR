@@ -3,10 +3,13 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
+import signal
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
 from sova.formats import strict_json_loads
@@ -14,7 +17,6 @@ from sova.formats.errors import FormatError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
-    from pathlib import Path
 
     from sova.trace import TraceWriter
 
@@ -74,21 +76,71 @@ def _subprocess_runner(
     environment: Mapping[str, str],
     timeout_seconds: int,
 ) -> CommandResult:
+    creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
     try:
-        completed = subprocess.run(  # noqa: S603 - shell is false and argv is fixed/typed
+        process = subprocess.Popen(  # noqa: S603 - shell is false and argv is fixed/typed
             list(argv),
             cwd=cwd,
             env=dict(environment),
-            check=False,
-            capture_output=True,
-            timeout=timeout_seconds,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            creationflags=creation_flags,
+            start_new_session=os.name != "nt",
         )
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
     except subprocess.TimeoutExpired as error:
+        _terminate_process_tree(process)
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                process.wait(timeout=5)
+        finally:
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stderr is not None:
+                process.stderr.close()
         raise FormatError(
             "SOVA-CODEX-TIMEOUT",
-            "optional Codex run exceeded its duration budget",
+            "optional Codex run exceeded its duration budget; bounded tree termination was applied",
         ) from error
-    return CommandResult(completed.returncode, completed.stdout, completed.stderr)
+    return CommandResult(process.returncode, stdout, stderr)
+
+
+def _terminate_process_tree(process: subprocess.Popen[bytes]) -> None:
+    """Stop the exact adapter-owned process tree after a duration-budget breach."""
+    if process.poll() is not None:
+        return
+    if os.name == "nt":
+        try:
+            process.send_signal(signal.CTRL_BREAK_EVENT)
+            process.wait(timeout=3)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        else:
+            return
+        system_root = os.environ.get("SYSTEMROOT", r"C:\Windows")
+        taskkill = Path(system_root) / "System32" / "taskkill.exe"
+        if taskkill.is_file():
+            try:
+                subprocess.run(  # noqa: S603 - executable and PID are adapter-controlled
+                    [str(taskkill), "/PID", str(process.pid), "/T", "/F"],
+                    check=False,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                process.kill()
+        else:
+            process.kill()
+        return
+    try:
+        os.killpg(process.pid, signal.SIGKILL)  # type: ignore[attr-defined]
+    except (OSError, ProcessLookupError):
+        process.kill()
 
 
 class CodexExecAdapter:

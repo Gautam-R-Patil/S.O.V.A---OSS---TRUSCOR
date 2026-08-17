@@ -39,6 +39,35 @@ class DomainProfile(StrEnum):
 
 
 _OPAQUE_SECRET_REFERENCE = re.compile(r"^sova-secret:[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$")
+_ATTACHMENT_MEDIA_TYPES = {
+    ".json": "application/json",
+    ".mp4": "video/mp4",
+    ".png": "image/png",
+    ".txt": "text/plain",
+    ".webm": "video/webm",
+}
+_MIN_MP4_SIGNATURE_BYTES = 12
+
+
+def _attachment_role_and_media_type(logical_name: str) -> tuple[str, str]:
+    lower = logical_name.casefold()
+    suffix = next((item for item in _ATTACHMENT_MEDIA_TYPES if lower.endswith(item)), "")
+    media_type = _ATTACHMENT_MEDIA_TYPES.get(suffix, "application/octet-stream")
+    role = "visual-replay" if media_type.startswith("video/") else "attachment"
+    return role, media_type
+
+
+def _validate_visual_attachment(media_type: str, data: bytes) -> None:
+    if media_type == "video/webm" and not data.startswith(b"\x1a\x45\xdf\xa3"):
+        raise FormatError(
+            "SOVA-CAPSULE-VISUAL-MEDIA",
+            "WebM visual replay does not contain the EBML signature",
+        )
+    if media_type == "video/mp4" and (len(data) < _MIN_MP4_SIGNATURE_BYTES or data[4:8] != b"ftyp"):
+        raise FormatError(
+            "SOVA-CAPSULE-VISUAL-MEDIA",
+            "MP4 visual replay does not contain an ISO base media file signature",
+        )
 
 
 def _allowed_secret_reference_paths(value: Any, path: str = "$") -> set[str]:
@@ -215,15 +244,18 @@ def build_capsule(
             document=scenario,
         )
     seen_attachments: set[str] = set()
-    for _logical_name, data in sorted((attachments or {}).items()):
+    for logical_name, data in sorted((attachments or {}).items()):
         digest = sha256_digest(data)
         if digest in seen_attachments:
             continue
         seen_attachments.add(digest)
+        role, media_type = _attachment_role_and_media_type(logical_name)
+        if role == "visual-replay":
+            _validate_visual_attachment(media_type, data)
         writer.add_bytes(
-            role="attachment",
+            role=role,
             path=f"blobs/sha256/{digest[7:]}",
-            media_type="application/octet-stream",
+            media_type=media_type,
             data=data,
         )
     for trace_path in sorted(traces or [], key=lambda item: item.name):
@@ -384,7 +416,8 @@ def render_capsule(path: Path) -> str:
         "",
     ]
     lines.extend(
-        f"- `{descriptor.role}` — `{descriptor.mediaType}` — {descriptor.size} bytes — "
+        f"- `{descriptor.role}` | `{descriptor.path}` | `{descriptor.mediaType}` | "
+        f"{descriptor.size} bytes | "
         f"`{descriptor.digest}`"
         for descriptor in descriptors
     )

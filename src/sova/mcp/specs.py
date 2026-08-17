@@ -38,9 +38,11 @@ def playwright_stdio_spec(  # noqa: PLR0913 - launch security inputs remain expl
     browser_executable: Path,
     allowed_origins: tuple[str, ...] = (),
     package_cache: Path | None = None,
+    browser_cache: Path | None = None,
     profile_directory: Path | None = None,
     profile_vault_root: Path | None = None,
     headless: bool = True,
+    record_video: bool = False,
 ) -> StdioServerSpec:
     """Create a workspace-local Playwright MCP launch.
 
@@ -61,11 +63,19 @@ def playwright_stdio_spec(  # noqa: PLR0913 - launch security inputs remain expl
         if package_cache is None
         else package_cache.resolve()
     )
-    browser_cache = workspace / ".cache" / "playwright-browsers"
+    if browser_cache is not None and browser_cache.is_symlink():
+        raise FormatError("SOVA-MCP-LAUNCH-PATH", "browser tool cache must not be a link")
+    browser_cache_path = (
+        workspace / ".cache" / "playwright-browsers"
+        if browser_cache is None
+        else browser_cache.resolve()
+    )
     local_app_data = workspace / ".cache" / "playwright-local-app-data"
     output = workspace / ".sova" / "playwright-output"
-    for directory in (npm_cache, browser_cache, local_app_data, output):
+    for directory in (npm_cache, browser_cache_path, local_app_data, output):
         directory.mkdir(parents=True, exist_ok=True)
+        if directory.is_symlink():
+            raise FormatError("SOVA-MCP-LAUNCH-PATH", "browser tool caches must not be links")
     runner = package_runner.resolve()
     if runner.suffix.casefold() in {".cmd", ".bat"}:
         node = runner.with_name("node.exe")
@@ -99,6 +109,7 @@ def playwright_stdio_spec(  # noqa: PLR0913 - launch security inputs remain expl
             )
         profile_args = ("--user-data-dir", str(profile))
     display_args = ("--headless",) if headless else ()
+    video_args = ("--viewport-size", "1280x720", "--caps", "devtools") if record_video else ()
     return StdioServerSpec(
         "microsoft-playwright-mcp",
         (
@@ -108,6 +119,7 @@ def playwright_stdio_spec(  # noqa: PLR0913 - launch security inputs remain expl
             str(npm_cache),
             "@playwright/mcp@0.0.78",
             *display_args,
+            *video_args,
             *profile_args,
             "--block-service-workers",
             "--image-responses",
@@ -121,7 +133,7 @@ def playwright_stdio_spec(  # noqa: PLR0913 - launch security inputs remain expl
         workspace,
         {
             "LOCALAPPDATA": str(local_app_data),
-            "PLAYWRIGHT_BROWSERS_PATH": str(browser_cache),
+            "PLAYWRIGHT_BROWSERS_PATH": str(browser_cache_path),
         },
         PLAYWRIGHT_MCP_RECEIPT.version,
         PLAYWRIGHT_MCP_RECEIPT.source,

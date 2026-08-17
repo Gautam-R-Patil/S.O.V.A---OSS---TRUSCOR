@@ -12,8 +12,11 @@ that a local `TraceWriter` is still producing.
 
 ## Interfaces
 
-`sova replay timeline SOURCE OUTPUT [--comparison TRACE]` writes one
-self-contained, offline HTML file. `sova replay serve SOURCE` starts a bounded
+`sova replay timeline SOURCE OUTPUT [--comparison TRACE] [--media VIDEO]`
+writes one self-contained, offline HTML file. `sova replay capsule CAPSULE
+OUTPUT` verifies a `.sova` package and selects its primary trace, optional
+reproduction trace, and optional typed visual replay without manual extraction.
+`sova replay serve SOURCE` starts a bounded
 foreground service on literal `127.0.0.1` and prints a random capability URL.
 The service exists for local live tailing; it is not production HTTP.
 
@@ -26,6 +29,17 @@ Both interfaces provide:
 - synchronized nearest-event comparison using normalized monotonic time;
 - payload, redaction, actor, target, phase, and completion details; and
 - an explicit statement that playback performs no recorded action.
+
+When reviewed WebM or MP4 media is supplied, the static page embeds the bytes
+as a local data URL with native playback controls. The page identifies the
+video digest and states that synchronization is session-level rather than
+event-time attested. Media is never accepted by the live-tail service.
+
+Capsule replay uses exact verified object descriptors. If more than one
+candidate comparison trace or visual recording exists, it refuses ambiguity
+and requires an internal object path shown by `sova inspect`. Package members
+are copied into a private temporary directory only long enough to render the
+page; archive member names are never used as host extraction paths.
 
 The visual model borrows the useful evidence-navigation pattern of trace
 processors such as Perfetto: multiple time lanes, selection, filtering, and a
@@ -76,6 +90,10 @@ All trace-controlled values enter the DOM through `textContent`, safe element
 properties, or JSON that escapes `<`, `>`, `&`, U+2028, and U+2029. The page has
 a restrictive Content Security Policy, no remote dependencies, no forms, and
 no execution bridge. Trace payloads cannot become HTML, CSS, URLs, or script.
+Static media is limited to one reviewed WebM/MP4 regular file of at most 128
+MiB. Empty, linked, unsupported, ambiguous, or digest-invalid media is refused.
+Embedded video pixels are sensitive evidence and receive no automatic visual
+redaction.
 
 The capability URL can still leak through local browser history, screenshots,
 clipboard use, or a malicious local process. A compromised host or browser can

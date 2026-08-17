@@ -260,6 +260,8 @@ def test_cli_outputs_precise_verify_and_replay_states(
     assert main(["replay", "study", str(trace), str(trace), str(trace), str(trace)]) == 0
     assert json.loads(capsys.readouterr().out)["classification"].startswith("structural")
     html_path = tmp_path / "cli-replay.html"
+    media_path = tmp_path / "cli-session.webm"
+    media_path.write_bytes(b"\x1a\x45\xdf\xa3cli-video")
     assert (
         main(
             [
@@ -271,12 +273,15 @@ def test_cli_outputs_precise_verify_and_replay_states(
                 str(trace),
                 "--counterfactual",
                 "remove-trigger",
+                "--media",
+                str(media_path),
             ]
         )
         == 0
     )
     assert capsys.readouterr().out.strip() == str(html_path)
     assert "Synchronized comparison" in html_path.read_text(encoding="utf-8")
+    assert "data:video/webm;base64," in html_path.read_text(encoding="utf-8")
     unsupported = tmp_path / "unsupported.bin"
     assert main(["verify", str(unsupported)]) == 4
     assert json.loads(capsys.readouterr().out)["state"] == "unsupported"

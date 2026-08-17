@@ -58,7 +58,10 @@ def test_capsule_round_trip_is_deterministic_and_inert(tmp_path: Path) -> None:
 
     assert first.read_bytes() == second.read_bytes()
     assert b"sova.observe.fixture" in scenario
-    assert "Rendering is inert" in render_capsule(first)
+    rendered = render_capsule(first)
+    assert "Rendering is inert" in rendered
+    assert " | `" in rendered
+    assert "—" not in rendered
     issues = lint_capsule(first)
     assert {issue.code for issue in issues} == {
         "SOVA-LINT-NO-LICENSE",
@@ -133,6 +136,40 @@ def test_attachments_are_content_addressed_and_deduplicated(tmp_path: Path) -> N
     ]
     assert len(attachments) == 1
     assert attachments[0].path == f"blobs/sha256/{attachments[0].digest[7:]}"
+    assert attachments[0].mediaType == "text/plain"
+
+
+def test_visual_replay_attachment_is_typed_and_content_addressed(tmp_path: Path) -> None:
+    path = tmp_path / "visual.sova"
+    manifest = capsule_manifest_template(
+        title="Visual replay",
+        summary="Typed browser recording fixture.",
+        author="Test author",
+    )
+    build_capsule(
+        path,
+        manifest,
+        attachments={"browser-session.webm": b"\x1a\x45\xdf\xa3video"},
+    )
+    objects = PackageReader(path).verify("sova.capsule")
+    visual = [item for item in objects if item.role == "visual-replay"]
+    assert len(visual) == 1
+    assert visual[0].mediaType == "video/webm"
+    assert visual[0].path == f"blobs/sha256/{visual[0].digest[7:]}"
+
+
+def test_capsule_refuses_a_mislabeled_visual_attachment(tmp_path: Path) -> None:
+    manifest = capsule_manifest_template(
+        title="Invalid visual",
+        summary="Reject media label spoofing.",
+        author="Tests",
+    )
+    with pytest.raises(FormatError, match="EBML signature"):
+        build_capsule(
+            tmp_path / "invalid-video.sova",
+            manifest,
+            attachments={"not-really-video.webm": b"plain bytes"},
+        )
 
 
 def test_secret_shaped_scenario_content_is_rejected_before_packaging(tmp_path: Path) -> None:

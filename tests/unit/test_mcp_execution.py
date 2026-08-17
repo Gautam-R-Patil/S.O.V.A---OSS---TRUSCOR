@@ -728,8 +728,19 @@ def test_pinned_open_source_launch_specs_are_fail_closed(tmp_path: Path) -> None
     assert "--isolated" in playwright.argv
     assert "--headless" in playwright.argv
     assert "--block-service-workers" in playwright.argv
+    assert "--caps" not in playwright.argv
     assert playwright.startup_timeout_seconds == 120
     assert playwright.environment["PLAYWRIGHT_BROWSERS_PATH"].startswith(str(tmp_path))
+
+    recorded = playwright_stdio_spec(
+        package_runner=runner,
+        workspace=tmp_path,
+        browser_executable=browser,
+        record_video=True,
+    )
+    assert recorded.argv[recorded.argv.index("--caps") + 1] == "devtools"
+    assert recorded.argv[recorded.argv.index("--viewport-size") + 1] == "1280x720"
+    assert not any(argument.startswith("--save-video") for argument in recorded.argv)
 
     devtools = chrome_devtools_stdio_spec(
         package_runner=runner,

@@ -17,6 +17,10 @@ have independent version ledgers.
 
 ### Added
 
+- Explicit opt-in Playwright browser recording with headed WebM capture,
+  chapter/action overlays, bounded and signature-checked media packaging, typed
+  `visual-replay` capsule objects, `--media` timeline playback, and direct
+  `sova replay capsule` rendering without manual archive extraction.
 - An evidence-native replay application with play/pause, speed controls,
   sensor-family lanes, search, causal/correlation navigation, synchronized
   comparison, hostile-content-safe rendering, integrity-validated live trace

@@ -6,10 +6,11 @@ from __future__ import annotations
 import base64
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import pytest
 
+import sova.live.browser as live_browser_module
 from sova.capsule import build_capsule, capsule_manifest_template, scenario_template
 from sova.community import (
     BrowserSwarmBudget,
@@ -18,7 +19,7 @@ from sova.community import (
     run_browser_swarm,
 )
 from sova.forensics import BrowserCounterfactualStudy, CausalLayer, run_browser_counterfactual_study
-from sova.formats import strict_json_loads
+from sova.formats import PackageReader, strict_json_loads
 from sova.formats.errors import FormatError
 from sova.live import (
     AdaptiveBrowserPolicy,
@@ -63,12 +64,17 @@ class _DeterministicBrowserMCP:
             "browser_take_screenshot",
             "browser_console_messages",
             "browser_network_requests",
+            "browser_start_video",
+            "browser_stop_video",
+            "browser_video_chapter",
+            "browser_video_show_actions",
         )
         self._tools = tuple(MCPTool(name, name, {"type": "object"}, None, {}) for name in names)
         self.armed = False
         self.triggered = False
         self.current = ""
         argv = getattr(_spec, "argv", ())
+        self.output = Path(argv[argv.index("--output-dir") + 1])
         try:
             self.origin = str(argv[argv.index("--allowed-origins") + 1]).split(";", 1)[0]
         except (AttributeError, ValueError, IndexError):
@@ -113,6 +119,11 @@ class _DeterministicBrowserMCP:
             elif self.current == "enable research mode":
                 self.armed = True
             self.current = ""
+        elif name == "browser_stop_video":
+            self.output.mkdir(parents=True, exist_ok=True)
+            (self.output / "sova-browser-session.webm").write_bytes(
+                b"\x1a\x45\xdf\xa3sova-unit-webm"
+            )
         content: tuple[dict[str, Any], ...] = (
             (
                 {
@@ -175,6 +186,90 @@ def test_live_browser_coordinator_captures_reproduces_and_packages(
     assert report["containment"]["nativeSandboxClaim"] is False
     assert observed["primary"] == TraceReader(artifacts.trace).events()
     assert observed["reproduction"] == TraceReader(artifacts.reproduction_trace).events()
+
+
+@pytest.mark.integration
+def test_live_browser_recording_is_typed_packaged_and_reported(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    origin = "http://127.0.0.1:9187"
+    source = tmp_path / "input.sova"
+    build_owned_web_capsule(origin + "/", source)
+    runner = tmp_path / "npx.exe"
+    browser = tmp_path / "browser.exe"
+    runner.write_bytes(b"deterministic test placeholder")
+    browser.write_bytes(b"deterministic test placeholder")
+    monkeypatch.setattr("sova.live.browser.StdioMCPClient", _DeterministicBrowserMCP)
+
+    artifacts = run_live_browser_assessment(
+        owned_web_target(origin),
+        source,
+        tmp_path / "recorded",
+        package_runner=runner,
+        browser_executable=browser,
+        approval_prompt=lambda challenge, _intent: challenge.exact_phrase,
+        record_video=True,
+    )
+
+    assert len(artifacts.visual_replays) == 1
+    assert artifacts.visual_replays[0].read_bytes().startswith(b"\x1a\x45\xdf\xa3")
+    report = strict_json_loads(artifacts.report.read_bytes())
+    assert isinstance(report, dict)
+    media = report["artifacts"]["visualReplays"][0]
+    assert media["mediaType"] == "video/webm"
+    assert media["operatorOptIn"] is True
+    assert media["synchronization"] == "chapter-separated-session-not-event-time-attested"
+    descriptors = PackageReader(artifacts.evidence_capsule).verify("sova.capsule")
+    visual = [descriptor for descriptor in descriptors if descriptor.role == "visual-replay"]
+    assert len(visual) == 1
+    assert visual[0].mediaType == "video/webm"
+    assert visual[0].digest == media["digest"]
+
+
+def test_visual_recording_helpers_refuse_missing_malformed_and_failed_backends(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "recording-guards"
+    destination.mkdir()
+    with pytest.raises(FormatError, match="output directory is missing"):
+        live_browser_module._collect_visual_replays(destination)
+
+    output = destination / ".sova" / "playwright-output"
+    output.mkdir(parents=True)
+    with pytest.raises(FormatError, match="produced no finalized WebM"):
+        live_browser_module._collect_visual_replays(destination)
+    (output / "empty.webm").write_bytes(b"")
+    with pytest.raises(FormatError, match="empty or exceeds"):
+        live_browser_module._collect_visual_replays(destination)
+    (output / "empty.webm").unlink()
+    for index in range(5):
+        (output / f"recording-{index}.webm").write_bytes(b"\x1a\x45\xdf\xa3video")
+    with pytest.raises(FormatError, match="too many browser recordings"):
+        live_browser_module._collect_visual_replays(destination)
+
+    class MissingTools:
+        def list_tools(self) -> tuple[MCPTool, ...]:
+            return ()
+
+    with pytest.raises(FormatError, match="did not advertise"):
+        live_browser_module._require_visual_recording_tools(cast("Any", MissingTools()))
+
+    class FailedTool:
+        def call_tool(
+            self,
+            _name: str,
+            _arguments: Mapping[str, Any],
+            *,
+            timeout_seconds: float,
+        ) -> MCPToolResult:
+            assert timeout_seconds == 30
+            return MCPToolResult((), None, is_error=True)
+
+    with pytest.raises(FormatError, match="recording tool failed"):
+        live_browser_module._call_visual_recording_tool(
+            cast("Any", FailedTool()), "browser_start_video", {}
+        )
 
 
 class _ControlFetcher:
@@ -674,6 +769,32 @@ def test_optional_real_playwright_mcp_owned_fixture(tmp_path: Path) -> None:
         approval_prompt=lambda challenge, _intent: challenge.exact_phrase,
     )
     assert artifacts.status == "pass"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    os.environ.get("SOVA_RUN_REAL_BROWSER") != "1",
+    reason="set SOVA_RUN_REAL_BROWSER=1 for the optional installed-browser lane",
+)
+def test_optional_real_playwright_mcp_records_visual_replay(tmp_path: Path) -> None:
+    artifacts = run_owned_web_vertical_slice(
+        tmp_path / "real-browser-recorded",
+        package_runner=Path(r"C:\Program Files\nodejs\npx.cmd"),
+        browser_executable=Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+        approval_prompt=lambda challenge, _intent: challenge.exact_phrase,
+        record_video=True,
+        browser_cache=Path.cwd() / ".cache" / "playwright-browsers",
+    )
+    assert artifacts.status == "pass"
+    assert len(artifacts.visual_replays) == 1
+    video = artifacts.visual_replays[0]
+    assert video.stat().st_size > 1024
+    assert video.read_bytes().startswith(b"\x1a\x45\xdf\xa3")
+    descriptors = PackageReader(artifacts.evidence_capsule).verify("sova.capsule")
+    assert any(
+        descriptor.role == "visual-replay" and descriptor.mediaType == "video/webm"
+        for descriptor in descriptors
+    )
 
 
 @pytest.mark.integration

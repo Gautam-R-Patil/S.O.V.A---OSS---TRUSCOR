@@ -4,10 +4,12 @@
 
 from __future__ import annotations
 
+import base64
 import html
 import json
 from typing import TYPE_CHECKING, Any
 
+from sova.formats import sha256_digest
 from sova.formats.errors import FormatError
 from sova.replay.model import ReplayMode
 from sova.trace import TraceReader
@@ -16,6 +18,45 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _MAX_RENDER_EVENTS = 50_000
+_MAX_MEDIA_BYTES = 128 * 1024 * 1024
+_MIN_MP4_SIGNATURE_BYTES = 12
+
+
+def _reviewed_media(path: Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    if path.is_symlink():
+        raise FormatError("SOVA-REPLAY-MEDIA-PATH", "replay media must not be a link")
+    resolved = path.resolve()
+    if not resolved.is_file():
+        raise FormatError("SOVA-REPLAY-MEDIA-PATH", "replay media must be a regular file")
+    media_type = {".webm": "video/webm", ".mp4": "video/mp4"}.get(resolved.suffix.casefold())
+    if media_type is None:
+        raise FormatError("SOVA-REPLAY-MEDIA-TYPE", "replay media must be WebM or MP4")
+    size = resolved.stat().st_size
+    if size <= 0 or size > _MAX_MEDIA_BYTES:
+        raise FormatError(
+            "SOVA-REPLAY-MEDIA-LIMIT",
+            "replay media is empty or exceeds the 128 MiB local renderer budget",
+        )
+    with resolved.open("rb") as handle:
+        data = handle.read(_MAX_MEDIA_BYTES + 1)
+    if len(data) != size or len(data) > _MAX_MEDIA_BYTES:
+        raise FormatError(
+            "SOVA-REPLAY-MEDIA-LIMIT",
+            "replay media changed during bounded rendering",
+        )
+    if media_type == "video/webm" and not data.startswith(b"\x1a\x45\xdf\xa3"):
+        raise FormatError("SOVA-REPLAY-MEDIA-TYPE", "WebM media has no EBML signature")
+    if media_type == "video/mp4" and (len(data) < _MIN_MP4_SIGNATURE_BYTES or data[4:8] != b"ftyp"):
+        raise FormatError("SOVA-REPLAY-MEDIA-TYPE", "MP4 media has no ISO base signature")
+    return {
+        "name": resolved.name,
+        "mediaType": media_type,
+        "digest": sha256_digest(data),
+        "dataUrl": f"data:{media_type};base64,{base64.b64encode(data).decode('ascii')}",
+        "synchronization": "session-level-recording-not-event-time-attested",
+    }
 
 
 def _safe_json(value: Any) -> str:
@@ -39,12 +80,13 @@ def replay_document(payload: dict[str, Any]) -> str:
     title = html.escape(str(payload["source"]))
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' data:; media-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
 <meta name="referrer" content="no-referrer"><title>SOVA Replay — {title}</title><style>
 :root{{--ink:#eaf2f8;--muted:#89a1b5;--panel:#0b1724;--line:#1d3448;--cyan:#5ce1e6;--amber:#ffc66d;--red:#ff7b86;--green:#66dda5;--bg:#050b12;color-scheme:dark;background:var(--bg);color:var(--ink);font:14px/1.45 Inter,ui-sans-serif,system-ui,sans-serif}}
 *{{box-sizing:border-box}}body{{margin:0;background:radial-gradient(circle at 20% -10%,#12314a 0,transparent 36rem),var(--bg)}}button,input,select{{font:inherit}}button,select,input[type=search]{{color:var(--ink);background:#0d2030;border:1px solid #29485f;border-radius:8px}}button{{padding:.55rem .8rem;cursor:pointer}}button:hover,button:focus-visible{{border-color:var(--cyan);outline:none}}button.active{{background:#155167;border-color:var(--cyan)}}
 header{{position:sticky;top:0;z-index:9;display:flex;justify-content:space-between;gap:1rem;align-items:center;padding:1rem 1.4rem;background:rgba(5,11,18,.92);border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}}.brand{{display:flex;gap:.75rem;align-items:center}}.mark{{display:grid;place-items:center;width:38px;height:38px;border:1px solid var(--cyan);border-radius:50%;color:var(--cyan);font-weight:800}}h1{{font-size:1rem;letter-spacing:.16em;margin:0}}.sub{{color:var(--muted);font-size:.78rem}}.status{{display:flex;gap:.55rem;align-items:center}}.dot{{width:8px;height:8px;border-radius:50%;background:var(--amber);box-shadow:0 0 12px currentColor}}.dot.sealed{{background:var(--green)}}
 main{{max-width:1500px;margin:auto;padding:1.2rem}}.warning{{padding:.7rem 1rem;border:1px solid #5c4927;background:#211a0e;color:var(--amber);border-radius:10px}}.metrics{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem;margin:1rem 0}}.metric{{background:linear-gradient(145deg,#0d1b29,#09131e);border:1px solid var(--line);border-radius:12px;padding:.8rem 1rem}}.metric b{{display:block;font-size:1.15rem}}.metric span{{color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.09em}}
+.visual{{margin:1rem 0;padding:1rem;background:var(--panel);border:1px solid var(--line);border-radius:12px}}.visual-head{{display:flex;justify-content:space-between;gap:1rem;align-items:center;margin-bottom:.7rem}}.visual video{{display:block;width:100%;max-height:66vh;background:#000;border-radius:9px}}.visual-note{{color:var(--amber);font-size:.78rem}}
 .controls{{display:grid;grid-template-columns:auto auto minmax(180px,1fr) auto minmax(180px,320px);gap:.65rem;align-items:center;padding:1rem;background:var(--panel);border:1px solid var(--line);border-radius:12px}}#scrub{{width:100%;accent-color:var(--cyan)}}select{{padding:.5rem}}input[type=search]{{padding:.55rem .7rem;width:100%}}.filters{{display:flex;gap:.45rem;flex-wrap:wrap;margin:.8rem 0}}.filters button{{padding:.35rem .65rem;font-size:.78rem}}
 .workspace{{display:grid;grid-template-columns:minmax(0,2.1fr) minmax(300px,.9fr);gap:1rem}}.tracks,.detail{{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}}.tracks-head,.detail-head{{display:flex;justify-content:space-between;align-items:center;padding:.75rem 1rem;border-bottom:1px solid var(--line)}}.tracks-body{{max-height:62vh;overflow:auto}}.lane{{display:grid;grid-template-columns:150px minmax(600px,1fr);min-height:50px;border-bottom:1px solid #122638}}.lane-label{{position:sticky;left:0;z-index:2;display:flex;align-items:center;padding:.6rem .8rem;color:var(--muted);background:#091522;border-right:1px solid var(--line);overflow-wrap:anywhere}}.rail{{position:relative;margin:.55rem .8rem;background:linear-gradient(90deg,#102236,#173149);height:30px;border-radius:7px;min-width:560px}}.event-dot{{position:absolute;top:7px;translate:-50% 0;width:15px;height:15px;padding:0;border:2px solid #07111b;border-radius:50%;background:var(--cyan);box-shadow:0 0 0 1px #4a899b}}.event-dot.selected{{background:white;box-shadow:0 0 0 3px var(--cyan)}}.event-dot.redacted{{background:var(--amber)}}.event-dot.error{{background:var(--red)}}
 .detail-body{{padding:1rem;max-height:62vh;overflow:auto}}.kicker{{color:var(--cyan);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase}}h2{{font-size:1.15rem;margin:.35rem 0}}.meta{{color:var(--muted);overflow-wrap:anywhere}}pre{{white-space:pre-wrap;overflow-wrap:anywhere;background:#07111b;border:1px solid #172d40;padding:.85rem;border-radius:9px;max-height:280px;overflow:auto}}.links{{display:flex;gap:.4rem;flex-wrap:wrap}}.links button{{font-size:.72rem;padding:.28rem .5rem}}.comparison{{margin-top:1rem;padding-top:1rem;border-top:1px solid var(--line)}}.empty{{padding:2rem;color:var(--muted)}}
@@ -54,6 +96,7 @@ main{{max-width:1500px;margin:auto;padding:1.2rem}}.warning{{padding:.7rem 1rem;
 <header><div class="brand"><div class="mark" aria-hidden="true">S</div><div><h1>SOVA REPLAY</h1><div class="sub">observable evidence navigator</div></div></div><div class="status"><span class="dot" id="statusDot"></span><span id="statusText">loading</span></div></header>
 <main><p class="warning">Inert playback only. Recorded actions, payloads, links, and tools are never executed by this page.</p>
 <section class="metrics" aria-label="Trace summary"><div class="metric"><b id="eventCount">0</b><span>events</span></div><div class="metric"><b id="laneCount">0</b><span>sensor lanes</span></div><div class="metric"><b id="actorCount">0</b><span>actors</span></div><div class="metric"><b id="redactionCount">0</b><span>redactions</span></div><div class="metric"><b id="duration">0</b><span>observed span</span></div></section>
+<section class="visual" id="visual" hidden><div class="visual-head"><div><b>Recorded browser session</b><div class="sub" id="mediaMeta"></div></div><span class="visual-note">Session-level visual evidence; event-time synchronization is not attested.</span></div><video id="sessionVideo" controls preload="metadata"></video></section>
 <section class="controls" aria-label="Playback controls"><button id="play" type="button">▶ Play</button><select id="speed" aria-label="Playback speed"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option><option value="8">8x</option></select><input id="scrub" type="range" min="0" value="0" aria-label="Event position"><output id="position">0 / 0</output><input id="search" type="search" maxlength="128" placeholder="Filter kind, actor, phase, target…" aria-label="Search events"></section>
 <div class="filters" id="filters" aria-label="Sensor family filters"></div>
 <section class="workspace"><div class="tracks"><div class="tracks-head"><b>Sensor lanes</b><span class="sub" id="sourceMeta"></span></div><div class="tracks-body" id="lanes"></div></div>
@@ -81,12 +124,13 @@ function draw(){{if(selectedIndex>=visible.length)selectedIndex=Math.max(0,visib
 function apply(){{visible=events.filter(matches);selectedIndex=0;drawLanes();draw()}}
 function drawFilters(){{const box=document.getElementById('filters');box.replaceChildren();families().forEach(name=>{{const b=document.createElement('button');b.type='button';b.textContent=name;b.className=name===selectedFamily?'active':'';b.onclick=()=>{{selectedFamily=name;drawFilters();apply()}};box.appendChild(b)}})}}
 function summary(){{events.forEach(e=>byId.set(e.id,e));text('eventCount',events.length);text('actorCount',new Set(events.map(e=>e.actor.id)).size);text('redactionCount',events.reduce((n,e)=>n+(e.redactions||[]).length,0));text('duration',duration());text('sourceMeta',`${{data.source}}${{data.comparison?' ↔ '+data.comparison:''}}`);const sealed=data.completion==='sealed';document.getElementById('statusDot').classList.toggle('sealed',sealed);text('statusText',sealed?'integrity-checked sealed trace':data.liveEndpoint?'live unsealed tail':'integrity-checked playback')}}
+function loadMedia(){{if(!data.media)return;const panel=document.getElementById('visual');const video=document.getElementById('sessionVideo');panel.hidden=false;video.src=data.media.dataUrl;text('mediaMeta',`${{data.media.name}} · ${{data.media.digest}}`)}}
 function stop(){{if(timer)clearInterval(timer);timer=null;play.textContent='▶ Play'}}
 function start(){{stop();play.textContent='❚❚ Pause';const speed=Number(document.getElementById('speed').value);timer=setInterval(()=>{{if(selectedIndex>=visible.length-1){{stop();return}}selectedIndex+=1;draw()}},Math.max(45,650/speed))}}
 play.onclick=()=>timer?stop():start();scrub.oninput=()=>{{stop();selectedIndex=Number(scrub.value);draw()}};search.oninput=apply;document.getElementById('speed').onchange=()=>{{if(timer)start()}};
 function addLive(raw){{if(!raw||byId.has(raw.id))return;events.push(raw);events.sort((a,b)=>a.sequence-b.sequence);summary();drawFilters();apply()}}
 if(data.liveEndpoint){{const stream=new EventSource(data.liveEndpoint);stream.addEventListener('trace-event',e=>{{try{{addLive(JSON.parse(e.data))}}catch(_error){{text('statusText','invalid live event refused')}}}});stream.addEventListener('sealed',()=>{{data.completion='sealed';summary();stream.close()}});stream.onerror=()=>{{if(data.completion!=='sealed')text('statusText','live tail reconnecting')}}}}
-summary();drawFilters();apply();
+summary();loadMedia();drawFilters();apply();
 </script></body></html>"""
 
 
@@ -96,6 +140,7 @@ def render_timeline_html(
     *,
     comparison: Path | None = None,
     counterfactual: str | None = None,
+    media: Path | None = None,
 ) -> None:
     """Write a rich offline replay application that never executes trace payloads."""
     source_paths = {source.resolve()}
@@ -129,6 +174,7 @@ def render_timeline_html(
         "completion": "sealed",
         "liveEndpoint": None,
         "warning": "Inert playback only. No recorded action is executed.",
+        "media": _reviewed_media(media),
     }
     destination.write_text(replay_document(payload), encoding="utf-8", newline="\n")
 

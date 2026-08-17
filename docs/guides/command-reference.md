@@ -10,7 +10,7 @@ human text or HTML artifact is the command's purpose.
 |---|---|
 | Setup | `init`, `doctor`, `data delete` |
 | Capsule | `inspect`, `validate`, `lint`, `verify`, `migrate`, `compat`, `format`, `hash`, `template`, `pack` |
-| Trace/replay | `playback`, `replay modes`, `replay timeline`, `replay serve`, `replay study`, `replay clip`, `query`, `compare`, `export`, `recover-trace` |
+| Trace/replay | `playback`, `replay modes`, `replay timeline`, `replay capsule`, `replay serve`, `replay study`, `replay clip`, `query`, `compare`, `export`, `recover-trace` |
 | First value | `map`, `check`, `demo`, `safety backends`, `executors receipts` |
 | Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt adaptive-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics browser-counterfactual`, `forensics benchmark`, `forensics blind-fixture`, `forensics blind-run`, `forensics blind-score`, `forensics blind-keygen`, `forensics blind-sign-key`, `evidence`, `case build`, `adjudicate`, `compose` |
 | Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse agent-run`, `rehearse export`, `trace command`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `monitor serve`, `monitor status`, `ci`, `self-check` |
@@ -55,6 +55,16 @@ only that the finite declared candidate set was exhausted.
 
 Trace playback, controlled re-execution, and semantic reproduction are distinct
 operations. No command claims to capture hidden chain-of-thought.
+
+`sova replay timeline TRACE OUTPUT --media SESSION.webm` embeds one reviewed
+WebM/MP4 in the inert offline evidence navigator. `sova replay capsule
+EVIDENCE.sova OUTPUT` performs the same operation directly from verified typed
+capsule objects. Use `sova inspect EVIDENCE.sova` to see exact object paths;
+selection flags are required when a capsule has multiple possible comparisons
+or recordings. Video capture itself is opt-in on browser detonation through
+`--headed --record-video` and requires a caller-managed Playwright FFmpeg
+cache. Recordings may contain screen-visible secrets and are not frame-level
+cryptographic attestations.
 
 `sova replay serve TRACE` is a foreground, read-only, loopback reference
 service for a sealed trace or its integrity-valid live prefix. It uses a random
