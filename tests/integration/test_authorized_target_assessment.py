@@ -130,7 +130,7 @@ def test_browser_kit_is_inert_complete_and_fail_closed(
     )
     assert target.configuration["allowedOrigins"] == ["https://owned.example"]
     assert campaign.entry_url == "https://owned.example/"
-    assert campaign.total_actions == 23
+    assert campaign.total_actions == 26
     assert "does not prove ownership" in (destination / "README.md").read_text(encoding="utf-8")
 
     with pytest.raises(FormatError, match="require HTTPS"):

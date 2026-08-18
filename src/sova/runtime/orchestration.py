@@ -32,6 +32,7 @@ _MAX_DURATION_MS = 3_600_000
 _MAX_TOKEN_COUNT = 10_000_000
 _MAX_MUTATIONS = 100
 _MAX_EFFECT_ATOMS = 1_000_000
+_MAX_RESOLVED_MODEL_ID_CHARS = 512
 _EFFECT_PREFIXES = (
     "filesystem.",
     "process.",
@@ -121,11 +122,13 @@ class RoleInvocation:
     output_bytes: int
     token_count: int | None
     monetary_cost: str | None
+    resolved_model_id: str | None = None
 
     def to_mapping(self) -> dict[str, Any]:
         return {
             "role": self.role.value,
             "modelId": self.model_id,
+            "resolvedModelId": self.resolved_model_id,
             "promptDigest": self.prompt_digest,
             "responseDigest": self.response_digest,
             "structured": self.structured,
@@ -196,6 +199,7 @@ class ModelRouter:
                 continue
             token_count = getattr(response, "token_count", None)
             monetary_cost = getattr(response, "monetary_cost", None)
+            resolved_model_id = getattr(response, "resolved_model_id", None)
             if token_count is not None and (
                 isinstance(token_count, bool) or not isinstance(token_count, int) or token_count < 0
             ):
@@ -203,6 +207,13 @@ class ModelRouter:
                 continue
             if monetary_cost is not None and not isinstance(monetary_cost, str):
                 failures.append(f"{model.model_id}:invalid-cost-usage")
+                continue
+            if resolved_model_id is not None and (
+                not isinstance(resolved_model_id, str)
+                or not resolved_model_id
+                or len(resolved_model_id) > _MAX_RESOLVED_MODEL_ID_CHARS
+            ):
+                failures.append(f"{model.model_id}:invalid-resolved-model-id")
                 continue
             return RoleInvocation(
                 role,
@@ -216,6 +227,7 @@ class ModelRouter:
                 len(response_bytes),
                 token_count,
                 monetary_cost,
+                resolved_model_id,
             )
         raise FormatError(
             "SOVA-MODEL-UNAVAILABLE",
@@ -381,6 +393,7 @@ class OrchestrationRuntime:
                 {
                     "role": role.value,
                     "modelId": invocation.model_id,
+                    "resolvedModelId": invocation.resolved_model_id,
                     "toolsAllowed": False,
                     "limits": {"maxOutputBytes": self.budget.max_model_output_bytes},
                 },
@@ -402,6 +415,7 @@ class OrchestrationRuntime:
                 "model.response",
                 {
                     "modelId": invocation.model_id,
+                    "resolvedModelId": invocation.resolved_model_id,
                     "responseDigest": invocation.response_digest,
                     "structured": invocation.structured if self.capture_model_content else None,
                     "contentCaptured": self.capture_model_content,

@@ -139,7 +139,9 @@ def test_browser_counterfactual_parser_and_campaign_reject_unsafe_inputs() -> No
         Path("examples/topics-15-17/browser-counterfactual-study.json").read_bytes()
     )
     assert isinstance(example, dict)
-    assert browser_counterfactual_from_mapping(example).repetitions == 4
+    parsed_example = browser_counterfactual_from_mapping(example)
+    assert parsed_example.repetitions == 4
+    assert parsed_example.baseline.total_actions == 10
     with pytest.raises(FormatError, match="fields are invalid"):
         browser_counterfactual_from_mapping({**value, "unknown": True})
     with pytest.raises(FormatError, match="between four and ten"):

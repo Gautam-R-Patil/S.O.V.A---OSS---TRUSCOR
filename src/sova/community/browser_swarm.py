@@ -39,6 +39,7 @@ _MIN_OUTPUT_BYTES = 1024
 _MAX_OUTPUT_BYTES = 1024 * 1024
 _MAX_DURATION_SECONDS = 1800
 _MAX_TOTAL_TOKENS = 10_000_000
+_MAX_RESOLVED_MODEL_ID_CHARS = 512
 _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
@@ -233,11 +234,22 @@ def _proposal(
         isinstance(token_count, bool) or not isinstance(token_count, int) or token_count < 0
     ):
         raise FormatError("SOVA-BROWSER-SWARM-USAGE", "provider token count is invalid")
+    resolved_model_id = getattr(response, "resolved_model_id", None)
+    if resolved_model_id is not None and (
+        not isinstance(resolved_model_id, str)
+        or not resolved_model_id
+        or len(resolved_model_id) > _MAX_RESOLVED_MODEL_ID_CHARS
+    ):
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-PROVENANCE",
+            "provider resolved model identifier is invalid",
+        )
     return (
         candidate_index,
         "[credential omitted before transfer]" if disclosures else safe["message"],
         {
             "modelId": model.model_id,
+            "resolvedModelId": resolved_model_id,
             "promptDigest": sha256_digest(prompt.encode("utf-8")),
             "responseDigest": safe_response_digest,
             "tokenCount": token_count,

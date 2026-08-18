@@ -166,6 +166,15 @@ sova hunt browser website-target.json browser-campaign.json website-hunt \
   --control-proof website-proof.json
 ```
 
+If the target renders a temporary loading label after submit, declare a
+bounded completion gate inside the campaign interaction, for example
+`"completionWait":{"textGone":"Generating...","timeoutSeconds":120}`.
+SOVA rejects unknown completion fields, counts one additional reviewed wait per
+message in `budgets.maxActions`, and applies the declared timeout as the
+scenario's per-step ceiling. Choose text that is target-specific and reliably
+present during generation; the deterministic oracle still decides success from
+the recorded post-wait observation.
+
 Version 0.1 searches only the reviewed finite candidate set. It does not
 generate unreviewed actions at runtime, bypass CAPTCHA, create unsolicited
 accounts, or infer permission from a login session.

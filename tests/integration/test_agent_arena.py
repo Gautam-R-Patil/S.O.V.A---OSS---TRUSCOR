@@ -36,6 +36,7 @@ def _models() -> dict[str, RoleModel]:
                     "",
                     {"message": "Bearer abcdefghijklmnopqrstuvwxyz"},
                     token_count=3,
+                    resolved_model_id="fixture-provider/resolved-challenger",
                 ),
                 ScriptedTurn(
                     "sova.agent-arena-challenger/0.1.0",
@@ -120,6 +121,10 @@ def test_agent_arena_records_multi_round_flow_redacts_and_scores_deterministical
     assert kinds.count("inter-agent.sent") == 4
     assert kinds.count("inter-agent.received") == 4
     assert kinds.count("oracle.result") == 2
+    model_responses = [event for event in events if event["kind"] == "model.response"]
+    assert model_responses[0]["payload"]["resolvedModelId"] == (
+        "fixture-provider/resolved-challenger"
+    )
     assert b"Bearer abcdefghijklmnopqrstuvwxyz" not in artifacts.traces[0].read_bytes()
     judge_prompt = next(
         event["payload"]["prompt"]

@@ -19,6 +19,8 @@ A campaign declares:
 
 - one exact entry URL inside the target manifest's admitted origin;
 - input and submit targets;
+- an optional bounded post-submit completion condition that waits for one
+  declared loading string to disappear;
 - one to 32 unique ordered message sequences, with at most six messages each;
 - one deterministic observable text-containment oracle;
 - exact attempt, duration, and derived action ceilings; and
@@ -27,6 +29,14 @@ A campaign declares:
 Unknown fields, credentials in URLs, duplicate candidates, booleans disguised
 as integer budgets, inconsistent action counts, and out-of-origin entry URLs
 fail closed.
+
+For asynchronous conversational UIs, `interaction.completionWait` may contain
+exactly `textGone` and `timeoutSeconds`. The timeout is an integer from one to
+300 seconds, the text is subject to the same credential-shaped-data rejection
+as the rest of the campaign, and SOVA adds one reviewed `browser.wait` action
+per submitted message. The derived `maxActions` and `maxStepSeconds` ceilings
+must therefore include the completion gate. Omitting `completionWait` preserves
+the original fixed-readiness behavior.
 
 ## Execution and authorization
 

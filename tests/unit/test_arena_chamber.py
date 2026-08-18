@@ -684,6 +684,21 @@ def test_reference_and_model_output_edge_contracts() -> None:
     with pytest.raises(FormatError, match="token count"):
         chamber_module._participant_output(invalid_usage, "prompt", ArenaChamberBudget())
 
+    invalid_participant_provenance = ScriptedModel(
+        [
+            ScriptedTurn(
+                "prompt",
+                "",
+                {"message": "", "actions": [], "signals": []},
+                resolved_model_id="",
+            )
+        ]
+    )
+    with pytest.raises(FormatError, match="resolved model identifier"):
+        chamber_module._participant_output(
+            invalid_participant_provenance, "prompt", ArenaChamberBudget()
+        )
+
     judge_tool = ScriptedModel(
         [
             ScriptedTurn(
@@ -709,6 +724,18 @@ def test_reference_and_model_output_edge_contracts() -> None:
         chamber_module._judge_output(
             judge_large, "prompt", ArenaChamberBudget(max_output_bytes=1024)
         )
+    invalid_judge_provenance = ScriptedModel(
+        [
+            ScriptedTurn(
+                "prompt",
+                "",
+                {"assessment": "observed", "limitations": ["bounded"]},
+                resolved_model_id="",
+            )
+        ]
+    )
+    with pytest.raises(FormatError, match="resolved model identifier"):
+        chamber_module._judge_output(invalid_judge_provenance, "prompt", ArenaChamberBudget())
 
 
 def test_parser_helpers_and_duplicate_participant_fail_closed(tmp_path: Path) -> None:

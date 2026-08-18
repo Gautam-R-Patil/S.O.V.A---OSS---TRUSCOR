@@ -66,23 +66,46 @@ _MAX_MESSAGE_CHARS = 1_024
 _MAX_SELECTOR_CHARS = 256
 _MAX_CAMPAIGN_ACTIONS = 256
 _MAX_DURATION_SECONDS = 1_800
+_CAMPAIGN_READY_WAIT_SECONDS = 2
+_DEFAULT_COMPLETION_WAIT_SECONDS = 30
+_MAX_COMPLETION_WAIT_SECONDS = 300
 _OBSERVED_MARKERS = ("READY", "NO_TRIGGER", "MODE_ACCEPTED", "SOVA_FIXTURE_TRIGGERED")
 
 
 def _reject_sensitive_campaign_input(
     candidates: tuple[tuple[str, ...], ...],
     oracle: str,
+    completion_text_gone: str | None,
 ) -> None:
     _, sensitive = Redactor(context_id="sova-live-campaign-input").redact(
         {
             "candidates": [list(candidate) for candidate in candidates],
             "oracle": oracle,
+            "completionTextGone": completion_text_gone,
         }
     )
     if sensitive:
         raise FormatError(
             "SOVA-LIVE-CAMPAIGN-SENSITIVE-INPUT",
             "campaign contains credential-shaped candidate or oracle material",
+        )
+
+
+def _validate_completion_wait(text_gone: str | None, timeout_seconds: int) -> None:
+    if text_gone is not None and (not text_gone or len(text_gone) > _MAX_MESSAGE_CHARS):
+        raise FormatError(
+            "SOVA-LIVE-CAMPAIGN-COMPLETION",
+            "completion wait text is empty or exceeds campaign limits",
+        )
+    if not 1 <= timeout_seconds <= _MAX_COMPLETION_WAIT_SECONDS:
+        raise FormatError(
+            "SOVA-LIVE-CAMPAIGN-COMPLETION",
+            "completion wait timeout is out of bounds",
+        )
+    if text_gone is None and timeout_seconds != _DEFAULT_COMPLETION_WAIT_SECONDS:
+        raise FormatError(
+            "SOVA-LIVE-CAMPAIGN-COMPLETION",
+            "completion timeout requires completion wait text",
         )
 
 
@@ -100,6 +123,8 @@ class BrowserCampaign:
     max_attempts: int
     max_duration_seconds: int
     offensive: bool = False
+    completion_text_gone: str | None = None
+    completion_timeout_seconds: int = _DEFAULT_COMPLETION_WAIT_SECONDS
 
     def __post_init__(self) -> None:
         if not self.identifier or not self.title:
@@ -129,7 +154,12 @@ class BrowserCampaign:
                 "SOVA-LIVE-CAMPAIGN-CANDIDATES",
                 "candidate messages are empty or exceed campaign limits",
             )
-        _reject_sensitive_campaign_input(self.candidates, self.oracle_contains)
+        _validate_completion_wait(self.completion_text_gone, self.completion_timeout_seconds)
+        _reject_sensitive_campaign_input(
+            self.candidates,
+            self.oracle_contains,
+            self.completion_text_gone,
+        )
         if not self.oracle_contains or len(self.oracle_contains) > _MAX_MESSAGE_CHARS:
             raise FormatError("SOVA-LIVE-CAMPAIGN-ORACLE", "oracle contains value is invalid")
         if not 1 <= self.max_attempts <= len(self.candidates):
@@ -145,23 +175,32 @@ class BrowserCampaign:
 
     @property
     def total_actions(self) -> int:
-        return sum(5 + 2 * len(candidate) for candidate in self.selected_candidates)
+        actions_per_message = 3 if self.completion_text_gone is not None else 2
+        return sum(
+            6 + actions_per_message * len(candidate) for candidate in self.selected_candidates
+        )
 
     @property
     def digest(self) -> str:
         return sha256_digest(canonical_json_bytes(self.to_mapping()))
 
     def to_mapping(self) -> dict[str, Any]:
+        interaction: dict[str, Any] = {
+            "inputTarget": self.input_target,
+            "submitTarget": self.submit_target,
+        }
+        if self.completion_text_gone is not None:
+            interaction["completionWait"] = {
+                "textGone": self.completion_text_gone,
+                "timeoutSeconds": self.completion_timeout_seconds,
+            }
         return {
             "artifactType": "sova.browser-campaign",
             "schemaVersion": "0.1.0",
             "id": self.identifier,
             "title": self.title,
             "entryUrl": self.entry_url,
-            "interaction": {
-                "inputTarget": self.input_target,
-                "submitTarget": self.submit_target,
-            },
+            "interaction": interaction,
             "candidates": [list(candidate) for candidate in self.candidates],
             "oracle": {
                 "kind": "field-contains",
@@ -217,8 +256,23 @@ def browser_campaign_from_mapping(value: dict[str, Any]) -> BrowserCampaign:
     oracle = value.get("oracle")
     budgets = value.get("budgets")
     candidates = value.get("candidates")
-    if not isinstance(interaction, dict) or set(interaction) != {"inputTarget", "submitTarget"}:
+    if not isinstance(interaction, dict) or not {
+        "inputTarget",
+        "submitTarget",
+    } <= set(interaction) <= {"inputTarget", "submitTarget", "completionWait"}:
         raise FormatError("SOVA-LIVE-CAMPAIGN-INTERACTION", "interaction shape is invalid")
+    completion_wait = interaction.get("completionWait")
+    if completion_wait is not None and (
+        not isinstance(completion_wait, dict)
+        or set(completion_wait) != {"textGone", "timeoutSeconds"}
+        or not isinstance(completion_wait.get("textGone"), str)
+        or isinstance(completion_wait.get("timeoutSeconds"), bool)
+        or not isinstance(completion_wait.get("timeoutSeconds"), int)
+    ):
+        raise FormatError(
+            "SOVA-LIVE-CAMPAIGN-COMPLETION",
+            "completion wait shape is invalid",
+        )
     if (
         not isinstance(oracle, dict)
         or oracle.get("kind") != "field-contains"
@@ -256,6 +310,12 @@ def browser_campaign_from_mapping(value: dict[str, Any]) -> BrowserCampaign:
         int(budgets["maxAttempts"]),
         int(budgets["maxDurationSeconds"]),
         bool(value["offensive"]),
+        None if completion_wait is None else str(completion_wait["textGone"]),
+        (
+            _DEFAULT_COMPLETION_WAIT_SECONDS
+            if completion_wait is None
+            else int(completion_wait["timeoutSeconds"])
+        ),
     )
     declared_actions = budgets.get("maxActions")
     if isinstance(declared_actions, bool) or declared_actions != campaign.total_actions:
@@ -309,7 +369,14 @@ def _build_candidate_capsule(
             "inputs": {"url": campaign.entry_url},
             "onFailure": "stop",
             "requires": ["browser.navigate/0.1"],
-        }
+        },
+        {
+            "id": "ready-wait",
+            "action": "browser.wait",
+            "inputs": {"time": _CAMPAIGN_READY_WAIT_SECONDS},
+            "onFailure": "stop",
+            "requires": ["browser.wait/0.1"],
+        },
     ]
     for index, message in enumerate(candidate.values["messages"], start=1):
         steps.extend(
@@ -338,6 +405,16 @@ def _build_candidate_capsule(
                 },
             )
         )
+        if campaign.completion_text_gone is not None:
+            steps.append(
+                {
+                    "id": f"turn-{index:02d}-completion-wait",
+                    "action": "browser.wait",
+                    "inputs": {"textGone": campaign.completion_text_gone},
+                    "onFailure": "continue",
+                    "requires": ["browser.wait/0.1"],
+                }
+            )
     steps.extend(
         (
             {
@@ -387,7 +464,14 @@ def _build_candidate_capsule(
         "run.lifecycle",
     ]
     scenario["safety"] = {
-        "budgets": {"maxSteps": len(steps), "maxStepSeconds": 20},
+        "budgets": {
+            "maxSteps": len(steps),
+            "maxStepSeconds": (
+                campaign.completion_timeout_seconds
+                if campaign.completion_text_gone is not None
+                else 20
+            ),
+        },
         "forbiddenEffects": ["filesystem.write", "process.spawn", "cross-origin-network"],
         "stopConditions": [{"kind": "first-action-failure"}],
     }
@@ -410,7 +494,7 @@ def _build_candidate_capsule(
         domain_profile=DomainProfile.SECURITY,
     )
     manifest["license"] = "Apache-2.0"
-    manifest["safety"]["impact"] = "none" if not campaign.offensive else "controlled"
+    manifest["safety"]["impact"] = "none" if not campaign.offensive else "low"
     manifest["requiredFeatures"] = ["scenario.core/0.1", "trace.core/0.1"]
     manifest["limitations"] = scenario["limitations"]
     build_capsule(destination, manifest, scenario=scenario)
@@ -596,7 +680,6 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
         ),
     }
 
-    started = time.monotonic()
     attempts: list[SearchAttempt] = []
     attempt_files: list[Path] = []
     coverage: set[str] = set()
@@ -621,6 +704,9 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             single_use=False,
             approval_ttl=timedelta(seconds=campaign.max_duration_seconds + 120),
         )
+        # Human review is intentionally outside the execution budget. Start
+        # timing only after the exact candidate batch has been approved.
+        started = time.monotonic()
         for index, row in enumerate(rows):
             if cancellation is not None and cancellation.cancelled:
                 raise FormatError("SOVA-LIVE-CAMPAIGN-CANCELLED", "browser campaign was cancelled")
@@ -650,6 +736,7 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             if observation.triggered:
                 success_row = row
                 break
+        search_elapsed_ms = int((time.monotonic() - started) * 1000)
         if success_row is not None:
             key, _candidate_item, capsule, scenario = success_row
             reproduction_trace = traces_dir / "reproduction.sova-trace"
@@ -682,7 +769,6 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             if repeated.oracle_status != "pass":
                 comparison = None
 
-    elapsed_ms = int((time.monotonic() - started) * 1000)
     success = None if success_row is None else success_row[1]
     search_report = SearchReport(
         SearchStrategy.SIGNATURE,
@@ -693,11 +779,11 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             "confirmed-trigger"
             if success is not None
             else "duration-budget"
-            if elapsed_ms >= campaign.max_duration_seconds * 1000
+            if search_elapsed_ms >= campaign.max_duration_seconds * 1000
             else "candidate-source-exhausted"
         ),
         frozenset(coverage),
-        elapsed_ms,
+        search_elapsed_ms,
         None if success is None else float(comparison is not None and comparison.equivalent),
         (
             TriggerFamilyMetric(
@@ -727,7 +813,7 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             domain_profile=DomainProfile.SECURITY,
         )
         manifest["license"] = "Apache-2.0"
-        manifest["safety"]["impact"] = "none" if not campaign.offensive else "controlled"
+        manifest["safety"]["impact"] = "none" if not campaign.offensive else "low"
         search_report_bytes = canonical_json_bytes(search_report.to_mapping())
         manifest["methodology"] = {
             "id": "SOVA-LIVE-BROWSER-HUNT",
@@ -810,8 +896,8 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             "discoveryCapsule": None if discovery_capsule is None else discovery_capsule.name,
         },
         "claims": {
-            "realBrowserExecuted": True,
-            "boundedCandidateSearchExecuted": True,
+            "realBrowserExecuted": bool(attempts),
+            "boundedCandidateSearchExecuted": bool(attempts),
             "behaviorDiscovered": success is not None,
             "controlledReproductionObserved": verified_reproduction,
             "autonomousNovelAttackGeneration": False,

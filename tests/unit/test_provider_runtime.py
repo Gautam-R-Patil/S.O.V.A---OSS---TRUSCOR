@@ -13,7 +13,9 @@ from sova.formats import strict_json_loads
 from sova.providers import (
     FakeTransport,
     HttpResponse,
+    ModelRequest,
     OpenAIAdapter,
+    OpenRouterAdapter,
     ProviderError,
     ProviderRoleModel,
     ProviderRoute,
@@ -69,10 +71,120 @@ def test_provider_role_model_parses_one_strict_object_and_reports_usage() -> Non
     assert response.structured == {"candidates": [["hello"]]}
     assert response.token_count == 10
     assert response.tool_calls == ()
+    assert response.resolved_model_id == "openai:fixture-model"
     request = transport.requests[0]
     assert request.url == "https://api.openai.com/v1/responses"
     assert b"fixture-secret" not in (request.body or b"")
     assert request.headers["authorization"] == "Bearer fixture-secret"
+
+
+def test_openrouter_free_router_preserves_concrete_returned_model_provenance() -> None:
+    response = HttpResponse(
+        200,
+        {},
+        json.dumps(
+            {
+                "id": "openrouter-response-fixture",
+                "model": "provider/concrete-free-model",
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": '{"candidateIndex":0,"message":"safe"}'},
+                    }
+                ],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 4},
+            }
+        ).encode(),
+    )
+    model = ProviderRoleModel(
+        OpenRouterAdapter(
+            FakeTransport((response,)),
+            secret_resolver=lambda _name: "fixture-secret",
+        ),
+        "openrouter/free",
+        RoleKind.ATTACKER,
+    )
+
+    result = model.respond("fixture")
+
+    assert result.resolved_model_id == "openrouter:provider/concrete-free-model"
+    assert result.token_count == 9
+
+
+def test_openrouter_rate_limit_retry_uses_bounded_fallback() -> None:
+    success = HttpResponse(
+        200,
+        {},
+        json.dumps(
+            {
+                "id": "openrouter-response-fixture",
+                "model": "provider/concrete-free-model",
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": '{"observations":["ready"]}'},
+                    }
+                ],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 4},
+            }
+        ).encode(),
+    )
+    transport = FakeTransport((HttpResponse(429, {}, b"{}"), success))
+    delays: list[float] = []
+    model = ProviderRoleModel(
+        OpenRouterAdapter(
+            transport,
+            secret_resolver=lambda _name: "fixture-secret",
+            rate_limit_retries=1,
+            sleeper=delays.append,
+        ),
+        "provider/free-model:free",
+        RoleKind.RECON,
+    )
+
+    result = model.respond("fixture")
+
+    assert result.structured == {"observations": ["ready"]}
+    assert delays == [10.0]
+    assert len(transport.requests) == 2
+
+
+def test_rate_limit_retry_header_is_case_insensitive_and_stays_bounded() -> None:
+    transport = FakeTransport(
+        (
+            HttpResponse(429, {"Retry-After": "2.5"}, b"{}"),
+            HttpResponse(429, {"retry-after": "2.5"}, b"{}"),
+        )
+    )
+    delays: list[float] = []
+    adapter = OpenRouterAdapter(
+        transport,
+        secret_resolver=lambda _name: "fixture-secret",
+        rate_limit_retries=1,
+        sleeper=delays.append,
+    )
+
+    with pytest.raises(ProviderError) as caught:
+        adapter.complete(
+            ModelRequest(
+                "provider/free-model:free",
+                ({"role": "user", "content": "fixture"},),
+            )
+        )
+
+    assert caught.value.issue.code == "SOVA-PROVIDER-RATE-LIMIT"
+    assert caught.value.issue.details == {"retryAfter": "2.5", "retryCount": 1}
+    assert delays == [2.5]
+
+
+@pytest.mark.parametrize("retry_count", (-1, 3))
+def test_provider_rate_limit_retry_count_is_bounded(retry_count: int) -> None:
+    with pytest.raises(ProviderError, match="retry count"):
+        OpenRouterAdapter(
+            FakeTransport(()),
+            secret_resolver=lambda _name: "fixture-secret",
+            rate_limit_retries=retry_count,
+        )
 
 
 @pytest.mark.parametrize("text", ('```json\n{"x":1}\n```', "[]", "not-json"))

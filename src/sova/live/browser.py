@@ -62,6 +62,7 @@ _MAX_VISUAL_REPLAY_BYTES = 128 * 1024 * 1024
 _MAX_VISUAL_REPLAYS = 4
 _VISUAL_RECORDING_TOOLS = frozenset(
     {
+        "browser_snapshot",
         "browser_start_video",
         "browser_stop_video",
         "browser_video_chapter",
@@ -673,6 +674,10 @@ def run_live_browser_assessment(  # noqa: PLR0913, PLR0915 - evidence phases sta
         try:
             if record_video:
                 _require_visual_recording_tools(client)
+                # Playwright MCP creates its first page lazily. Materialize that page
+                # before recording so the screencast target is awaited in both headed
+                # and headless sessions instead of depending on a page-created race.
+                _call_visual_recording_tool(client, "browser_snapshot", {})
                 _call_visual_recording_tool(
                     client,
                     "browser_start_video",

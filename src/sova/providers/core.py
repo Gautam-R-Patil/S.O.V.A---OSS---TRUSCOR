@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import ssl
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
@@ -26,6 +27,9 @@ _RATE_LIMIT_STATUS = 429
 _HTTP_SUCCESS_MIN = 200
 _HTTP_SUCCESS_MAX = 300
 _MIN_SWAP_CONFIGURATIONS = 2
+_MAX_RATE_LIMIT_RETRIES = 2
+_MAX_RETRY_DELAY_SECONDS = 30.0
+_OPENROUTER_FALLBACK_RETRY_SECONDS = 10.0
 
 
 class ProviderError(FormatError):
@@ -220,9 +224,18 @@ class ProviderAdapter:
         transport: HttpTransport,
         *,
         secret_resolver: SecretResolver = _environment_secret,
+        rate_limit_retries: int = 0,
+        sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
+        if not 0 <= rate_limit_retries <= _MAX_RATE_LIMIT_RETRIES:
+            raise ProviderError(
+                "SOVA-PROVIDER-RETRY",
+                "provider rate-limit retry count is outside 0..2",
+            )
         self.transport = transport
         self.secret_resolver = secret_resolver
+        self.rate_limit_retries = rate_limit_retries
+        self.sleeper = sleeper
 
     def _credential(self) -> str | None:
         if self.credential_name is None:
@@ -242,13 +255,24 @@ class ProviderAdapter:
         raise NotImplementedError
 
     def complete(self, request: ModelRequest) -> ModelResult:
-        response = self.transport.send(self._request(request), timeout=request.timeout_seconds)
-        if response.status == _RATE_LIMIT_STATUS:
-            raise ProviderError(
-                "SOVA-PROVIDER-RATE-LIMIT",
-                "provider rate limit reached",
-                details={"retryAfter": response.headers.get("retry-after")},
-            )
+        retry_count = 0
+        while True:
+            response = self.transport.send(self._request(request), timeout=request.timeout_seconds)
+            if response.status != _RATE_LIMIT_STATUS:
+                break
+            retry_after = _header_value(response.headers, "retry-after")
+            delay = _rate_limit_delay(self.provider, retry_after)
+            if retry_count >= self.rate_limit_retries or delay is None:
+                details: dict[str, Any] = {"retryAfter": retry_after}
+                if self.rate_limit_retries:
+                    details["retryCount"] = retry_count
+                raise ProviderError(
+                    "SOVA-PROVIDER-RATE-LIMIT",
+                    "provider rate limit reached",
+                    details=details,
+                )
+            retry_count += 1
+            self.sleeper(delay)
         if not _HTTP_SUCCESS_MIN <= response.status < _HTTP_SUCCESS_MAX:
             raise ProviderError(
                 "SOVA-PROVIDER-HTTP",
@@ -287,6 +311,23 @@ class ProviderAdapter:
 
 def _json_headers(**extra: str) -> dict[str, str]:
     return {"content-type": "application/json", "accept": "application/json", **extra}
+
+
+def _header_value(headers: Mapping[str, str], name: str) -> str | None:
+    expected = name.casefold()
+    return next((value for key, value in headers.items() if key.casefold() == expected), None)
+
+
+def _rate_limit_delay(provider: str, retry_after: str | None) -> float | None:
+    if retry_after is not None:
+        try:
+            delay = float(retry_after)
+        except ValueError:
+            return None
+        return delay if 0 < delay <= _MAX_RETRY_DELAY_SECONDS else None
+    if provider == "openrouter":
+        return _OPENROUTER_FALLBACK_RETRY_SECONDS
+    return None
 
 
 def _provider_json_bytes(value: dict[str, Any]) -> bytes:
@@ -417,9 +458,17 @@ class OpenRouterAdapter(ProviderAdapter):
         choice = choices[0] if isinstance(choices, list) and choices else {}
         message = choice.get("message", {}) if isinstance(choice, dict) else {}
         usage = response.get("usage", {})
+        returned_model = response.get("model")
+        resolved_model = (
+            returned_model
+            if isinstance(returned_model, str)
+            and returned_model
+            and len(returned_model) <= _MAX_MODEL_NAME
+            else request.model
+        )
         return ModelResult(
             self.provider,
-            request.model,
+            resolved_model,
             str(message.get("content", "")) if isinstance(message, dict) else "",
             choice.get("finish_reason") if isinstance(choice, dict) else None,
             {

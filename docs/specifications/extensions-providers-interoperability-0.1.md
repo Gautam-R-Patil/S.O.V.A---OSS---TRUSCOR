@@ -65,8 +65,18 @@ Remote requests require a pinned HTTPS origin, reject redirects, and cap the
 response at 8 MiB. Ollama permits HTTP only on loopback. Secrets resolve at call
 time from an injected resolver, environment reference, or optional OS keyring
 and are never serialized into a SOVA result. Pricing is `not-pinned` unless an
-experiment explicitly freezes it; no cost is invented. HTTP 429 preserves the
-provider's retry-after value as an optional operational hint.
+experiment explicitly freezes it; no cost is invented. Direct adapters fail
+fast on HTTP 429 and preserve the provider's retry-after value as an optional
+operational hint. Configured provider-role runtimes retry at most twice, honor
+a bounded numeric `Retry-After`, and use a ten-second fallback only for
+OpenRouter when that header is absent.
+
+The configured route identifier and the provider-returned model identifier are
+separate provenance fields. This matters for router aliases such as
+`openrouter/free`: evidence keeps the requested route as `modelId` and records a
+bounded, non-secret `resolvedModelId` when the provider reports the concrete
+model. If the response omits or malforms that value, SOVA retains the configured
+route and does not invent a resolved identity.
 
 Role routing configures attacker, judge, mutator, oracle, and target model
 separately. A model-swap run reuses the same request envelope, but exact text

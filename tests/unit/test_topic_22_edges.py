@@ -392,6 +392,20 @@ def test_provider_discovery_and_parse_fallbacks() -> None:
     assert router.complete(_request()).text == ""
     assert router.list_models() == ()
 
+    routed = OpenRouterAdapter(
+        FakeTransport(
+            (
+                HttpResponse(
+                    200,
+                    {},
+                    b'{"model":"provider/concrete","choices":[],"usage":null}',
+                ),
+            )
+        ),
+        secret_resolver=lambda _name: "secret",
+    )
+    assert routed.complete(_request()).model == "provider/concrete"
+
     ollama = OllamaAdapter(
         FakeTransport(
             (

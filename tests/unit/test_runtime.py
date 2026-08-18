@@ -444,6 +444,7 @@ def test_model_router_budgets_fallbacks_and_tool_isolation() -> None:
                             {"ok": True},
                             token_count=17,
                             monetary_cost="0",
+                            resolved_model_id="fixture-provider/resolved-model",
                         )
                     ],
                     model_id="fallback",
@@ -453,7 +454,9 @@ def test_model_router_budgets_fallbacks_and_tool_isolation() -> None:
     )
     invocation = router.invoke(RoleKind.RECON, "prompt", output_budget=4096)
     assert invocation.model_id == "fallback"
+    assert invocation.resolved_model_id == "fixture-provider/resolved-model"
     assert invocation.fallback_errors == ("failed:ScriptedModelError",)
+    assert invocation.to_mapping()["resolvedModelId"] == "fixture-provider/resolved-model"
     assert invocation.to_mapping()["usage"] == {
         "inputBytes": 6,
         "outputBytes": invocation.output_bytes,
@@ -488,6 +491,30 @@ def test_model_router_budgets_fallbacks_and_tool_isolation() -> None:
         }
     ).invoke(RoleKind.RECON, "prompt", output_budget=4096, tools_allowed=True)
     assert allowed.tool_call_count == 1
+
+
+@pytest.mark.parametrize("resolved_model_id", ("", "x" * 513))
+def test_model_router_rejects_invalid_resolved_model_provenance(
+    resolved_model_id: str,
+) -> None:
+    router = ModelRouter(
+        {
+            RoleKind.RECON: (
+                ScriptedModel(
+                    [
+                        ScriptedTurn(
+                            "prompt",
+                            "ok",
+                            {"ok": True},
+                            resolved_model_id=resolved_model_id,
+                        )
+                    ]
+                ),
+            )
+        }
+    )
+    with pytest.raises(FormatError, match="all models failed"):
+        router.invoke(RoleKind.RECON, "prompt", output_budget=4096)
 
 
 @pytest.mark.parametrize(

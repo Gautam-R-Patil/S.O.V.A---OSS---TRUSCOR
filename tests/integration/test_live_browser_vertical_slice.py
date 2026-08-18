@@ -6,11 +6,13 @@ from __future__ import annotations
 import base64
 import os
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Self, cast
 
 import pytest
 
 import sova.live.browser as live_browser_module
+import sova.live.campaign as live_campaign_module
 from sova.capsule import build_capsule, capsule_manifest_template, scenario_template
 from sova.community import (
     BrowserSwarmBudget,
@@ -59,6 +61,7 @@ class _DeterministicBrowserMCP:
         names = (
             "browser_navigate",
             "browser_snapshot",
+            "browser_wait_for",
             "browser_type",
             "browser_click",
             "browser_take_screenshot",
@@ -73,6 +76,7 @@ class _DeterministicBrowserMCP:
         self.armed = False
         self.triggered = False
         self.current = ""
+        self.initial_snapshot_observed = False
         argv = getattr(_spec, "argv", ())
         self.output = Path(argv[argv.index("--output-dir") + 1])
         try:
@@ -107,7 +111,11 @@ class _DeterministicBrowserMCP:
         timeout_seconds: float,
     ) -> MCPToolResult:
         assert timeout_seconds > 0
-        if name == "browser_navigate":
+        if name == "browser_snapshot":
+            self.initial_snapshot_observed = True
+        elif name == "browser_start_video":
+            assert self.initial_snapshot_observed
+        elif name == "browser_navigate":
             self.armed = False
             self.triggered = False
             self.current = ""
@@ -398,6 +406,89 @@ def test_bounded_live_campaign_discovers_reproduces_and_packages(
     assert report["attempts"][2]["score"] == "0.5"
     assert report["attempts"][3]["triggered"] is True
     assert verify_artifact(artifacts.discovery_capsule).state == VerificationState.VERIFIED
+
+
+@pytest.mark.integration
+def test_campaign_execution_budget_excludes_deliberate_human_review_time(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    origin = "http://127.0.0.1:9187"
+    runner = tmp_path / "npx.exe"
+    browser = tmp_path / "browser.exe"
+    runner.write_bytes(b"deterministic test placeholder")
+    browser.write_bytes(b"deterministic test placeholder")
+    monkeypatch.setattr("sova.live.campaign.StdioMCPClient", _DeterministicBrowserMCP)
+    clock = [0.0]
+    monkeypatch.setattr(
+        live_campaign_module,
+        "time",
+        SimpleNamespace(monotonic=lambda: clock[0]),
+    )
+
+    def approve(challenge: Any, _intents: Any) -> str:
+        clock[0] = 24 * 60 * 60.0
+        return str(challenge.exact_phrase)
+
+    artifacts = run_browser_campaign(
+        owned_web_target(origin),
+        owned_web_campaign(origin + "/"),
+        tmp_path / "delayed-approval-result",
+        package_runner=runner,
+        browser_executable=browser,
+        approval_prompt=approve,
+    )
+
+    report = strict_json_loads(artifacts.report.read_bytes())
+    assert isinstance(report, dict)
+    assert artifacts.status == "pass"
+    assert len(artifacts.traces) == 4
+    assert report["search"]["durationMs"] == 0
+    assert report["claims"]["boundedCandidateSearchExecuted"] is True
+    assert report["claims"]["realBrowserExecuted"] is True
+
+
+@pytest.mark.integration
+def test_zero_attempt_campaign_does_not_claim_browser_execution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    origin = "http://127.0.0.1:9187"
+    runner = tmp_path / "npx.exe"
+    browser = tmp_path / "browser.exe"
+    runner.write_bytes(b"deterministic test placeholder")
+    browser.write_bytes(b"deterministic test placeholder")
+    monkeypatch.setattr("sova.live.campaign.StdioMCPClient", _DeterministicBrowserMCP)
+
+    def approve(challenge: Any, _intents: Any) -> str:
+        ticks = iter((0.0, 301.0))
+
+        def elapsed_clock() -> float:
+            return next(ticks, 301.0)
+
+        monkeypatch.setattr(
+            live_campaign_module,
+            "time",
+            SimpleNamespace(monotonic=elapsed_clock),
+        )
+        return str(challenge.exact_phrase)
+
+    artifacts = run_browser_campaign(
+        owned_web_target(origin),
+        owned_web_campaign(origin + "/"),
+        tmp_path / "zero-attempt-result",
+        package_runner=runner,
+        browser_executable=browser,
+        approval_prompt=approve,
+    )
+
+    report = strict_json_loads(artifacts.report.read_bytes())
+    assert isinstance(report, dict)
+    assert artifacts.status == "not-confirmed"
+    assert artifacts.traces == ()
+    assert report["search"]["stopReason"] == "duration-budget"
+    assert report["claims"]["boundedCandidateSearchExecuted"] is False
+    assert report["claims"]["realBrowserExecuted"] is False
 
 
 @pytest.mark.integration
@@ -776,12 +867,18 @@ def test_optional_real_playwright_mcp_owned_fixture(tmp_path: Path) -> None:
     os.environ.get("SOVA_RUN_REAL_BROWSER") != "1",
     reason="set SOVA_RUN_REAL_BROWSER=1 for the optional installed-browser lane",
 )
-def test_optional_real_playwright_mcp_records_visual_replay(tmp_path: Path) -> None:
+@pytest.mark.parametrize("headless", (True, False), ids=("headless", "headed"))
+def test_optional_real_playwright_mcp_records_visual_replay(
+    tmp_path: Path,
+    *,
+    headless: bool,
+) -> None:
     artifacts = run_owned_web_vertical_slice(
-        tmp_path / "real-browser-recorded",
+        tmp_path / f"real-browser-recorded-{headless}",
         package_runner=Path(r"C:\Program Files\nodejs\npx.cmd"),
         browser_executable=Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
         approval_prompt=lambda challenge, _intent: challenge.exact_phrase,
+        headless=headless,
         record_video=True,
         browser_cache=Path.cwd() / ".cache" / "playwright-browsers",
     )

@@ -51,6 +51,7 @@ class ProviderModelResponse:
     token_count: int | None
     monetary_cost: str | None = None
     tool_calls: tuple[dict[str, Any], ...] = ()
+    resolved_model_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,7 +119,12 @@ class ProviderRoleModel:
             if isinstance(value, int) and not isinstance(value, bool)
         ]
         token_count = sum(counts) if counts else None
-        return ProviderModelResponse(result.text, structured, token_count)
+        return ProviderModelResponse(
+            result.text,
+            structured,
+            token_count,
+            resolved_model_id=f"{result.provider}:{result.model}",
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -260,6 +266,7 @@ def _adapter(
     return adapter_type(
         UrllibTransport((origin,)),
         secret_resolver=secret_resolver,
+        rate_limit_retries=2,
     )
 
 

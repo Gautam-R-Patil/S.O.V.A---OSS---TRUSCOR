@@ -35,6 +35,7 @@ _MAX_SIGNALS = 16
 _MAX_TOTAL_TOKENS = 10_000_000
 _MAX_CASE_POINTS = 100
 _MAX_PARTICIPANT_ID_CHARS = 128
+_MAX_RESOLVED_MODEL_ID_CHARS = 512
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,6 +157,7 @@ class _Invocation:
     input_bytes: int
     output_bytes: int
     token_count: int | None
+    resolved_model_id: str | None
 
 
 def _fingerprint(
@@ -304,6 +306,16 @@ def _invoke(
         isinstance(token_count, bool) or not isinstance(token_count, int) or token_count < 0
     ):
         raise FormatError("SOVA-AGENT-ARENA-USAGE", "participant token usage is invalid")
+    resolved_model_id = getattr(response, "resolved_model_id", None)
+    if resolved_model_id is not None and (
+        not isinstance(resolved_model_id, str)
+        or not resolved_model_id
+        or len(resolved_model_id) > _MAX_RESOLVED_MODEL_ID_CHARS
+    ):
+        raise FormatError(
+            "SOVA-AGENT-ARENA-PROVENANCE",
+            "participant resolved model identifier is invalid",
+        )
     return _Invocation(
         participant,
         model.model_id,
@@ -313,6 +325,7 @@ def _invoke(
         len(prompt.encode("utf-8")),
         len(response_bytes),
         token_count,
+        resolved_model_id,
     )
 
 
@@ -450,6 +463,7 @@ def _record_invocation(  # noqa: PLR0913
         "model.response",
         {
             "modelId": invocation.model_id,
+            "resolvedModelId": invocation.resolved_model_id,
             "responseDigest": invocation.response_digest,
             "message": message,
             "signals": list(signals),

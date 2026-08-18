@@ -508,6 +508,12 @@ def test_constructor_hostile_boundaries(factory: Callable[[], object]) -> None:
         ScriptedTurn("prompt", "", {"candidateIndex": 0, "message": 1}),
         ScriptedTurn("prompt", "x" * 2000, {"candidateIndex": 0, "message": "ok"}),
         ScriptedTurn("prompt", "", {"candidateIndex": 0, "message": "ok"}, token_count=-1),
+        ScriptedTurn(
+            "prompt",
+            "",
+            {"candidateIndex": 0, "message": "ok"},
+            resolved_model_id="",
+        ),
     ],
 )
 def test_proposal_refuses_malformed_or_over_budget_output(turn: ScriptedTurn) -> None:

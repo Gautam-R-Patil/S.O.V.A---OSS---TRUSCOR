@@ -37,7 +37,7 @@ class _Client:
     def list_tools(self) -> tuple[MCPTool, ...]:
         return tuple(
             MCPTool(name, name, {"type": "object"}, None, {})
-            for name in ("browser_navigate", "browser_snapshot")
+            for name in ("browser_close", "browser_navigate", "browser_snapshot")
         )
 
     def call_tool(
@@ -47,8 +47,8 @@ class _Client:
         *,
         timeout_seconds: float,
     ) -> MCPToolResult:
-        assert name in {"browser_navigate", "browser_snapshot"}
-        assert timeout_seconds in {20, 30}
+        assert name in {"browser_close", "browser_navigate", "browser_snapshot"}
+        assert timeout_seconds in {10.0, 20, 30}
         self._calls += 1
         if "url" in arguments:
             self._url = str(arguments["url"])
@@ -193,7 +193,6 @@ def test_persistent_session_failure_paths_are_explicit(
             workspace=workspace,
             request_id="failed-snapshot",
         )
-
     runner = tmp_path / "npx"
     browser = tmp_path / "chrome"
     runner.write_bytes(b"fixture")

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 import secrets
+import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -22,6 +23,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _CUA_PIPE = re.compile(r"^\\\\\.\\pipe\\sova-cua-[a-f0-9]{32}$")
+_WINDOWS_PROFILE_COOKIE_MIGRATION = sys.platform == "win32"
+_WINDOWS_PROFILE_CONFIG = (
+    b'{"browser":{"launchOptions":{"args":["--enable-features=TriggerNetworkDataMigration"]}}}\n'
+)
 
 
 def _file(path: Path, role: str) -> str:
@@ -95,19 +100,11 @@ def playwright_stdio_spec(  # noqa: PLR0913 - launch security inputs remain expl
     if profile_directory is None:
         profile_args: tuple[str, ...] = ("--isolated",)
     else:
-        admission_root = workspace if profile_vault_root is None else profile_vault_root.resolve()
-        if not admission_root.is_dir() or admission_root.is_symlink():
-            raise FormatError(
-                "SOVA-MCP-LAUNCH-PATH",
-                "Playwright profile vault root must be a real existing directory",
-            )
-        profile = _inside(admission_root, profile_directory, "Playwright profile directory")
-        if not profile.is_dir() or profile.is_symlink():
-            raise FormatError(
-                "SOVA-MCP-LAUNCH-PATH",
-                "Playwright profile directory must be a real existing directory",
-            )
-        profile_args = ("--user-data-dir", str(profile))
+        profile_args = _playwright_profile_args(
+            workspace,
+            profile_directory,
+            profile_vault_root,
+        )
     display_args = ("--headless",) if headless else ()
     video_args = ("--viewport-size", "1280x720", "--caps", "devtools") if record_video else ()
     return StdioServerSpec(
@@ -244,6 +241,41 @@ def _inside(root: Path, candidate: Path, role: str) -> Path:
             f"{role} must stay inside the admitted workspace",
         ) from error
     return resolved
+
+
+def _playwright_profile_args(
+    workspace: Path,
+    profile_directory: Path,
+    profile_vault_root: Path | None,
+) -> tuple[str, ...]:
+    admission_root = workspace if profile_vault_root is None else profile_vault_root.resolve()
+    if not admission_root.is_dir() or admission_root.is_symlink():
+        raise FormatError(
+            "SOVA-MCP-LAUNCH-PATH",
+            "Playwright profile vault root must be a real existing directory",
+        )
+    profile = _inside(admission_root, profile_directory, "Playwright profile directory")
+    if not profile.is_dir() or profile.is_symlink():
+        raise FormatError(
+            "SOVA-MCP-LAUNCH-PATH",
+            "Playwright profile directory must be a real existing directory",
+        )
+    profile_args = ("--user-data-dir", str(profile))
+    if not _WINDOWS_PROFILE_COOKIE_MIGRATION:
+        return profile_args
+    config_path = _inside(
+        workspace,
+        workspace / ".sova" / "playwright-windows-profile.json",
+        "Playwright profile configuration",
+    )
+    if config_path.is_symlink() or (config_path.exists() and not config_path.is_file()):
+        raise FormatError(
+            "SOVA-MCP-LAUNCH-PATH",
+            "Playwright profile configuration must be a regular file",
+        )
+    if not config_path.exists() or config_path.read_bytes() != _WINDOWS_PROFILE_CONFIG:
+        config_path.write_bytes(_WINDOWS_PROFILE_CONFIG)
+    return (*profile_args, "--config", str(config_path))
 
 
 @dataclass(frozen=True, slots=True)

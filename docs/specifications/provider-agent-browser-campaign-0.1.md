@@ -27,14 +27,20 @@ The runtime invokes five bounded roles in order:
 Every role must return one strict JSON object matching its role schema. Unknown
 fields, wrapped Markdown, arrays at the root, tool calls, oversized output,
 invalid token usage, exhausted budgets, and excess candidates fail closed.
-Target and prior-role strings are explicitly untrusted data.
+Target, campaign, candidate-seed, and prior-role strings are explicitly
+untrusted data.
 
-Only the target identifier, kind, version, declared capabilities, allowed
-origins, browser profile, and a digest of the complete target configuration are
-shown to planning roles. The planning trace and report retain provider/model
-identity, prompt/response digests, byte and token accounting, and fallback
-errors. They do not copy the provider's structured prose. The generated
-candidate set is necessarily retained in the reviewed browser campaign.
+Planning roles receive the target identifier, kind, version, declared
+capabilities, allowed origins, browser profile, and a digest of the complete
+target configuration. They also receive the campaign entry URL, interaction
+selectors, observable oracle, ceilings, offensive flag, and the already
+validated operator-declared candidate seeds. Candidate seeds cannot grant
+authority. Because provider calls disclose this declared planning context to
+the configured service, the explicit `--allow-provider-calls` gate is required.
+The planning trace and report retain provider/model identity, prompt/response
+digests, byte and token accounting, and fallback errors. They do not copy the
+provider's structured prose. The generated candidate set is necessarily
+retained in the reviewed browser campaign.
 
 ## Authority boundary
 

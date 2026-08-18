@@ -353,6 +353,7 @@ class MCPExecutorAdapter:
         tools = {tool.name: tool for tool in client.list_tools()}
         self._mappings = {mapping.action: mapping for mapping in mappings if mapping.tool in tools}
         self._tools = tools
+        self._closed = False
 
     def __enter__(self) -> Self:
         return self
@@ -456,7 +457,15 @@ class MCPExecutorAdapter:
             )
 
     def close(self) -> None:
-        self._client.close()
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            if "browser_close" in self._tools:
+                with suppress(FormatError):
+                    self._client.call_tool("browser_close", {}, timeout_seconds=10.0)
+        finally:
+            self._client.close()
 
 
 def playwright_mappings(*, allowed_origins: tuple[str, ...] = ()) -> tuple[ToolMapping, ...]:

@@ -22,6 +22,7 @@ class ScriptedTurn:
     failure: str | None = None
     token_count: int | None = None
     monetary_cost: str | None = None
+    resolved_model_id: str | None = None
 
 
 class ScriptedModel:

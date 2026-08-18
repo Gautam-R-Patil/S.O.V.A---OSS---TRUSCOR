@@ -68,12 +68,14 @@ build/
 coverage/
 .coverage
 coverage.json
+/coverage-*.json
 htmlcov/
 *.log
 audit-requirements.txt
 /.validation/
 tmp/
 temp/
+/.tmp/
 .cache/
 .tmp-npm-cache/
 

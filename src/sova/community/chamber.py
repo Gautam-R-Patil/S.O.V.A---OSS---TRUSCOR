@@ -48,6 +48,7 @@ _MAX_DURATION_SECONDS = 3600
 _MIN_OUTPUT_BYTES = 1024
 _MAX_OUTPUT_BYTES = 1024 * 1024
 _MAX_TOTAL_TOKENS = 10_000_000
+_MAX_RESOLVED_MODEL_ID_CHARS = 512
 _MAX_DESCRIPTION_CHARS = 512
 _MAX_OBJECTIVE_CHARS = 4096
 _MAX_TITLE_CHARS = 512
@@ -444,6 +445,16 @@ def _participant_output(
         isinstance(token_count, bool) or not isinstance(token_count, int) or token_count < 0
     ):
         raise FormatError("SOVA-CHAMBER-USAGE", "provider token count is invalid")
+    resolved_model_id = getattr(response, "resolved_model_id", None)
+    if resolved_model_id is not None and (
+        not isinstance(resolved_model_id, str)
+        or not resolved_model_id
+        or len(resolved_model_id) > _MAX_RESOLVED_MODEL_ID_CHARS
+    ):
+        raise FormatError(
+            "SOVA-CHAMBER-PROVENANCE",
+            "provider resolved model identifier is invalid",
+        )
     normalized = {
         "message": message,
         "actions": list(actions),
@@ -451,6 +462,7 @@ def _participant_output(
     }
     metadata = {
         "modelId": model.model_id,
+        "resolvedModelId": resolved_model_id,
         "promptDigest": sha256_digest(prompt.encode("utf-8")),
         "responseDigest": sha256_digest(encoded),
         "structuredDigest": sha256_digest(canonical_json_bytes(normalized)),
@@ -485,8 +497,19 @@ def _judge_output(
         "assessment": value["assessment"],
         "limitations": list(value["limitations"]),
     }
+    resolved_model_id = getattr(response, "resolved_model_id", None)
+    if resolved_model_id is not None and (
+        not isinstance(resolved_model_id, str)
+        or not resolved_model_id
+        or len(resolved_model_id) > _MAX_RESOLVED_MODEL_ID_CHARS
+    ):
+        raise FormatError(
+            "SOVA-CHAMBER-PROVENANCE",
+            "provider resolved model identifier is invalid",
+        )
     metadata = {
         "modelId": model.model_id,
+        "resolvedModelId": resolved_model_id,
         "promptDigest": sha256_digest(prompt.encode("utf-8")),
         "responseDigest": sha256_digest(encoded),
         "structuredDigest": sha256_digest(canonical_json_bytes(normalized)),

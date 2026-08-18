@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+import sova.mcp.specs as mcp_specs
 from sova.cli import main
 from sova.executors import (
     ActionOutcome,
@@ -229,6 +230,24 @@ def test_playwright_adapter_discovers_subset_normalizes_and_post_observes(
     assert outcome.verification == "post-action-observation"
     assert outcome.output["postObservationDigest"].startswith("sha256:")
     assert [call[0] for call in client.calls] == ["browser_navigate", "browser_snapshot"]
+
+
+def test_playwright_adapter_gracefully_closes_browser_before_transport() -> None:
+    client = FakeMCPClient(
+        ("browser_close", "browser_navigate"),
+        [MCPToolResult(content=(), structured_content=None, is_error=False)],
+    )
+    adapter = MCPExecutorAdapter("playwright", client, playwright_mappings())
+
+    adapter.close()
+    adapter.close()
+
+    assert client.calls == [("browser_close", {})]
+    assert client.closed
+
+    unavailable = FakeMCPClient(("browser_close", "browser_navigate"), [])
+    MCPExecutorAdapter("playwright", unavailable, playwright_mappings()).close()
+    assert unavailable.closed
 
 
 def test_playwright_adapter_enforces_exact_navigation_origin(tmp_path: Path) -> None:
@@ -706,7 +725,10 @@ def test_cua_provider_failure_does_not_escalate_without_typed_reason(tmp_path: P
     assert [name for name, _arguments in client.calls] == ["start_session", "scroll"]
 
 
-def test_pinned_open_source_launch_specs_are_fail_closed(tmp_path: Path) -> None:  # noqa: PLR0915
+def test_pinned_open_source_launch_specs_are_fail_closed(  # noqa: PLR0915
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     runner = tmp_path / "npx.cmd"
     node = tmp_path / "node.exe"
     melra_cli = tmp_path / "melra-cli.js"
@@ -762,6 +784,7 @@ def test_pinned_open_source_launch_specs_are_fail_closed(tmp_path: Path) -> None
 
     profile = tmp_path / ".sova" / "browser-profiles" / "persistent"
     profile.mkdir(parents=True)
+    monkeypatch.setattr(mcp_specs, "_WINDOWS_PROFILE_COOKIE_MIGRATION", True)
     persistent = playwright_stdio_spec(
         package_runner=runner,
         workspace=tmp_path,
@@ -773,6 +796,15 @@ def test_pinned_open_source_launch_specs_are_fail_closed(tmp_path: Path) -> None
     assert "--headless" not in persistent.argv
     profile_index = persistent.argv.index("--user-data-dir")
     assert persistent.argv[profile_index + 1] == str(profile.resolve())
+    config_index = persistent.argv.index("--config")
+    config_path = Path(persistent.argv[config_index + 1])
+    assert json.loads(config_path.read_text(encoding="utf-8")) == {
+        "browser": {
+            "launchOptions": {
+                "args": ["--enable-features=TriggerNetworkDataMigration"],
+            }
+        }
+    }
 
     external_vault = tmp_path.parent / f"{tmp_path.name}-profile-vault"
     external_profile = external_vault / "profile"
