@@ -67,7 +67,8 @@ Prepare the target, campaign, provider runtime, and control proof using the
 ```powershell
 sova arena web website-target.json browser-campaign.json provider-runtime.json `
   .\arena-web-output --control-proof control-proof.json `
-  --allow-provider-calls --stream-jsonl
+  --allow-provider-calls --stream-jsonl --headed --record-video `
+  --playwright-browser-cache .\.cache\playwright-browsers
 ```
 
 SOVA keeps planning roles away from browser tools. It validates their proposed
@@ -75,12 +76,37 @@ candidate set and displays the complete action batch. Nothing executes until a
 human types the fresh digest-bound phrase. The browser executor remains pinned
 to the exact authorized origin.
 
+With `--headed`, the same admitted campaign is visible in the installed
+browser while it runs. With `--record-video`, SOVA records that campaign and
+its fresh reproduction, adds an `EXPLOIT CONFIRMED` chapter when the persisted
+deterministic oracle passes, and packages `replay-cues.json` with the WebM and
+signed traces. Render the proof directly:
+
+```powershell
+sova replay capsule .\arena-web-output\browser\discovery.sova `
+  .\arena-web-output\decisive-replay.html
+```
+
+The replay defaults to the decisive cue belonging to the selected primary trace
+(the controlled reproduction trace when that conventional object is present),
+opens two seconds before that oracle, and plays only through its three-second
+post-roll when **Play decisive moment** is selected. It also selects the exact
+`oracle.completed` trace event and displays the channel, sequence, oracle
+status, video offset, and synchronization uncertainty. The cue uses the
+same-host monotonic clock bounded by the successful recorder start RPC. Video
+frames are not independently cryptographically timestamped.
+
 This path can navigate and evaluate only the operations supported by the
 declared campaign and admitted browser adapter. It does not bypass login,
 CAPTCHA, anti-bot controls, or platform terms; create accounts; collect
 credentials; or silently escalate scope. An authenticated testing adapter may
 in future consume an operator-prepared disposable session, but authentication
 material must never enter a `.sova`, trace, report, or live stream.
+
+`arena web` is a provider-assisted, bounded candidate campaign: provider roles
+propose candidates and SOVA executes the exact reviewed browser actions. It is
+not an unrestricted agent that can invent arbitrary browser tools or silently
+roam outside the declared origin and action budget.
 
 ## Run several roles over one prepared browser identity
 

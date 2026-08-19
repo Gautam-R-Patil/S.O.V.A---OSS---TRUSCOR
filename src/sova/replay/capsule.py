@@ -55,7 +55,12 @@ def _trace_priority(descriptor: ContentDescriptor) -> tuple[int, str]:
 def _choose_evidence(
     descriptors: list[ContentDescriptor],
     selection: CapsuleReplaySelection,
-) -> tuple[ContentDescriptor, ContentDescriptor | None, ContentDescriptor | None]:
+) -> tuple[
+    ContentDescriptor,
+    ContentDescriptor | None,
+    ContentDescriptor | None,
+    ContentDescriptor | None,
+]:
     traces = sorted((item for item in descriptors if item.role == "trace"), key=_trace_priority)
     if not traces:
         raise FormatError(
@@ -100,7 +105,15 @@ def _choose_evidence(
                     details={"available": [item.path for item in media_candidates]},
                 )
             media = media_candidates[0] if media_candidates else None
-    return primary, comparison, media
+    cue_candidates = [item for item in descriptors if item.role == "replay-cues"]
+    if len(cue_candidates) > 1:
+        raise FormatError(
+            "SOVA-REPLAY-CAPSULE-AMBIGUOUS-CUES",
+            "capsule contains multiple replay cue indexes",
+            details={"available": [item.path for item in cue_candidates]},
+        )
+    cues = cue_candidates[0] if cue_candidates and media is not None else None
+    return primary, comparison, media, cues
 
 
 def render_capsule_timeline(
@@ -133,7 +146,7 @@ def render_capsule_timeline(
 
     reader = PackageReader(capsule)
     descriptors = reader.verify("sova.capsule")
-    primary, comparison, media = _choose_evidence(
+    primary, comparison, media, cues = _choose_evidence(
         descriptors,
         selected,
     )
@@ -156,11 +169,21 @@ def render_capsule_timeline(
                 )
             media_path = root / f"session{extension}"
             media_path.write_bytes(reader.read_object(media))
+        cue_path: Path | None = None
+        if cues is not None:
+            if cues.mediaType != "application/json":
+                raise FormatError(
+                    "SOVA-REPLAY-CUES-TYPE",
+                    "replay-cues object must declare application/json",
+                )
+            cue_path = root / "replay-cues.json"
+            cue_path.write_bytes(reader.read_object(cues))
         render_timeline_html(
             primary_path,
             destination,
             comparison=comparison_path,
             media=media_path,
+            replay_cues=cue_path,
         )
     return {
         "artifactType": "sova.capsule-replay",
@@ -170,6 +193,8 @@ def render_capsule_timeline(
         "primaryTrace": primary.path,
         "comparisonTrace": None if comparison is None else comparison.path,
         "visualReplay": None if media is None else media.path,
+        "replayCues": None if cues is None else cues.path,
+        "opensAtDecisiveMoment": cues is not None,
         "executesRecordedActions": False,
     }
 

@@ -423,7 +423,9 @@ The pre-alpha now includes:
   sensor lanes, search, recorded-link navigation, synchronized comparison, and
   a bounded integrity-checked loopback live tail;
 - explicit opt-in headed-browser WebM capture, typed visual-replay packaging,
-  and direct `sova replay capsule` rendering into one inert self-contained page;
+  digest-bound decisive-oracle cueing, and direct `sova replay capsule`
+  rendering that selects the exact trace event and opens its bounded decisive
+  video window in one inert self-contained page;
 - numerator/denominator, Wilson uncertainty, condition sensitivity, and
   optional calibrated-judge reporting;
 - a bounded MCP stdio client, pinned open-source launch recipes, capability
@@ -659,7 +661,10 @@ sova arena chamber ./examples/arena/chamber.json ./arena-chamber-output \
 # generated browser batch still requires fresh human approval.
 sova arena web ./website-target.json ./browser-campaign.json ./provider-runtime.json \
   ./arena-web-output --control-proof ./control-proof.json \
-  --allow-provider-calls --stream-jsonl
+  --allow-provider-calls --stream-jsonl --headed --record-video \
+  --playwright-browser-cache ./.cache/playwright-browsers
+sova replay capsule ./arena-web-output/browser/discovery.sova \
+  ./arena-web-output/decisive-replay.html
 # Run several bounded roles over one operator-prepared, target-bound browser
 # profile. Scripted roles need no provider-call flag.
 sova arena swarm-web ./website-target.json ./browser-campaign.json \
@@ -933,7 +938,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | SOVA Runtime | Provider-neutral isolated roles, standard/custom profiles, evidence firewall, local minimized experience, opaque sessions, and verified executor fallback implemented in [ADR-0014](./docs/decisions/0014-evidence-firewalled-runtime.md) |
 | `sova check` | Bundled synthetic and authorized live-browser checks with finite candidate sets, exact human approval, signed traces, controlled reproduction, and honest confirmed/not-observed/inconclusive states |
 | `sova detonate` | Real Playwright/Chrome website execution plus bounded trusted local-process execution on two credential-stripped copies; both require exact human approval and produce signed primary/reproduction traces plus evidence capsules. Browser detonation supports explicit opt-in headed WebM recording packaged as typed visual replay and rendered directly from the capsule. A four-class static/SPA/authenticated/popup owned-site matrix passed real Chrome. The contained action lab adds real disposable file, loopback SMTP email, loopback message, and settings effects with independent ground-truth receipts and a registry-ready module; this proves the controlled vertical, not arbitrary third-party agents. Windows/macOS Appium and Linux AT-SPI application-bound adapters exist at the executor API, but general native-desktop detonation still requires platform drivers, owned fixtures, and CLI integration |
-| `sova hunt` | Bounded operator-authored or provider-assisted candidate search executes in real Playwright/Chrome, records snapshot/console/network observations, detects near misses, reproduces the winning recipe under fresh approval, and emits signed traces plus an offline-verifiable discovery capsule; deterministic tests verify isolated roles, while a real external-provider acceptance run remains optional and unclaimed |
+| `sova hunt` | Bounded operator-authored or provider-assisted candidate search executes in real Playwright/Chrome, records snapshot/console/network observations, detects near misses, reproduces the winning recipe under fresh approval, and emits signed traces plus an offline-verifiable discovery capsule. Deterministic tests verify isolated roles; one founder-authorized OpenRouter free-model run against loopback AI Goat Challenge 1 passed with controlled reproduction and digest-bound exact-moment video evidence on 2026-08-20. This is not general target coverage or provider-quality evidence; see the [bounded acceptance record](./docs/engineering/aigoat-loopback-acceptance-2026-08-20.md) |
 | Persistent browser sessions | Exact-target-bound opaque profiles, cross-process exclusive leases, bounded stale recovery, manual headful authentication/CAPTCHA handoff, campaign reuse, and installed-Chrome two-process fixture persistence are implemented; profile state remains sensitive local executor material, is not SOVA-encrypted, and is never embedded in capsules or traces |
 | MELRA/CUA adapters | MELRA `0.3.0-alpha.10` browser/terminal/computer probe and same-process session reuse passed live; checksum-pinned CUA `0.12.6` bounded reads passed, while live desktop mutation remains visibly blocked on this runner |
 | Sleeper demonstration | Implemented with named narrow baselines, two-dimensional search, signed discovery/reproduction traces, `.sova`, independent offline verification, and reset evidence |

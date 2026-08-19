@@ -61,10 +61,13 @@ WebM/MP4 in the inert offline evidence navigator. `sova replay capsule
 EVIDENCE.sova OUTPUT` performs the same operation directly from verified typed
 capsule objects. Use `sova inspect EVIDENCE.sova` to see exact object paths;
 selection flags are required when a capsule has multiple possible comparisons
-or recordings. Video capture itself is opt-in on browser detonation through
-`--headed --record-video` and requires a caller-managed Playwright FFmpeg
-cache. Recordings may contain screen-visible secrets and are not frame-level
-cryptographic attestations.
+or recordings. Video capture itself is opt-in on browser detonation and
+provider-backed `arena web` through `--headed --record-video` and requires a
+caller-managed Playwright FFmpeg cache. A recorded passing oracle is packaged
+with a media-digest-bound cue; capsule replay selects that trace event and
+opens at its bounded video offset. Recordings may contain screen-visible
+secrets, and same-host cue synchronization is not a frame-level cryptographic
+attestation.
 
 `sova replay serve TRACE` is a foreground, read-only, loopback reference
 service for a sealed trace or its integrity-valid live prefix. It uses a random

@@ -16,6 +16,10 @@ that a local `TraceWriter` is still producing.
 writes one self-contained, offline HTML file. `sova replay capsule CAPSULE
 OUTPUT` verifies a `.sova` package and selects its primary trace, optional
 reproduction trace, and optional typed visual replay without manual extraction.
+If the capsule also contains one typed `replay-cues` object, the renderer
+verifies that its media digest matches the selected recording and that every
+cue names a real passing `oracle.completed` event at the exact recorded
+sequence in the selected trace pair.
 `sova replay serve SOURCE` starts a bounded
 foreground service on literal `127.0.0.1` and prints a random capability URL.
 The service exists for local live tailing; it is not production HTTP.
@@ -31,9 +35,13 @@ Both interfaces provide:
 - an explicit statement that playback performs no recorded action.
 
 When reviewed WebM or MP4 media is supplied, the static page embeds the bytes
-as a local data URL with native playback controls. The page identifies the
-video digest and states that synchronization is session-level rather than
-event-time attested. Media is never accepted by the live-tail service.
+as a local data URL with native playback controls. Media without a cue index is
+identified as session-level rather than event-time synchronized. A valid cue
+index makes the page select the decisive `oracle.completed` event, seek two
+seconds before its bounded video offset, and expose a five-second decisive
+playback window. The page displays the synchronization method and uncertainty;
+it does not call host-clock synchronization a cryptographic frame timestamp.
+Media is never accepted by the live-tail service.
 
 Capsule replay uses exact verified object descriptors. If more than one
 candidate comparison trace or visual recording exists, it refuses ambiguity
@@ -92,6 +100,9 @@ a restrictive Content Security Policy, no remote dependencies, no forms, and
 no execution bridge. Trace payloads cannot become HTML, CSS, URLs, or script.
 Static media is limited to one reviewed WebM/MP4 regular file of at most 128
 MiB. Empty, linked, unsupported, ambiguous, or digest-invalid media is refused.
+Replay cues are capped at 64 entries and 256 KiB, require canonical decimal
+timings, must be digest-bound to the selected media, and may reference only
+events present in the selected verified traces.
 Embedded video pixels are sensitive evidence and receive no automatic visual
 redaction.
 

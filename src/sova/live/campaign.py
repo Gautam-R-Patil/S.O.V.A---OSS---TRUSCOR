@@ -6,6 +6,7 @@ from __future__ import annotations
 import platform
 import time
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -24,6 +25,13 @@ from sova.live.browser import (
     verified_browser_control,
 )
 from sova.live.fixture_web import OwnedWebFixture
+from sova.live.recording import (
+    collect_visual_replays,
+    recorded_observer,
+    start_visual_recording,
+    stop_visual_recording,
+    write_replay_cues,
+)
 from sova.live.startup import start_stdio_client
 from sova.mcp import MCPExecutorAdapter, StdioMCPClient, playwright_mappings, playwright_stdio_spec
 from sova.reproduction import compare_observable_outcomes
@@ -225,6 +233,8 @@ class BrowserCampaignArtifacts:
     discovery_capsule: Path | None
     report: Path
     status: str
+    visual_replays: tuple[Path, ...] = ()
+    replay_cues: Path | None = None
 
 
 def browser_campaign_from_mapping(value: dict[str, Any]) -> BrowserCampaign:
@@ -547,6 +557,9 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
     event_observer: CampaignEventObserver | None = None,
     profile_lease: BrowserProfileLease | None = None,
     cancellation: CancellationToken | None = None,
+    headless: bool = True,
+    record_video: bool = False,
+    browser_cache: Path | None = None,
 ) -> BrowserCampaignArtifacts:
     """Search a declared candidate set, reproduce success, and package proof."""
     if cancellation is not None and cancellation.cancelled:
@@ -601,7 +614,8 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
         "ephemeralProfile": profile_lease is None,
         "profileMode": "ephemeral" if profile_lease is None else "opaque-exclusive-durable",
         "profileEvidence": None if profile_lease is None else profile_lease.trace_mapping(),
-        "headless": True,
+        "headless": headless,
+        "visualRecording": record_video,
         "serviceWorkersBlocked": True,
         "allowedOrigins": list(origins),
         "nativeSandboxClaim": False,
@@ -614,8 +628,11 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
         browser_executable=browser_executable,
         allowed_origins=origins,
         package_cache=package_cache,
+        browser_cache=browser_cache,
         profile_directory=(None if profile_lease is None else profile_lease.path_for_executor()),
         profile_vault_root=(None if profile_lease is None else profile_lease.root_for_executor()),
+        headless=headless,
+        record_video=record_video,
     )
     signing_key = generate_ed25519_keypair()
     code_digest = sha256_digest(
@@ -634,6 +651,15 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             "license": spec.license,
         }
     ]
+    if record_video:
+        dependencies.append(
+            {
+                "name": "playwright-ffmpeg",
+                "version": "revision-1011",
+                "source": "https://cdn.playwright.dev/dbazure/download/playwright/ffmpeg/1011/",
+                "license": "LGPL-2.1-or-later",
+            }
+        )
     environment = {
         "platform": platform.platform(),
         "python": platform.python_version(),
@@ -686,6 +712,7 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
     success_row: tuple[str, TriggerCandidate, Path, dict[str, Any]] | None = None
     reproduction_trace: Path | None = None
     comparison = None
+    recording = None
     with (
         start_stdio_client(spec, StdioMCPClient) as client,
         MCPExecutorAdapter(
@@ -693,6 +720,7 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             client,
             playwright_mappings(allowed_origins=origins),
         ) as executor,
+        ExitStack() as recording_stack,
     ):
         session, approval_sets = authorize_browser_scenarios(
             tuple((key, scenario) for key, _candidate_item, _capsule, scenario in rows),
@@ -706,6 +734,9 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
         )
         # Human review is intentionally outside the execution budget. Start
         # timing only after the exact candidate batch has been approved.
+        if record_video:
+            recording = start_visual_recording(client)
+            recording_stack.callback(stop_visual_recording, client)
         started = time.monotonic()
         for index, row in enumerate(rows):
             if cancellation is not None and cancellation.cancelled:
@@ -725,7 +756,7 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
                 environment=environment,
                 fingerprints=fingerprints,
                 cancellation=cancellation,
-                event_observer=_channel_observer(event_observer, key),
+                event_observer=recorded_observer(recording, client, event_observer, key),
             )
             TraceReader(trace).verify(require_signature=True)
             observation = _trace_observation(trace, triggered=result.oracle_status == "pass")
@@ -760,7 +791,9 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
                 environment=environment,
                 fingerprints=fingerprints,
                 cancellation=cancellation,
-                event_observer=_channel_observer(event_observer, "reproduction"),
+                event_observer=recorded_observer(
+                    recording, client, event_observer, "reproduction"
+                ),
             )
             TraceReader(reproduction_trace).verify(require_signature=True)
             comparison = compare_observable_outcomes(
@@ -768,6 +801,13 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             )
             if repeated.oracle_status != "pass":
                 comparison = None
+
+    visual_replays = collect_visual_replays(destination) if record_video else ()
+    replay_cues = (
+        write_replay_cues(destination, recording, visual_replays[0])
+        if recording is not None and recording.cues and visual_replays
+        else None
+    )
 
     success = None if success_row is None else success_row[1]
     search_report = SearchReport(
@@ -833,15 +873,19 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             }
         ]
         manifest["limitations"] = list(search_report.limitations)
+        discovery_attachments = {
+            "campaign.json": canonical_json_bytes(campaign.to_mapping()),
+            "target.json": canonical_json_bytes(target.to_mapping()),
+            "search-report.json": search_report_bytes,
+        }
+        discovery_attachments.update({path.name: path.read_bytes() for path in visual_replays})
+        if replay_cues is not None:
+            discovery_attachments[replay_cues.name] = replay_cues.read_bytes()
         build_capsule(
             discovery_capsule,
             manifest,
             scenario=winning_scenario,
-            attachments={
-                "campaign.json": canonical_json_bytes(campaign.to_mapping()),
-                "target.json": canonical_json_bytes(target.to_mapping()),
-                "search-report.json": search_report_bytes,
-            },
+            attachments=discovery_attachments,
             traces=[attempt_files[-1], reproduction_trace],
         )
 
@@ -894,6 +938,23 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             "target": target_path.name,
             "campaign": campaign_path.name,
             "discoveryCapsule": None if discovery_capsule is None else discovery_capsule.name,
+            "visualReplays": [
+                {
+                    "path": item.name,
+                    "mediaType": "video/webm",
+                    "digest": sha256_digest(item.read_bytes()),
+                    "size": item.stat().st_size,
+                    "scope": "combined-search-and-reproduction-browser-session",
+                    "synchronization": (
+                        "same-host-monotonic-recorder-start-rpc-bound"
+                        if replay_cues is not None
+                        else "session-level-recording-not-event-time-attested"
+                    ),
+                    "operatorOptIn": True,
+                }
+                for item in visual_replays
+            ],
+            "replayCues": None if replay_cues is None else replay_cues.name,
         },
         "claims": {
             "realBrowserExecuted": bool(attempts),
@@ -903,9 +964,20 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             "autonomousNovelAttackGeneration": False,
             "universalCoverage": False,
             "privateModelThoughtsCaptured": False,
+            "visualReplayRecorded": bool(visual_replays),
+            "decisiveReplayCueRecorded": bool(recording is not None and recording.cues),
         },
         "limitations": [
             *search_report.limitations,
+            *(
+                (
+                    "Replay cue offsets use the recorder host monotonic clock and a bounded "
+                    "recorder-start RPC window; browser frames are not independently "
+                    "cryptographically timestamped.",
+                )
+                if record_video
+                else ()
+            ),
             *(
                 (
                     "The local browser profile may contain authentication material and is "
@@ -925,16 +997,21 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
         discovery_capsule,
         report_path,
         status,
+        visual_replays,
+        replay_cues,
     )
 
 
-def run_owned_web_campaign(
+def run_owned_web_campaign(  # noqa: PLR0913 - visual capture policy stays explicit
     destination: Path,
     *,
     package_runner: Path,
     browser_executable: Path,
     approval_prompt: ApprovalPrompt,
     event_observer: CampaignEventObserver | None = None,
+    headless: bool = True,
+    record_video: bool = False,
+    browser_cache: Path | None = None,
 ) -> BrowserCampaignArtifacts:
     """Prove bounded trigger discovery through a real browser on SOVA's fixture."""
     with OwnedWebFixture() as fixture:
@@ -946,6 +1023,9 @@ def run_owned_web_campaign(
             browser_executable=browser_executable,
             approval_prompt=approval_prompt,
             event_observer=event_observer,
+            headless=headless,
+            record_video=record_video,
+            browser_cache=browser_cache,
         )
 
 

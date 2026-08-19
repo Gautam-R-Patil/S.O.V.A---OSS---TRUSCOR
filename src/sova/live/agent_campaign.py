@@ -337,6 +337,9 @@ def run_agent_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
     event_observer: AgentCampaignEventObserver | None = None,
     prior_rounds: tuple[dict[str, Any], ...] = (),
     profile_lease: BrowserProfileLease | None = None,
+    headless: bool = True,
+    record_video: bool = False,
+    browser_cache: Path | None = None,
 ) -> AgentBrowserCampaignArtifacts:
     """Plan without tools, execute only after review, and judge only safe evidence."""
     if max_model_turns < _REQUIRED_MODEL_TURNS:
@@ -475,6 +478,9 @@ def run_agent_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             control_proof=control_proof,
             event_observer=event_observer,
             profile_lease=profile_lease,
+            headless=headless,
+            record_video=record_video,
+            browser_cache=browser_cache,
         )
         browser_report = strict_json_loads(browser.report.read_bytes())
         if not isinstance(browser_report, dict):
@@ -577,6 +583,10 @@ def run_agent_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             "generatedActionsRequiredHumanReview": True,
             "deterministicEvidenceControlledVerdict": True,
             "privateModelThoughtsCaptured": False,
+            "visualReplayRecorded": bool(browser.visual_replays),
+            "decisiveReplayCueRecorded": (
+                browser.status == "pass" and browser.replay_cues is not None
+            ),
         },
         "limitations": [
             "Candidate quality depends on the configured provider and declared budgets.",

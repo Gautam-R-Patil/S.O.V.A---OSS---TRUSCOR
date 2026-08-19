@@ -13,7 +13,7 @@ import pytest
 
 from sova.capsule import build_capsule, capsule_manifest_template
 from sova.cli import main
-from sova.formats import PackageReader, PackageWriter, canonical_json_bytes
+from sova.formats import PackageReader, PackageWriter, canonical_json_bytes, sha256_digest
 from sova.formats.errors import FormatError
 from sova.replay import (
     CapsuleReplaySelection,
@@ -129,6 +129,252 @@ def test_static_replay_embeds_reviewed_browser_video_without_executing_trace_con
     assert "event-time synchronization is not attested" in rendered
     assert f"data:video/webm;base64,{base64.b64encode(payload).decode('ascii')}" in rendered
     assert "media-src 'self' data:" in rendered
+
+
+def test_replay_cues_open_on_digest_bound_decisive_oracle_moment(tmp_path: Path) -> None:
+    source = tmp_path / "decisive.sova-trace"
+    writer = TraceWriter(source)
+    event_id = writer.append("oracle.completed", {"status": "pass", "results": []})
+    assert event_id is not None
+    writer.finalize()
+    video = tmp_path / "browser-session.webm"
+    video.write_bytes(b"\x1a\x45\xdf\xa3decisive-video")
+    cues = tmp_path / "replay-cues.json"
+    cue_document = {
+        "artifactType": "sova.replay-cues",
+        "schemaVersion": "0.1.0",
+        "mediaName": video.name,
+        "mediaDigest": sha256_digest(video.read_bytes()),
+        "synchronization": {
+            "method": "same-host-monotonic-recorder-start-rpc-bound",
+            "uncertaintyMs": "1.250",
+            "frameTimestampAttested": False,
+            "statement": "Fixture same-host monotonic synchronization bound.",
+        },
+        "cues": [
+            {
+                "id": "decisive-01",
+                "label": "Exploit confirmed",
+                "channel": "attempt-001",
+                "eventId": event_id,
+                "eventKind": "oracle.completed",
+                "eventSequence": 0,
+                "oracleStatus": "pass",
+                "offsetSeconds": "4.500000",
+                "chapterOffsetSeconds": "4.600000",
+                "preRollSeconds": "2.000000",
+                "postRollSeconds": "3.000000",
+            }
+        ],
+    }
+    cues.write_bytes(canonical_json_bytes(cue_document) + b"\n")
+    destination = tmp_path / "decisive-replay.html"
+
+    render_timeline_html(source, destination, media=video, replay_cues=cues)
+
+    rendered = destination.read_text(encoding="utf-8")
+    assert 'id="breakpoint"' in rendered
+    assert 'id="playDecisive"' in rendered
+    assert '"defaultCueId":"decisive-01"' in rendered
+    assert "same-host-monotonic-recorder-start-rpc-bound" in rendered
+    assert "seekCue(cue,false)" in rendered
+
+    manifest = capsule_manifest_template(
+        title="Decisive replay", summary="Digest-bound replay cue fixture.", author="Tests"
+    )
+    manifest["license"] = "Apache-2.0"
+    manifest["safety"]["impact"] = "none"
+    capsule = tmp_path / "decisive.sova"
+    build_capsule(
+        capsule,
+        manifest,
+        attachments={video.name: video.read_bytes(), cues.name: cues.read_bytes()},
+        traces=[source],
+    )
+    report = render_capsule_timeline(capsule, tmp_path / "capsule-decisive.html")
+    assert report["opensAtDecisiveMoment"] is True
+    assert report["replayCues"] is not None
+
+
+def test_replay_cues_default_to_the_selected_primary_trace(tmp_path: Path) -> None:
+    discovery = tmp_path / "discovery.sova-trace"
+    discovery_writer = TraceWriter(discovery)
+    discovery_event = discovery_writer.append(
+        "oracle.completed", {"status": "pass", "results": []}
+    )
+    assert discovery_event is not None
+    discovery_writer.finalize()
+    reproduction = tmp_path / "reproduction.sova-trace"
+    reproduction_writer = TraceWriter(reproduction)
+    reproduction_event = reproduction_writer.append(
+        "oracle.completed", {"status": "pass", "results": []}
+    )
+    assert reproduction_event is not None
+    reproduction_writer.finalize()
+    video = tmp_path / "browser-session.webm"
+    video.write_bytes(b"\x1a\x45\xdf\xa3two-trace-video")
+    cues = tmp_path / "replay-cues.json"
+    cue_template = {
+        "label": "Exploit confirmed",
+        "eventKind": "oracle.completed",
+        "eventSequence": 0,
+        "oracleStatus": "pass",
+        "preRollSeconds": "2.000000",
+        "postRollSeconds": "3.000000",
+    }
+    cues.write_bytes(
+        canonical_json_bytes(
+            {
+                "artifactType": "sova.replay-cues",
+                "schemaVersion": "0.1.0",
+                "mediaName": video.name,
+                "mediaDigest": sha256_digest(video.read_bytes()),
+                "synchronization": {
+                    "method": "same-host-monotonic-recorder-start-rpc-bound",
+                    "uncertaintyMs": "1.000",
+                    "frameTimestampAttested": False,
+                    "statement": "Fixture.",
+                },
+                "cues": [
+                    {
+                        **cue_template,
+                        "id": "decisive-discovery",
+                        "channel": "attempt-001",
+                        "eventId": discovery_event,
+                        "offsetSeconds": "4.000000",
+                        "chapterOffsetSeconds": "4.100000",
+                    },
+                    {
+                        **cue_template,
+                        "id": "decisive-reproduction",
+                        "channel": "reproduction",
+                        "eventId": reproduction_event,
+                        "offsetSeconds": "8.000000",
+                        "chapterOffsetSeconds": "8.100000",
+                    },
+                ],
+            }
+        )
+        + b"\n"
+    )
+
+    destination = tmp_path / "two-trace-replay.html"
+    render_timeline_html(
+        reproduction,
+        destination,
+        comparison=discovery,
+        media=video,
+        replay_cues=cues,
+    )
+
+    rendered = destination.read_text(encoding="utf-8")
+    assert '"defaultCueId":"decisive-reproduction"' in rendered
+
+
+def test_replay_cues_reject_empty_or_duplicate_indexes(tmp_path: Path) -> None:
+    source = tmp_path / "cue-policy.sova-trace"
+    writer = TraceWriter(source)
+    event_id = writer.append("oracle.completed", {"status": "pass", "results": []})
+    assert event_id is not None
+    writer.finalize()
+    video = tmp_path / "browser-session.webm"
+    video.write_bytes(b"\x1a\x45\xdf\xa3cue-policy-video")
+    cues = tmp_path / "replay-cues.json"
+    document = {
+        "artifactType": "sova.replay-cues",
+        "schemaVersion": "0.1.0",
+        "mediaName": video.name,
+        "mediaDigest": sha256_digest(video.read_bytes()),
+        "synchronization": {
+            "method": "same-host-monotonic-recorder-start-rpc-bound",
+            "uncertaintyMs": "1.000",
+            "frameTimestampAttested": False,
+            "statement": "Fixture.",
+        },
+        "cues": [],
+    }
+    cues.write_bytes(canonical_json_bytes(document) + b"\n")
+    with pytest.raises(FormatError, match="count"):
+        render_timeline_html(source, tmp_path / "empty-cues.html", media=video, replay_cues=cues)
+
+    cue = {
+        "id": "duplicate",
+        "label": "Exploit confirmed",
+        "channel": "attempt-001",
+        "eventId": event_id,
+        "eventKind": "oracle.completed",
+        "eventSequence": 0,
+        "oracleStatus": "pass",
+        "offsetSeconds": "4.000000",
+        "chapterOffsetSeconds": "4.100000",
+        "preRollSeconds": "2.000000",
+        "postRollSeconds": "3.000000",
+    }
+    document["cues"] = [cue, dict(cue)]
+    cues.write_bytes(canonical_json_bytes(document) + b"\n")
+    with pytest.raises(FormatError, match="invalid decisive"):
+        render_timeline_html(
+            source,
+            tmp_path / "duplicate-cues.html",
+            media=video,
+            replay_cues=cues,
+        )
+
+    document["cues"] = [{**cue, "id": "wrong-sequence", "eventSequence": 99}]
+    cues.write_bytes(canonical_json_bytes(document) + b"\n")
+    with pytest.raises(FormatError, match="invalid decisive"):
+        render_timeline_html(
+            source,
+            tmp_path / "wrong-event-sequence.html",
+            media=video,
+            replay_cues=cues,
+        )
+
+    document["cues"] = [{**cue, "id": "noncanonical-time", "offsetSeconds": "4e0"}]
+    cues.write_bytes(canonical_json_bytes(document) + b"\n")
+    with pytest.raises(FormatError, match="invalid decisive"):
+        render_timeline_html(
+            source,
+            tmp_path / "noncanonical-time.html",
+            media=video,
+            replay_cues=cues,
+        )
+
+
+def test_replay_cues_reject_wrong_media_binding(tmp_path: Path) -> None:
+    source = tmp_path / "wrong-binding.sova-trace"
+    writer = TraceWriter(source)
+    event_id = writer.append("oracle.completed", {"status": "pass", "results": []})
+    assert event_id is not None
+    writer.finalize()
+    video = tmp_path / "browser-session.webm"
+    video.write_bytes(b"\x1a\x45\xdf\xa3binding-video")
+    cues = tmp_path / "replay-cues.json"
+    cues.write_bytes(
+        canonical_json_bytes(
+            {
+                "artifactType": "sova.replay-cues",
+                "schemaVersion": "0.1.0",
+                "mediaName": video.name,
+                "mediaDigest": "sha256:" + "0" * 64,
+                "synchronization": {
+                    "method": "same-host-monotonic-recorder-start-rpc-bound",
+                    "uncertaintyMs": "1.000",
+                    "frameTimestampAttested": False,
+                    "statement": "Fixture.",
+                },
+                "cues": [],
+            }
+        )
+        + b"\n"
+    )
+    with pytest.raises(FormatError, match="not bound"):
+        render_timeline_html(
+            source,
+            tmp_path / "wrong-binding.html",
+            media=video,
+            replay_cues=cues,
+        )
 
 
 def test_static_replay_refuses_empty_unsupported_and_linked_media(tmp_path: Path) -> None:

@@ -101,11 +101,13 @@ not prove that an executor did not retain its own copy.
 The optional WebM is intentionally different: it preserves the reviewed
 browser session so a human can watch the interaction. It may contain target
 content, identifiers, or secrets visible on screen, so use isolated accounts,
-review it before export, and apply the declared retention policy. It is
-session/chapter-level visual evidence, not cryptographically attested
-frame-to-event synchronization. `sova replay capsule` verifies every capsule
-object, materializes selected members only in a temporary directory, embeds the
-video in one self-contained inert HTML page, and removes the temporary files.
+review it before export, and apply the declared retention policy. Recorded
+runs package a digest-bound replay cue for every passing deterministic oracle.
+`sova replay capsule` verifies every capsule object, validates each cue against
+the selected media and traces, opens on the decisive event with bounded
+pre/post roll, embeds the video in one self-contained inert HTML page, and
+removes the temporary files. Cue timing uses a same-host monotonic recorder
+start RPC bound; it is not a cryptographically attested frame timestamp.
 
 This proves the live browser/evidence path on SOVA's own target. It is not a VM
 sandbox, a production-site test, a jailbreak-superiority result, or evidence

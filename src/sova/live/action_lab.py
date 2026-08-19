@@ -812,6 +812,8 @@ def run_owned_action_lab_vertical_slice(  # noqa: PLR0913, PLR0915 - phases stay
             "target.json": browser.target.read_bytes(),
         }
         attachments.update({path.name: path.read_bytes() for path in browser.visual_replays})
+        if browser.replay_cues is not None:
+            attachments[browser.replay_cues.name] = browser.replay_cues.read_bytes()
         build_capsule(
             action_capsule,
             manifest,

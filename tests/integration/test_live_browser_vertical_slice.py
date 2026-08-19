@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Any, Self, cast
 
 import pytest
 
-import sova.live.browser as live_browser_module
 import sova.live.campaign as live_campaign_module
+import sova.live.recording as live_recording_module
 from sova.capsule import build_capsule, capsule_manifest_template, scenario_template
 from sova.community import (
     BrowserSwarmBudget,
@@ -227,12 +227,18 @@ def test_live_browser_recording_is_typed_packaged_and_reported(
     media = report["artifacts"]["visualReplays"][0]
     assert media["mediaType"] == "video/webm"
     assert media["operatorOptIn"] is True
-    assert media["synchronization"] == "chapter-separated-session-not-event-time-attested"
+    assert media["synchronization"] == "same-host-monotonic-recorder-start-rpc-bound"
+    assert artifacts.replay_cues is not None
+    cue_document = strict_json_loads(artifacts.replay_cues.read_bytes())
+    assert isinstance(cue_document, dict)
+    assert [cue["channel"] for cue in cue_document["cues"]] == ["primary", "reproduction"]
+    assert report["artifacts"]["replayCues"] == "replay-cues.json"
     descriptors = PackageReader(artifacts.evidence_capsule).verify("sova.capsule")
     visual = [descriptor for descriptor in descriptors if descriptor.role == "visual-replay"]
     assert len(visual) == 1
     assert visual[0].mediaType == "video/webm"
     assert visual[0].digest == media["digest"]
+    assert len([descriptor for descriptor in descriptors if descriptor.role == "replay-cues"]) == 1
 
 
 def test_visual_recording_helpers_refuse_missing_malformed_and_failed_backends(
@@ -241,27 +247,27 @@ def test_visual_recording_helpers_refuse_missing_malformed_and_failed_backends(
     destination = tmp_path / "recording-guards"
     destination.mkdir()
     with pytest.raises(FormatError, match="output directory is missing"):
-        live_browser_module._collect_visual_replays(destination)
+        live_recording_module.collect_visual_replays(destination)
 
     output = destination / ".sova" / "playwright-output"
     output.mkdir(parents=True)
     with pytest.raises(FormatError, match="produced no finalized WebM"):
-        live_browser_module._collect_visual_replays(destination)
+        live_recording_module.collect_visual_replays(destination)
     (output / "empty.webm").write_bytes(b"")
     with pytest.raises(FormatError, match="empty or exceeds"):
-        live_browser_module._collect_visual_replays(destination)
+        live_recording_module.collect_visual_replays(destination)
     (output / "empty.webm").unlink()
     for index in range(5):
         (output / f"recording-{index}.webm").write_bytes(b"\x1a\x45\xdf\xa3video")
     with pytest.raises(FormatError, match="too many browser recordings"):
-        live_browser_module._collect_visual_replays(destination)
+        live_recording_module.collect_visual_replays(destination)
 
     class MissingTools:
         def list_tools(self) -> tuple[MCPTool, ...]:
             return ()
 
     with pytest.raises(FormatError, match="did not advertise"):
-        live_browser_module._require_visual_recording_tools(cast("Any", MissingTools()))
+        live_recording_module.require_visual_recording_tools(cast("Any", MissingTools()))
 
     class FailedTool:
         def call_tool(
@@ -275,7 +281,7 @@ def test_visual_recording_helpers_refuse_missing_malformed_and_failed_backends(
             return MCPToolResult((), None, is_error=True)
 
     with pytest.raises(FormatError, match="recording tool failed"):
-        live_browser_module._call_visual_recording_tool(
+        live_recording_module.call_visual_recording_tool(
             cast("Any", FailedTool()), "browser_start_video", {}
         )
 
@@ -402,6 +408,8 @@ def test_bounded_live_campaign_discovers_reproduces_and_packages(
         "privateModelThoughtsCaptured": False,
         "realBrowserExecuted": True,
         "universalCoverage": False,
+        "visualReplayRecorded": False,
+        "decisiveReplayCueRecorded": False,
     }
     assert report["attempts"][2]["score"] == "0.5"
     assert report["attempts"][3]["triggered"] is True
@@ -624,6 +632,7 @@ def test_tool_isolated_agent_roles_plan_an_approved_real_browser_campaign(
         browser_executable=browser,
         approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
         event_observer=lambda channel, event: observed.setdefault(channel, []).append(event),
+        record_video=True,
     )
 
     assert artifacts.status == "pass"
@@ -637,6 +646,8 @@ def test_tool_isolated_agent_roles_plan_an_approved_real_browser_campaign(
         "privateModelThoughtsCaptured": False,
         "providerBackedPlanning": False,
         "isolatedRolePlanning": True,
+        "visualReplayRecorded": True,
+        "decisiveReplayCueRecorded": True,
     }
     assert report["judge"]["canOverride"] is False
     assert report["judge"]["conflict"] is False
@@ -647,6 +658,10 @@ def test_tool_isolated_agent_roles_plan_an_approved_real_browser_campaign(
     assert "fixture only" not in rendered
     assert observed["orchestration"] == TraceReader(artifacts.orchestration_trace).events()
     assert any(channel.startswith("attempt-") for channel in observed)
+    assert artifacts.browser.replay_cues is not None
+    descriptors = PackageReader(artifacts.browser.discovery_capsule).verify("sova.capsule")
+    assert any(item.role == "visual-replay" for item in descriptors)
+    assert any(item.role == "replay-cues" for item in descriptors)
 
 
 @pytest.mark.integration

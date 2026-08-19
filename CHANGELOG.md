@@ -17,6 +17,12 @@ have independent version ledgers.
 
 ### Added
 
+- Provider-backed `arena web` now supports the same explicit `--headed
+  --record-video` path as browser detonation. Passing deterministic oracle
+  events create visible exploit-confirmed chapters and canonical,
+  media-digest-bound replay cues; capsule replay selects the exact trace event
+  and opens a bounded decisive-moment video window with declared timing
+  uncertainty.
 - Explicit opt-in Playwright browser recording with headed WebM capture,
   chapter/action overlays, bounded and signature-checked media packaging, typed
   `visual-replay` capsule objects, `--media` timeline playback, and direct
@@ -252,6 +258,9 @@ have independent version ledgers.
 
 ### Fixed
 
+- Corrected the release claim ledger to the parser-verified 111 CLI leaf
+  commands and recorded the bounded provider-backed AI Goat loopback acceptance
+  without broadening it into an autonomous-coverage or provider-quality claim.
 - Standardized test invocation on `python -m pytest`, avoiding a Windows
   console-entry-point import-path failure for the public `scripts` package.
 - Current-to-current `.sova` migration now performs an exact, no-overwrite

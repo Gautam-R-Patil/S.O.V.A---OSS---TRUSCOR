@@ -53,7 +53,13 @@ def _attachment_role_and_media_type(logical_name: str) -> tuple[str, str]:
     lower = logical_name.casefold()
     suffix = next((item for item in _ATTACHMENT_MEDIA_TYPES if lower.endswith(item)), "")
     media_type = _ATTACHMENT_MEDIA_TYPES.get(suffix, "application/octet-stream")
-    role = "visual-replay" if media_type.startswith("video/") else "attachment"
+    role = (
+        "replay-cues"
+        if lower == "replay-cues.json"
+        else "visual-replay"
+        if media_type.startswith("video/")
+        else "attachment"
+    )
     return role, media_type
 
 

@@ -760,6 +760,9 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     hunt_fixture.add_argument("destination", type=_path)
     hunt_fixture.add_argument("--package-runner", type=_path)
     hunt_fixture.add_argument("--browser-executable", type=_path)
+    hunt_fixture.add_argument("--playwright-browser-cache", type=_path)
+    hunt_fixture.add_argument("--headed", action="store_true")
+    hunt_fixture.add_argument("--record-video", action="store_true")
     hunt_fixture.set_defaults(handler=_hunt_owned_web_fixture)
     hunt_browser = hunt_commands.add_parser(
         "browser",
@@ -771,6 +774,9 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     hunt_browser.add_argument("--control-proof", type=_path)
     hunt_browser.add_argument("--package-runner", type=_path)
     hunt_browser.add_argument("--browser-executable", type=_path)
+    hunt_browser.add_argument("--playwright-browser-cache", type=_path)
+    hunt_browser.add_argument("--headed", action="store_true")
+    hunt_browser.add_argument("--record-video", action="store_true")
     _add_browser_profile_arguments(hunt_browser)
     hunt_browser.set_defaults(handler=_hunt_browser)
     hunt_agent_browser = hunt_commands.add_parser(
@@ -787,6 +793,9 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     hunt_agent_browser.add_argument("--control-proof", type=_path)
     hunt_agent_browser.add_argument("--package-runner", type=_path)
     hunt_agent_browser.add_argument("--browser-executable", type=_path)
+    hunt_agent_browser.add_argument("--playwright-browser-cache", type=_path)
+    hunt_agent_browser.add_argument("--headed", action="store_true")
+    hunt_agent_browser.add_argument("--record-video", action="store_true")
     _add_browser_profile_arguments(hunt_agent_browser)
     hunt_agent_browser.add_argument(
         "--allow-provider-calls",
@@ -1240,6 +1249,9 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     arena_web.add_argument("--control-proof", type=_path)
     arena_web.add_argument("--package-runner", type=_path)
     arena_web.add_argument("--browser-executable", type=_path)
+    arena_web.add_argument("--playwright-browser-cache", type=_path)
+    arena_web.add_argument("--headed", action="store_true")
+    arena_web.add_argument("--record-video", action="store_true")
     _add_browser_profile_arguments(arena_web)
     arena_web.add_argument(
         "--allow-provider-calls",
@@ -1886,6 +1898,12 @@ def _campaign_output(artifacts: Any) -> dict[str, Any]:
         "discoveryCapsule": (
             None if artifacts.discovery_capsule is None else str(artifacts.discovery_capsule)
         ),
+        "visualReplays": [str(path) for path in getattr(artifacts, "visual_replays", ())],
+        "replayCues": (
+            None
+            if getattr(artifacts, "replay_cues", None) is None
+            else str(artifacts.replay_cues)
+        ),
         "report": str(artifacts.report),
     }
 
@@ -1898,6 +1916,9 @@ def _hunt_owned_web_fixture(args: argparse.Namespace) -> int:
         package_runner=package_runner,
         browser_executable=browser,
         approval_prompt=_live_campaign_prompt,
+        headless=not getattr(args, "headed", False),
+        record_video=getattr(args, "record_video", False),
+        browser_cache=getattr(args, "playwright_browser_cache", None),
     )
     sys.stdout.buffer.write(canonical_json_bytes(_campaign_output(artifacts)) + b"\n")
     return 0 if artifacts.status == "pass" else 2
@@ -1923,6 +1944,9 @@ def _hunt_browser(args: argparse.Namespace) -> int:
             approval_prompt=_live_campaign_prompt,
             control_proof=proof,
             profile_lease=profile_lease,
+            headless=not getattr(args, "headed", False),
+            record_video=getattr(args, "record_video", False),
+            browser_cache=getattr(args, "playwright_browser_cache", None),
         )
     sys.stdout.buffer.write(canonical_json_bytes(_campaign_output(artifacts)) + b"\n")
     return 0 if artifacts.status == "pass" else 2
@@ -1957,6 +1981,9 @@ def _hunt_agent_browser(args: argparse.Namespace) -> int:
             approval_prompt=_live_campaign_prompt,
             control_proof=proof,
             profile_lease=profile_lease,
+            headless=not getattr(args, "headed", False),
+            record_video=getattr(args, "record_video", False),
+            browser_cache=getattr(args, "playwright_browser_cache", None),
         )
     output = _campaign_output(artifacts.browser)
     output.update(
@@ -2370,6 +2397,9 @@ def _arena_web(args: argparse.Namespace) -> int:
             control_proof=proof,
             event_observer=observe if args.stream_jsonl else None,
             profile_lease=profile_lease,
+            headless=not getattr(args, "headed", False),
+            record_video=getattr(args, "record_video", False),
+            browser_cache=getattr(args, "playwright_browser_cache", None),
         )
     output = _campaign_output(artifacts.browser)
     output.update(
