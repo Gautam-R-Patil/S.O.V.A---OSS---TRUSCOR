@@ -1,6 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """Authorization-gated live assessment workflows."""
 
+from sova.live.action_lab import (
+    ActionLabArtifacts,
+    OwnedActionLab,
+    build_owned_action_lab_capsule,
+    owned_action_lab_target,
+    run_owned_action_lab_vertical_slice,
+)
 from sova.live.adaptive_campaign import (
     AdaptiveBrowserCampaignArtifacts,
     AdaptiveBrowserPolicy,
@@ -61,6 +68,7 @@ from sova.live.software import (
 )
 
 __all__ = [
+    "ActionLabArtifacts",
     "AdaptiveBrowserCampaignArtifacts",
     "AdaptiveBrowserPolicy",
     "AgentBrowserCampaignArtifacts",
@@ -74,6 +82,7 @@ __all__ = [
     "ControlFetchResult",
     "LiveBrowserArtifacts",
     "LiveSoftwareArtifacts",
+    "OwnedActionLab",
     "OwnedWebFixture",
     "OwnedWebMatrixFixture",
     "PersistentSessionArtifacts",
@@ -84,6 +93,7 @@ __all__ = [
     "WebsiteControlChallenge",
     "adaptive_browser_policy_from_mapping",
     "browser_campaign_from_mapping",
+    "build_owned_action_lab_capsule",
     "build_owned_software_capsule",
     "build_owned_web_capsule",
     "build_web_matrix_capsule",
@@ -91,6 +101,7 @@ __all__ = [
     "collect_website_control_proof",
     "control_proof_from_mapping",
     "create_website_control_challenge",
+    "owned_action_lab_target",
     "owned_web_campaign",
     "owned_web_target",
     "run_adaptive_agent_browser_campaign",
@@ -99,6 +110,7 @@ __all__ = [
     "run_browser_profile_handoff",
     "run_live_browser_assessment",
     "run_live_software_assessment",
+    "run_owned_action_lab_vertical_slice",
     "run_owned_persistent_session_restart_probe",
     "run_owned_software_vertical_slice",
     "run_owned_web_campaign",

@@ -16,12 +16,13 @@ from sova.command_audit import AuditError, audit, command_handlers, function_bod
 
 def test_every_cli_leaf_has_a_unique_registered_handler() -> None:
     handlers = command_handlers()
-    assert len(handlers) == 110
+    assert len(handlers) == 111
     assert len(set(handlers)) == len(handlers)
     assert all(name.startswith("_") for name in handlers.values())
     assert {
         "case build",
         "detonate owned-software-fixture",
+        "detonate action-lab",
         "detonate software",
         "target fixture",
         "target browser-kit",

@@ -52,6 +52,7 @@ claiming that the field set is ready for `1.0`.
 - [supply-chain release artifacts](./supply-chain-release-0.1.md)
 - [final-mile acceptance and stable-release gates](./final-mile-acceptance-0.1.md)
 - [browser adapters and held-out website matrix](./browser-adapters-and-web-matrix-0.1.md)
+- [contained consequential-action lab](./consequential-action-lab-0.1.md)
 - [cross-platform accessibility-first desktop execution](./cross-platform-desktop-execution-0.1.md)
 - [gVisor runsc isolation backend](./gvisor-runsc-isolation-0.1.md)
 - [claim-conditioned sensor coverage ledger](./sensor-coverage-ledger-0.1.md)

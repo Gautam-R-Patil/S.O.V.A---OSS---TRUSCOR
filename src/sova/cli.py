@@ -117,6 +117,7 @@ from sova.live import (
     run_browser_profile_handoff,
     run_live_browser_assessment,
     run_live_software_assessment,
+    run_owned_action_lab_vertical_slice,
     run_owned_software_vertical_slice,
     run_owned_web_campaign,
     run_owned_web_vertical_slice,
@@ -392,6 +393,20 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     detonate_fixture.add_argument("--headed", action="store_true")
     detonate_fixture.add_argument("--record-video", action="store_true")
     detonate_fixture.set_defaults(handler=_detonate_owned_web_fixture)
+    detonate_action_lab = detonate_commands.add_parser(
+        "action-lab",
+        help=(
+            "prove confined file, loopback email/message, settings, browser evidence, "
+            "reproduction, replay, and registry packaging"
+        ),
+    )
+    detonate_action_lab.add_argument("destination", type=_path)
+    detonate_action_lab.add_argument("--package-runner", type=_path)
+    detonate_action_lab.add_argument("--browser-executable", type=_path)
+    detonate_action_lab.add_argument("--playwright-browser-cache", type=_path)
+    detonate_action_lab.add_argument("--headed", action="store_true")
+    detonate_action_lab.add_argument("--record-video", action="store_true")
+    detonate_action_lab.set_defaults(handler=_detonate_action_lab)
     detonate_software_fixture = detonate_commands.add_parser(
         "owned-software-fixture",
         help="prove the real local-process-to-evidence pipeline on SOVA's inert fixture",
@@ -1583,6 +1598,58 @@ def _detonate_owned_web_fixture(args: argparse.Namespace) -> int:
         )
         + "\n"
     )
+    return 0 if artifacts.status == "pass" else 1
+
+
+def _detonate_action_lab(args: argparse.Namespace) -> int:
+    if not sys.stdin.isatty():
+        raise FormatError(
+            "SOVA-LIVE-INTERACTIVE-APPROVAL",
+            "consequential-action lab requires a human-operated interactive terminal",
+        )
+    package_runner = _detected_path(
+        args.package_runner,
+        ("npx.cmd", "npx"),
+        "Node package runner",
+    )
+    browser = _detected_path(
+        args.browser_executable,
+        (
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            "chrome.exe",
+            "msedge.exe",
+        ),
+        "Chromium browser executable",
+    )
+
+    def prompt(challenge: Any, intents: Any) -> str:
+        review = [
+            {
+                "target": intent.target,
+                "action": intent.action,
+                "effect": intent.effect.name.lower(),
+                "domain": intent.domain,
+                "offensive": intent.offensive,
+                "irreversible": intent.irreversible,
+                "requiredEvidence": sorted(intent.required_evidence),
+            }
+            for intent in intents
+        ]
+        sys.stderr.write(json.dumps({"approvedIntents": review}, indent=2) + "\n")
+        sys.stderr.write(f"Type exactly: {challenge.exact_phrase}\n")
+        return input("approval> ")
+
+    artifacts = run_owned_action_lab_vertical_slice(
+        args.destination,
+        package_runner=package_runner,
+        browser_executable=browser,
+        approval_prompt=prompt,
+        headless=not args.headed,
+        record_video=args.record_video,
+        browser_cache=args.playwright_browser_cache,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(artifacts.to_mapping()) + b"\n")
     return 0 if artifacts.status == "pass" else 1
 
 

@@ -214,6 +214,53 @@ def test_owned_fixture_detonation_routes_approval_and_outputs_artifacts(
         cli._detonate_owned_web_fixture(args)
 
 
+def test_action_lab_detonation_routes_approval_and_registry_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    _tty(monkeypatch)
+    executable = tmp_path / "executable.exe"
+    executable.write_bytes(b"fixture")
+
+    def run(destination: Path, **options: Any) -> Any:
+        assert options["package_runner"] == executable
+        assert options["browser_executable"] == executable
+        assert options["headless"] is False
+        assert options["record_video"] is True
+        assert options["browser_cache"] == tmp_path / "browser-cache"
+        prompt = options["approval_prompt"]
+        assert prompt(SimpleNamespace(exact_phrase="APPROVE"), (_intent(),)) == "APPROVE"
+        return SimpleNamespace(
+            status="pass",
+            to_mapping=lambda: {
+                "status": "pass",
+                "evidenceCapsule": str(destination / "action-evidence.sova"),
+                "replay": str(destination / "action-replay.html"),
+                "registryEntry": str(destination / "registry-entry.json"),
+            },
+        )
+
+    monkeypatch.setattr(cli, "_detected_path", lambda *_args, **_kwargs: executable)
+    monkeypatch.setattr(cli, "run_owned_action_lab_vertical_slice", run)
+    args = argparse.Namespace(
+        destination=tmp_path / "action-result",
+        package_runner=None,
+        browser_executable=None,
+        headed=True,
+        record_video=True,
+        playwright_browser_cache=tmp_path / "browser-cache",
+    )
+    assert cli._detonate_action_lab(args) == 0
+    output = json.loads(capfd.readouterr().out)
+    assert output["status"] == "pass"
+    assert output["evidenceCapsule"].endswith("action-evidence.sova")
+
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: False))
+    with pytest.raises(FormatError, match="human-operated interactive terminal"):
+        cli._detonate_action_lab(args)
+
+
 def test_external_browser_detonation_parses_optional_proof_and_failure_state(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

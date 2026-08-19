@@ -441,6 +441,10 @@ The pre-alpha now includes:
 - a loopback self-hosted registry/leaderboard reference service with bounded
   staged uploads, pinned evidence signers, restart-safe verification, signed
   indexes, SSE updates, and no execution of submitted content;
+- a contained consequential-action lab that creates a real disposable file,
+  transfers email through loopback SMTP, posts to a loopback message sink,
+  persists a disposable setting, repeats the effects, and packages signed
+  traces plus browser video, replay, and a registry-ready module entry;
 - a durable foreground monitor scheduler with non-executable job documents,
   overlap exclusion, restart recovery, retention, and signed drift evidence;
 - an MCP `2025-11-25` stdio server whose offensive tools require exact,
@@ -706,6 +710,12 @@ sova target fixture software ./software-fixture
 sova detonate owned-web-fixture ./live-browser-proof --headed --record-video \
   --playwright-browser-cache ./.cache/playwright-browsers
 
+# Prove consequential agent actions in the resettable owned action lab.
+# The recording visibly follows file, SMTP, message, settings, and proof views;
+# no external account, recipient, host path, or network service is reachable.
+sova detonate action-lab ./action-lab-proof --headed --record-video \
+  --playwright-browser-cache ./.cache/playwright-browsers
+
 # Exercise a real local process against two clean copies of SOVA's owned fixture.
 # The exact actions and host-process limitations require a human approval phrase.
 sova detonate owned-software-fixture ./live-software-proof
@@ -758,6 +768,21 @@ sova mcp init-control ./control.key
 # Launch broader live-target rehearsal only after a stronger admitted backend
 sova rehearse prepare ./authorized-target ./isolated-workspace
 ```
+
+### Is the registry “Metasploit for AI security”?
+
+That is the product direction, not a current equivalence claim. A registry
+entry can already distribute a content-addressed `.sova` scenario or finding,
+its reproduction metadata, taxonomy, provenance, licence, verification tier,
+and signed evidence. The contained action lab now emits the first concrete
+registry-ready action module and builds a verified signed local registry
+snapshot containing it. Unlike a raw exploit collection, the registry never
+executes submissions: secret scanning, safety validation, human review,
+disclosure state, exact authorization, and evidence verification stay mandatory.
+
+The remaining gap to a defensible “Metasploit-like” description is breadth:
+maintained modules for real agent/tool ecosystems, independent reproduction,
+moderation operations, and a deployed public service still require evidence.
 
 One safe implemented demonstration is available now:
 
@@ -907,7 +932,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `sova map` | Air-gapped typed inventory, provenance-separated reach closures, map schema, and tool-definition drift implemented in [ADR-0013](./docs/decisions/0013-provenance-separated-capability-map.md) |
 | SOVA Runtime | Provider-neutral isolated roles, standard/custom profiles, evidence firewall, local minimized experience, opaque sessions, and verified executor fallback implemented in [ADR-0014](./docs/decisions/0014-evidence-firewalled-runtime.md) |
 | `sova check` | Bundled synthetic and authorized live-browser checks with finite candidate sets, exact human approval, signed traces, controlled reproduction, and honest confirmed/not-observed/inconclusive states |
-| `sova detonate` | Real Playwright/Chrome website execution plus bounded trusted local-process execution on two credential-stripped copies; both require exact human approval and produce signed primary/reproduction traces plus evidence capsules. Browser detonation supports explicit opt-in headed WebM recording packaged as typed visual replay and rendered directly from the capsule. A four-class static/SPA/authenticated/popup owned-site matrix passed real Chrome. Windows/macOS Appium and Linux AT-SPI application-bound adapters exist at the executor API, but general native-desktop detonation still requires platform drivers, owned fixtures, and CLI integration |
+| `sova detonate` | Real Playwright/Chrome website execution plus bounded trusted local-process execution on two credential-stripped copies; both require exact human approval and produce signed primary/reproduction traces plus evidence capsules. Browser detonation supports explicit opt-in headed WebM recording packaged as typed visual replay and rendered directly from the capsule. A four-class static/SPA/authenticated/popup owned-site matrix passed real Chrome. The contained action lab adds real disposable file, loopback SMTP email, loopback message, and settings effects with independent ground-truth receipts and a registry-ready module; this proves the controlled vertical, not arbitrary third-party agents. Windows/macOS Appium and Linux AT-SPI application-bound adapters exist at the executor API, but general native-desktop detonation still requires platform drivers, owned fixtures, and CLI integration |
 | `sova hunt` | Bounded operator-authored or provider-assisted candidate search executes in real Playwright/Chrome, records snapshot/console/network observations, detects near misses, reproduces the winning recipe under fresh approval, and emits signed traces plus an offline-verifiable discovery capsule; deterministic tests verify isolated roles, while a real external-provider acceptance run remains optional and unclaimed |
 | Persistent browser sessions | Exact-target-bound opaque profiles, cross-process exclusive leases, bounded stale recovery, manual headful authentication/CAPTCHA handoff, campaign reuse, and installed-Chrome two-process fixture persistence are implemented; profile state remains sensitive local executor material, is not SOVA-encrypted, and is never embedded in capsules or traces |
 | MELRA/CUA adapters | MELRA `0.3.0-alpha.10` browser/terminal/computer probe and same-process session reuse passed live; checksum-pinned CUA `0.12.6` bounded reads passed, while live desktop mutation remains visibly blocked on this runner |

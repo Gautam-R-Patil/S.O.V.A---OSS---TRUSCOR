@@ -68,6 +68,13 @@ unique signed trace packaging, and CLI tests. Its opt-in installed-Chrome lane
 runs two roles across separate MCP processes and verifies coordinator,
 participant, reproduction, live-stream, and aggregate-capsule evidence.
 
+The contained consequential-action lane adds two-run ground-truth checks for a
+real disposable file, loopback SMTP delivery, loopback HTTP message delivery,
+and a persisted disposable setting. Its browser procedure clicks through each
+effect view and the complete proof page; deterministic integration validates
+packaging, signed traces, visual replay, and registry metadata, while the
+installed-Chrome acceptance remains an explicitly reported live lane.
+
 The self-hosted community lane adds exact/bounded upload parsing, wrong-token,
 untrusted-signer, tamper, traversal, secret-metadata, duplicate-evidence,
 orphan-object, service-index rollback, restart, HTTP queue, content-address,
