@@ -4,25 +4,35 @@
 from __future__ import annotations
 
 import json
+import struct
+from dataclasses import replace
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from sova.capsule import build_capsule, capsule_manifest_template
 from sova.community import (
     BrowserSwarmBudget,
     BrowserSwarmCase,
     BrowserSwarmParticipant,
     run_browser_swarm,
     run_browser_swarm_document,
+    validate_browser_swarm_document,
 )
 from sova.community import browser_swarm as swarm_module
 from sova.executors import CancellationToken
-from sova.formats import canonical_json_bytes, strict_json_loads
+from sova.formats import PackageReader, canonical_json_bytes, sha256_digest, strict_json_loads
 from sova.formats.errors import FormatError
 from sova.live import BrowserCampaignArtifacts, owned_web_campaign, owned_web_target
 from sova.models import ScriptedModel, ScriptedTurn
-from sova.replay import VerificationState, verify_artifact
-from sova.runtime import BrowserProfileVault
+from sova.replay import VerificationState, render_capsule_timeline, verify_artifact
+from sova.runtime import (
+    BrowserProfileVault,
+    GVisorOciAgentAdapter,
+    OciAgentResponse,
+    OciAgentRuntime,
+)
 from sova.trace import Redactor, TraceReader, TraceWriter, generate_ed25519_keypair
 
 if TYPE_CHECKING:
@@ -59,6 +69,32 @@ def _case() -> BrowserSwarmCase:
     )
 
 
+def _ebml_size(value: int) -> bytes:
+    if value < 0x7F:
+        return bytes((0x80 | value,))
+    if value < 0x3FFF:
+        return bytes((0x40 | (value >> 8), value & 0xFF))
+    raise AssertionError
+
+
+def _ebml(identifier: bytes, payload: bytes) -> bytes:
+    return identifier + _ebml_size(len(payload)) + payload
+
+
+def _synthetic_webm(*, duration_seconds: float = 12.0) -> bytes:
+    info = _ebml(b"\x2a\xd7\xb1", (1_000_000).to_bytes(3, "big")) + _ebml(
+        b"\x44\x89", struct.pack(">d", duration_seconds * 1000)
+    )
+    segment = b"".join(
+        (
+            _ebml(b"\x15\x49\xa9\x66", info),
+            _ebml(b"\x16\x54\xae\x6b", b"\xae\x80"),
+            _ebml(b"\x1f\x43\xb6\x75", b"\xe7\x81\x00"),
+        )
+    )
+    return _ebml(b"\x1a\x45\xdf\xa3", b"") + _ebml(b"\x18\x53\x80\x67", segment)
+
+
 def _fake_browser_campaign(
     target: TargetManifest,
     campaign: BrowserCampaign,
@@ -75,7 +111,7 @@ def _fake_browser_campaign(
     campaign_path.write_bytes(canonical_json_bytes(campaign.to_mapping()) + b"\n")
     observed = campaign.candidates[0] == ("enable research mode", "blue owl")
 
-    def write(path: Path, channel: str) -> None:
+    def write(path: Path, channel: str) -> tuple[str, int] | None:
         observer: Callable[[str, dict[str, Any]], None] | None = options.get("event_observer")
         writer = TraceWriter(
             path,
@@ -89,26 +125,96 @@ def _fake_browser_campaign(
             event_observer=(None if observer is None else lambda event: observer(channel, event)),
         )
         writer.append("run.started", {"campaign": campaign.identifier})
+        oracle_event = (
+            writer.append("oracle.completed", {"status": "pass", "results": []})
+            if observed
+            else None
+        )
         writer.append("run.completed", {"status": "pass" if observed else "not-observed"})
         writer.finalize(completion="completed")
+        if oracle_event is None:
+            return None
+        event = next(item for item in TraceReader(path).events() if item["id"] == oracle_event)
+        return oracle_event, int(event["sequence"])
 
     attempt = traces / "attempt-001.sova-trace"
     write(attempt, "attempt-001")
     reproduction = None
+    reproduction_oracle: tuple[str, int] | None = None
     if observed:
         reproduction = traces / "reproduction.sova-trace"
-        write(reproduction, "reproduction")
+        reproduction_oracle = write(reproduction, "reproduction")
     report_path.write_bytes(
         canonical_json_bytes({"status": "pass" if observed else "not-confirmed"}) + b"\n"
     )
+    discovery = None
+    visual_replays: tuple[Path, ...] = ()
+    replay_cues = None
+    if options.get("record_video"):
+        video = _synthetic_webm()
+        video_path = destination / "visual-replay-01.webm"
+        video_path.write_bytes(video)
+        visual_replays = (video_path,)
+        if observed:
+            assert reproduction is not None
+            assert reproduction_oracle is not None
+            event_id, sequence = reproduction_oracle
+            cue_document = {
+                "artifactType": "sova.replay-cues",
+                "schemaVersion": "0.1.0",
+                "mediaName": video_path.name,
+                "mediaDigest": sha256_digest(video),
+                "synchronization": {
+                    "method": "same-host-monotonic-recorder-start-rpc-bound",
+                    "uncertaintyMs": "1.000",
+                    "frameTimestampAttested": False,
+                    "statement": "Deterministic fixture.",
+                },
+                "cues": [
+                    {
+                        "id": "decisive-reproduction",
+                        "label": "Behavior reproduced",
+                        "channel": "reproduction",
+                        "eventId": event_id,
+                        "eventKind": "oracle.completed",
+                        "eventSequence": sequence,
+                        "oracleStatus": "pass",
+                        "offsetSeconds": "4.000000",
+                        "chapterOffsetSeconds": "4.100000",
+                        "preRollSeconds": "2.000000",
+                        "postRollSeconds": "3.000000",
+                    }
+                ],
+            }
+            replay_cues = destination / "replay-cues.json"
+            replay_cues.write_bytes(canonical_json_bytes(cue_document))
+            manifest = capsule_manifest_template(
+                title="Recorded participant finding",
+                summary="Deterministic browser-swarm replay fixture.",
+                author="Tests",
+            )
+            manifest["license"] = "Apache-2.0"
+            manifest["safety"]["impact"] = "none"
+            discovery = destination / "discovery.sova"
+            build_capsule(
+                discovery,
+                manifest,
+                attachments={
+                    video_path.name: video,
+                    replay_cues.name: replay_cues.read_bytes(),
+                },
+                traces=[attempt, reproduction],
+            )
     return BrowserCampaignArtifacts(
         target_path,
         campaign_path,
         (attempt,),
         reproduction,
-        None,
+        discovery,
         report_path,
         "pass" if observed else "not-confirmed",
+        visual_replays,
+        replay_cues,
     )
 
 
@@ -145,6 +251,9 @@ def test_browser_swarm_builds_signed_multichannel_capsule(
             approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
             profile_lease=lease,
             provider_calls_authorized=False,
+            headless=False,
+            record_video=True,
+            browser_cache=tmp_path / "playwright-cache",
             event_observer=lambda channel, event: observed.setdefault(channel, []).append(event),
         )
 
@@ -163,11 +272,98 @@ def test_browser_swarm_builds_signed_multichannel_capsule(
     serialized = artifacts.report.read_bytes() + artifacts.live_events.read_bytes()
     assert synthetic_credential.encode() not in serialized
     assert len(artifacts.participant_runs) == 2
+    assert artifacts.decisive_replay_capsule == tmp_path / "result" / "swarm-finding.sova"
+    source_finding = artifacts.participant_runs[1] / "discovery.sova"
+    assert artifacts.decisive_replay_capsule.read_bytes() == source_finding.read_bytes()
+    replay = render_capsule_timeline(
+        artifacts.decisive_replay_capsule,
+        tmp_path / "decisive-replay.html",
+    )
+    assert replay["opensAtDecisiveMoment"] is True
+    assert replay["decisiveCueDurationBound"] is True
+    decisive_objects = PackageReader(artifacts.decisive_replay_capsule).verify("sova.capsule")
+    assert len([item for item in decisive_objects if item.role == "trace"]) == 2
+    assert len([item for item in decisive_objects if item.role == "visual-replay"]) == 1
+    assert len([item for item in decisive_objects if item.role == "replay-cues"]) == 1
+    aggregate_objects = PackageReader(artifacts.capsule).verify("sova.capsule")
+    assert len([item for item in aggregate_objects if item.role == "trace"]) > 2
+    assert not [item for item in aggregate_objects if item.role == "visual-replay"]
+    assert report["artifacts"]["aggregateCapsuleRole"] == "audit-only"
+    assert report["artifacts"]["decisiveReplayCapsule"] == "swarm-finding.sova"
+    assert report["decisiveReplay"]["selectionPolicy"] == "first-confirmed-in-execution-order"
+    assert report["claims"]["browserSubrunsRecorded"] is True
+    assert report["claims"]["participantPlanningRecordedOnVideo"] is False
+    manifest = TraceReader(artifacts.trace).manifest()
+    scope = {
+        "targetDigest": target.digest,
+        "campaignDigest": campaign.digest,
+        "case": report["case"],
+        "budget": report["budget"],
+        "sharedBrowserProfile": report["profile"],
+        "participantExecutionBindings": report["participantExecution"],
+    }
+    capability = {
+        **scope,
+        "scheduler": "sequential-turns-exclusive-profile-lease",
+        "browserActions": "sova-human-approved-only",
+        "participantDirectTools": False,
+    }
+    assert manifest["authorization"]["scopeDigest"] == sha256_digest(canonical_json_bytes(scope))
+    assert manifest["executor"]["capabilityDigest"] == sha256_digest(
+        canonical_json_bytes(capability)
+    )
     assert observed["coordinator"] == TraceReader(artifacts.trace).events()
     assert all(
         path.name != "attempt-001.sova-trace"
         for path in artifacts.capsule.parent.glob("trace-attachments/*")
     )
+
+
+@pytest.mark.parametrize(
+    "defect",
+    ["missing-video", "multiple-video", "missing-cues", "missing-discovery"],
+)
+def test_requested_recording_fails_closed_on_incomplete_decisive_evidence(
+    defect: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def broken_campaign(*args: Any, **options: Any) -> BrowserCampaignArtifacts:
+        artifacts = _fake_browser_campaign(*args, **options)
+        if artifacts.status != "pass":
+            return artifacts
+        if defect == "missing-video":
+            return replace(artifacts, visual_replays=())
+        if defect == "multiple-video":
+            extra = artifacts.report.parent / "visual-replay-02.webm"
+            extra.write_bytes(_synthetic_webm())
+            return replace(artifacts, visual_replays=(*artifacts.visual_replays, extra))
+        if defect == "missing-cues":
+            return replace(artifacts, replay_cues=None)
+        return replace(artifacts, discovery_capsule=None)
+
+    monkeypatch.setattr(swarm_module, "run_browser_campaign", broken_campaign)
+    target = owned_web_target("http://127.0.0.1:9187")
+    runner = tmp_path / "runner.exe"
+    runner.write_bytes(b"fixture")
+    with (
+        _lease(tmp_path, target.digest) as lease,
+        pytest.raises(FormatError, match=r"recording|visual replay|discovery capsule"),
+    ):
+        run_browser_swarm(
+            target,
+            owned_web_campaign("http://127.0.0.1:9187/"),
+            _case(),
+            {"recon": _model(0), "tester": _model(3)},
+            BrowserSwarmBudget(1, 1, 2, 120, 4096),
+            tmp_path / f"broken-{defect}",
+            package_runner=runner,
+            browser_executable=runner,
+            approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
+            profile_lease=lease,
+            provider_calls_authorized=False,
+            record_video=True,
+        )
 
 
 def _document(candidate_a: int = 0, candidate_b: int = 3) -> dict[str, Any]:
@@ -205,6 +401,167 @@ def _document(candidate_a: int = 0, candidate_b: int = 3) -> dict[str, Any]:
         },
         "participants": [participant("recon", candidate_a), participant("tester", candidate_b)],
     }
+
+
+def _oci_runtime(identifier: str, *, image_marker: str = "a") -> OciAgentRuntime:
+    return OciAgentRuntime(
+        identifier,
+        f"fixture/sova-agent@sha256:{image_marker * 64}",
+        "/sova-agent",
+    )
+
+
+def _oci_adapter(runtime: OciAgentRuntime, workspace: Path) -> GVisorOciAgentAdapter:
+    adapter = object.__new__(GVisorOciAgentAdapter)
+    adapter.runtime = runtime
+    executor: Any = SimpleNamespace(
+        attestation=SimpleNamespace(
+            digest="sha256:" + "f" * 64,
+            readiness="ready",
+        )
+    )
+    adapter.executor = executor
+    adapter.workspace = workspace
+    return adapter
+
+
+def _oci_document() -> dict[str, Any]:
+    document = _document()
+    document["participants"] = document["participants"][:1]
+    document["ociParticipants"] = [
+        {
+            "id": "tester",
+            "objective": "exercise one declared workflow",
+            "allowedCandidateIndices": [3],
+            "runtime": _oci_runtime("tester").to_mapping(),
+        }
+    ]
+    return document
+
+
+def test_document_admits_exact_attested_oci_participant_without_browser_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(swarm_module, "run_browser_campaign", _fake_browser_campaign)
+    monkeypatch.setattr(
+        GVisorOciAgentAdapter,
+        "respond",
+        lambda _self, _prompt: OciAgentResponse(
+            "",
+            {"candidateIndex": 3, "message": "bounded isolated proposal"},
+            1,
+            resolved_model_id="fixture-isolated-agent",
+        ),
+    )
+    target = owned_web_target("http://127.0.0.1:9187")
+    campaign = owned_web_campaign("http://127.0.0.1:9187/")
+    executable = tmp_path / "runner.exe"
+    executable.write_bytes(b"fixture")
+    adapter = _oci_adapter(_oci_runtime("tester"), tmp_path)
+    with _lease(tmp_path, target.digest) as lease:
+        artifacts = run_browser_swarm_document(
+            _oci_document(),
+            target,
+            campaign,
+            tmp_path / "oci-swarm",
+            package_runner=executable,
+            browser_executable=executable,
+            approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
+            profile_lease=lease,
+            secret_resolver=lambda _name: None,
+            provider_calls_authorized=False,
+            external_models={"tester": adapter},
+        )
+
+    report = strict_json_loads(artifacts.report.read_bytes())
+    assert isinstance(report, dict)
+    assert report["status"] == "pass"
+    assert report["sandboxedExternalParticipants"] == ["tester"]
+    assert report["nativeCodeExecuted"] is True
+    assert report["participantExecution"]["tester"]["runtimeDigest"] == adapter.runtime.digest
+    assert report["participantExecution"]["tester"]["attestationDigest"] == (
+        adapter.executor.attestation.digest
+    )
+    assert report["claims"]["attestedGVisorExternalAgents"] is True
+    assert report["claims"]["externalAgentsHaveDirectBrowserAuthority"] is False
+    manifest = TraceReader(artifacts.trace).manifest()
+    scope = {
+        "targetDigest": target.digest,
+        "campaignDigest": campaign.digest,
+        "case": report["case"],
+        "budget": report["budget"],
+        "sharedBrowserProfile": report["profile"],
+        "participantExecutionBindings": report["participantExecution"],
+    }
+    assert manifest["authorization"]["scopeDigest"] == sha256_digest(canonical_json_bytes(scope))
+    assert manifest["executor"]["capabilityDigest"] == sha256_digest(
+        canonical_json_bytes(
+            {
+                **scope,
+                "scheduler": "sequential-turns-exclusive-profile-lease",
+                "browserActions": "sova-human-approved-only",
+                "participantDirectTools": False,
+            }
+        )
+    )
+
+
+@pytest.mark.parametrize("failure", ["missing", "wrong-type", "substitution", "undeclared"])
+def test_document_refuses_unbound_or_substituted_external_participants(
+    failure: str,
+    tmp_path: Path,
+) -> None:
+    document = _oci_document()
+    runtime = _oci_runtime("tester")
+    external: dict[str, Any]
+    if failure == "missing":
+        external = {}
+        expected = "no authorized external model adapter"
+    elif failure == "wrong-type":
+        external = {"tester": _model(3)}
+        expected = "exact gVisor OCI agent adapter"
+    elif failure == "substitution":
+        external = {"tester": _oci_adapter(_oci_runtime("tester", image_marker="b"), tmp_path)}
+        expected = "does not match the declared runtime"
+    else:
+        document = _document()
+        external = {"undeclared": _oci_adapter(runtime, tmp_path)}
+        expected = "not declared in the swarm document"
+    with pytest.raises(FormatError, match=expected):
+        run_browser_swarm_document(
+            document,
+            owned_web_target("http://127.0.0.1:9187"),
+            owned_web_campaign("http://127.0.0.1:9187/"),
+            tmp_path / f"external-{failure}",
+            package_runner=tmp_path / "runner.exe",
+            browser_executable=tmp_path / "runner.exe",
+            approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
+            profile_lease=object(),  # type: ignore[arg-type]
+            secret_resolver=lambda _name: None,
+            provider_calls_authorized=False,
+            external_models=external,
+        )
+
+
+@pytest.mark.parametrize("invalid", ["candidate-grant", "aggregate-turns"])
+def test_complete_prevalidation_rejects_campaign_and_turn_budget_before_external_setup(
+    invalid: str,
+) -> None:
+    document = _oci_document()
+    campaign = owned_web_campaign("http://127.0.0.1:9187/")
+    if invalid == "candidate-grant":
+        document["ociParticipants"][0]["allowedCandidateIndices"] = [len(campaign.candidates)]
+        expected = "outside the campaign"
+    else:
+        document["budget"]["maxTotalTurns"] = 3
+        expected = "sum of per-agent grants"
+    with pytest.raises(FormatError, match=expected):
+        validate_browser_swarm_document(
+            document,
+            campaign,
+            provider_calls_authorized=False,
+        )
 
 
 def test_document_parser_is_strict_and_routes_models(
@@ -615,6 +972,96 @@ def test_run_preconditions_refuse_missing_unsupported_out_of_range_and_nonempty(
                 profile_lease=lease,
                 provider_calls_authorized=False,
             )
+
+
+@pytest.mark.parametrize(
+    ("model_finished_at", "message"),
+    [(1.1, "duration budget exhausted"), (0.2, "cannot admit another browser subrun")],
+)
+def test_global_duration_refuses_late_or_subsecond_model_result_before_browser(
+    model_finished_at: float,
+    message: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = {"now": 0.0}
+    monkeypatch.setattr(
+        swarm_module,
+        "time",
+        SimpleNamespace(monotonic=lambda: clock["now"]),
+    )
+    original_respond = ScriptedModel.respond
+
+    def delayed_respond(model: ScriptedModel, prompt: str) -> Any:
+        response = original_respond(model, prompt)
+        clock["now"] = model_finished_at
+        return response
+
+    monkeypatch.setattr(ScriptedModel, "respond", delayed_respond)
+    monkeypatch.setattr(
+        swarm_module,
+        "run_browser_campaign",
+        lambda *_args, **_kwargs: pytest.fail("browser work started after deadline gate"),
+    )
+    target = owned_web_target("http://127.0.0.1:9187")
+    executable = tmp_path / "runner.exe"
+    executable.write_bytes(b"fixture")
+    with (
+        _lease(tmp_path, target.digest) as lease,
+        pytest.raises(FormatError, match=message),
+    ):
+        run_browser_swarm(
+            target,
+            owned_web_campaign("http://127.0.0.1:9187/"),
+            _case(),
+            {"recon": _model(0), "tester": _model(3)},
+            BrowserSwarmBudget(1, 1, 2, max_duration_seconds=1),
+            tmp_path / f"model-deadline-{model_finished_at}",
+            package_runner=executable,
+            browser_executable=executable,
+            approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
+            profile_lease=lease,
+            provider_calls_authorized=False,
+        )
+
+
+def test_global_duration_is_rechecked_immediately_after_browser_subrun(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = {"now": 0.0}
+    monkeypatch.setattr(
+        swarm_module,
+        "time",
+        SimpleNamespace(monotonic=lambda: clock["now"]),
+    )
+
+    def slow_browser(*args: Any, **options: Any) -> BrowserCampaignArtifacts:
+        artifacts = _fake_browser_campaign(*args, **options)
+        clock["now"] = 1.1
+        return artifacts
+
+    monkeypatch.setattr(swarm_module, "run_browser_campaign", slow_browser)
+    target = owned_web_target("http://127.0.0.1:9187")
+    executable = tmp_path / "runner.exe"
+    executable.write_bytes(b"fixture")
+    with (
+        _lease(tmp_path, target.digest) as lease,
+        pytest.raises(FormatError, match="duration budget exhausted"),
+    ):
+        run_browser_swarm(
+            target,
+            owned_web_campaign("http://127.0.0.1:9187/"),
+            _case(),
+            {"recon": _model(0), "tester": _model(3)},
+            BrowserSwarmBudget(1, 1, 2, max_duration_seconds=1),
+            tmp_path / "browser-deadline",
+            package_runner=executable,
+            browser_executable=executable,
+            approval_prompt=lambda challenge, _intents: challenge.exact_phrase,
+            profile_lease=lease,
+            provider_calls_authorized=False,
+        )
 
 
 def test_duplicate_candidate_and_missing_or_excess_token_usage_fail(

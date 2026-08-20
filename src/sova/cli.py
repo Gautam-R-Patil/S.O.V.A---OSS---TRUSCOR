@@ -15,6 +15,7 @@ from contextlib import contextmanager, suppress
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any
 
 from sova import __version__
@@ -50,6 +51,7 @@ from sova.community import (
     run_arena_document,
     run_browser_swarm_document,
     validate_agent_arena_document,
+    validate_browser_swarm_document,
     verify_probe_response,
 )
 from sova.composition import (
@@ -1417,11 +1419,39 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     arena_swarm_web.add_argument("--control-proof", type=_path)
     arena_swarm_web.add_argument("--package-runner", type=_path)
     arena_swarm_web.add_argument("--browser-executable", type=_path)
+    arena_swarm_web.add_argument(
+        "--playwright-browser-cache",
+        type=_path,
+        help="optional preinstalled Playwright browser cache used by trusted browser subruns",
+    )
+    arena_swarm_web.add_argument(
+        "--headed",
+        action="store_true",
+        help="show the trusted browser during each sequential participant subrun",
+    )
+    arena_swarm_web.add_argument(
+        "--record-video",
+        action="store_true",
+        help="record each browser subrun and emit decisive replay proof for a reproduced pass",
+    )
+    arena_swarm_web.add_argument(
+        "--docker",
+        type=_path,
+        help="Docker CLI path for declared sova.oci-agent-runtime swarm participants",
+    )
     _add_browser_profile_arguments(arena_swarm_web)
     arena_swarm_web.add_argument(
         "--allow-provider-calls",
         action="store_true",
         help="explicitly permit configured model-provider calls, which may incur cost",
+    )
+    arena_swarm_web.add_argument(
+        "--allow-sandboxed-agent-code",
+        action="store_true",
+        help=(
+            "permit digest-pinned external swarm agents only through attested gVisor "
+            "with no browser, network, credential, or host-mount authority"
+        ),
     )
     arena_swarm_web.add_argument(
         "--stream-jsonl",
@@ -2831,8 +2861,28 @@ def _arena_explore_web(args: argparse.Namespace) -> int:
 
 def _arena_swarm_web(args: argparse.Namespace) -> int:
     _require_live_campaign_terminal()
+    document = _load_object(args.specification)
+    oci_rows = document.get("ociParticipants", [])
+    if not isinstance(oci_rows, list):
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-EXTERNAL",
+            "browser swarm ociParticipants must be an array",
+        )
+    if oci_rows and not getattr(args, "allow_sandboxed_agent_code", False):
+        raise FormatError(
+            "SOVA-OCI-AGENT-CODE-NOT-ALLOWED",
+            "OCI browser-swarm participants require --allow-sandboxed-agent-code",
+        )
     target = target_manifest_from_mapping(_load_object(args.manifest))
     campaign = browser_campaign_from_mapping(_load_object(args.campaign))
+    if oci_rows:
+        # Validate participant/runtime identities, campaign grants, and the aggregate
+        # turn budget before Docker attestation or native-code setup.
+        validate_browser_swarm_document(
+            document,
+            campaign,
+            provider_calls_authorized=args.allow_provider_calls,
+        )
     proof = (
         control_proof_from_mapping(_load_object(args.control_proof))
         if args.control_proof is not None
@@ -2844,34 +2894,89 @@ def _arena_swarm_web(args: argparse.Namespace) -> int:
             "SOVA-BROWSER-SWARM-PROFILE",
             "browser swarm requires an explicit target-bound profile vault and handle",
         )
+    external_models: dict[str, Any] = {}
+    with TemporaryDirectory(prefix="sova-browser-swarm-oci-") as temporary_root:
+        if oci_rows:
+            if args.destination.exists() and (
+                args.destination.is_symlink()
+                or not args.destination.is_dir()
+                or any(args.destination.iterdir())
+            ):
+                raise FormatError(
+                    "SOVA-BROWSER-SWARM-EXISTS",
+                    "browser swarm destination must be an empty real directory",
+                )
+            docker = _detected_path(
+                getattr(args, "docker", None),
+                ("docker", "docker.exe"),
+                "Docker CLI",
+            )
+            document_digest = sha256_digest(canonical_json_bytes(document))
+            workspace_root = Path(temporary_root)
+            for row in oci_rows:
+                if not isinstance(row, dict):  # validated above; narrows the type
+                    raise FormatError(
+                        "SOVA-BROWSER-SWARM-EXTERNAL",
+                        "OCI browser-swarm participant must be an object",
+                    )
+                identifier = row["id"]
+                runtime = oci_agent_runtime_from_mapping(row["runtime"])
+                workspace = workspace_root / identifier
+                workspace.mkdir()
+                executor = GVisorOciExecutor(
+                    docker,
+                    runtime.image,
+                    runtime=runtime.runtime,
+                )
+                adapter = authorize_oci_agent_adapter(
+                    runtime,
+                    executor,
+                    workspace,
+                    use_scope={
+                        "purpose": "bounded-browser-swarm-planning",
+                        "swarmDocumentDigest": document_digest,
+                        "targetDigest": target.digest,
+                        "campaignDigest": campaign.digest,
+                        "participant": identifier,
+                        "browserAuthorityInherited": False,
+                        "targetToolsAvailable": False,
+                    },
+                    approval_prompt=_oci_agent_approval_prompt,
+                )
+                adapter.conform()
+                external_models[identifier] = adapter
 
-    def observe(channel: str, event: dict[str, Any]) -> None:
-        envelope = {
-            "artifactType": "sova.browser-swarm-live-event",
-            "schemaVersion": "0.1.0",
-            "channel": channel,
-            "event": event,
-        }
-        sys.stdout.buffer.write(canonical_json_bytes(envelope) + b"\n")
-        sys.stdout.buffer.flush()
+        def observe(channel: str, event: dict[str, Any]) -> None:
+            envelope = {
+                "artifactType": "sova.browser-swarm-live-event",
+                "schemaVersion": "0.1.0",
+                "channel": channel,
+                "event": event,
+            }
+            sys.stdout.buffer.write(canonical_json_bytes(envelope) + b"\n")
+            sys.stdout.buffer.flush()
 
-    with _browser_profile_lease(args, target) as profile_lease:
-        if profile_lease is None:  # pragma: no cover - rejected above, narrows the type
-            raise AssertionError
-        artifacts = run_browser_swarm_document(
-            _load_object(args.specification),
-            target,
-            campaign,
-            args.destination,
-            package_runner=package_runner,
-            browser_executable=browser,
-            approval_prompt=_live_campaign_prompt,
-            profile_lease=profile_lease,
-            secret_resolver=os.getenv,
-            control_proof=proof,
-            provider_calls_authorized=args.allow_provider_calls,
-            event_observer=observe if args.stream_jsonl else None,
-        )
+        with _browser_profile_lease(args, target) as profile_lease:
+            if profile_lease is None:  # pragma: no cover - rejected above, narrows the type
+                raise AssertionError
+            artifacts = run_browser_swarm_document(
+                document,
+                target,
+                campaign,
+                args.destination,
+                package_runner=package_runner,
+                browser_executable=browser,
+                approval_prompt=_live_campaign_prompt,
+                profile_lease=profile_lease,
+                secret_resolver=os.getenv,
+                control_proof=proof,
+                provider_calls_authorized=args.allow_provider_calls,
+                headless=not getattr(args, "headed", False),
+                record_video=getattr(args, "record_video", False),
+                browser_cache=getattr(args, "playwright_browser_cache", None),
+                event_observer=observe if args.stream_jsonl else None,
+                external_models=external_models,
+            )
     output = {
         "artifactType": "sova.browser-swarm-cli-result",
         "schemaVersion": "0.1.0",
@@ -2879,6 +2984,11 @@ def _arena_swarm_web(args: argparse.Namespace) -> int:
         "report": str(artifacts.report),
         "trace": str(artifacts.trace),
         "capsule": str(artifacts.capsule),
+        "decisiveReplayCapsule": (
+            None
+            if artifacts.decisive_replay_capsule is None
+            else str(artifacts.decisive_replay_capsule)
+        ),
         "liveEvents": str(artifacts.live_events),
         "participantRuns": [str(path) for path in artifacts.participant_runs],
     }

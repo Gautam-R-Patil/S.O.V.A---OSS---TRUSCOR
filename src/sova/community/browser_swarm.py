@@ -9,21 +9,24 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any
 
 from sova.capsule import DomainProfile, build_capsule, capsule_manifest_template
-from sova.formats import canonical_json_bytes, sha256_digest, strict_json_loads
+from sova.formats import PackageReader, canonical_json_bytes, sha256_digest, strict_json_loads
 from sova.formats.errors import FormatError
 from sova.live import BrowserCampaign, run_browser_campaign
 from sova.models import ScriptedModel
 from sova.providers import ProviderRoleModel
-from sova.replay import VerificationState, verify_artifact
+from sova.replay import VerificationState, render_capsule_timeline, verify_artifact
+from sova.runtime import GVisorOciAgentAdapter
 from sova.trace import Redactor, TraceReader, TraceWriter, generate_ed25519_keypair
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from sova.executors import CancellationToken
+    from sova.live import BrowserCampaignArtifacts
     from sova.live.browser import ApprovalPrompt
     from sova.runtime import BrowserProfileLease, RoleModel
     from sova.safety import ControlProof
@@ -40,6 +43,7 @@ _MAX_OUTPUT_BYTES = 1024 * 1024
 _MAX_DURATION_SECONDS = 1800
 _MAX_TOTAL_TOKENS = 10_000_000
 _MAX_RESOLVED_MODEL_ID_CHARS = 512
+_DECISIVE_TRACE_COUNT = 2
 _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
@@ -166,6 +170,85 @@ class BrowserSwarmArtifacts:
     report: Path
     live_events: Path
     participant_runs: tuple[Path, ...]
+    decisive_replay_capsule: Path | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _RecordingEvidence:
+    visual_replay_digests: tuple[str, ...]
+    replay_cues_digest: str | None
+    discovery_capsule_digest: str | None
+    opens_at_decisive_moment: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _DecisiveReplaySource:
+    participant: str
+    round_index: int
+    candidate_index: int
+    run_root: Path
+    capsule: Path
+    capsule_digest: str
+    visual_replay_digest: str
+    replay_cues_digest: str
+
+
+@dataclass(frozen=True, slots=True)
+class _SwarmExecutionProvenance:
+    participant_bindings: dict[str, dict[str, Any]]
+    dependencies: tuple[dict[str, Any], ...]
+    sandboxed_external_participants: tuple[str, ...]
+
+
+def _execution_provenance(
+    identifiers: set[str],
+    models: Mapping[str, RoleModel],
+) -> _SwarmExecutionProvenance:
+    """Describe every planner boundary without granting planners browser authority."""
+    bindings: dict[str, dict[str, Any]] = {}
+    dependencies: list[dict[str, Any]] = []
+    external: list[str] = []
+    for identifier in sorted(identifiers):
+        model = models[identifier]
+        if type(model) is GVisorOciAgentAdapter:
+            runtime = model.runtime
+            attestation = model.executor.attestation
+            bindings[identifier] = {
+                "modelId": model.model_id,
+                "executionMode": "isolated-oci-agent",
+                "nativeCodeExecuted": True,
+                "protocol": "sova.oci-agent/0.1",
+                "runtimeDigest": runtime.digest,
+                "image": runtime.image,
+                "ociRuntime": runtime.runtime,
+                "attestationDigest": attestation.digest,
+                "attestationReadiness": attestation.readiness,
+                "isolation": "gvisor-runsc-user-kernel",
+                "networkAuthority": "none",
+                "browserAuthorityInherited": False,
+            }
+            dependencies.append(
+                {
+                    "name": identifier,
+                    "kind": "oci-agent-image",
+                    "agentId": runtime.identifier,
+                    "runtimeDigest": runtime.digest,
+                    "image": runtime.image,
+                    "ociRuntime": runtime.runtime,
+                    "attestationDigest": attestation.digest,
+                }
+            )
+            external.append(identifier)
+        else:
+            provider_backed = type(model) is ProviderRoleModel
+            bindings[identifier] = {
+                "modelId": model.model_id,
+                "executionMode": "provider-api" if provider_backed else "scripted-model",
+                "nativeCodeExecuted": False,
+                "networkAuthority": "provider-api-only" if provider_backed else "none",
+                "browserAuthorityInherited": False,
+            }
+    return _SwarmExecutionProvenance(bindings, tuple(dependencies), tuple(external))
 
 
 class _EnvelopeJournal:
@@ -332,6 +415,213 @@ def _verify_substream(
     return all(journal.channels.get(channel) == events for channel, events in expected.items())
 
 
+def validate_browser_swarm_contract(
+    campaign: BrowserCampaign,
+    case: BrowserSwarmCase,
+    budget: BrowserSwarmBudget,
+) -> None:
+    """Validate campaign-dependent grants and aggregate turns without executing models."""
+    for participant in case.participants:
+        if any(
+            index >= len(campaign.candidates) for index in participant.allowed_candidate_indices
+        ):
+            raise FormatError(
+                "SOVA-BROWSER-SWARM-CANDIDATE",
+                "participant candidate grant is outside the campaign",
+            )
+    if case.participants and budget.max_total_turns > (
+        len(case.participants) * budget.max_turns_per_agent
+    ):
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-BUDGET",
+            "total turn budget exceeds the sum of per-agent grants",
+        )
+
+
+def _remaining_duration(started: float, budget: BrowserSwarmBudget) -> float:
+    remaining = budget.max_duration_seconds - (time.monotonic() - started)
+    if remaining <= 0:
+        raise FormatError("SOVA-BROWSER-SWARM-TIMEOUT", "duration budget exhausted")
+    return remaining
+
+
+def _remaining_browser_seconds(started: float, budget: BrowserSwarmBudget) -> int:
+    remaining = int(_remaining_duration(started, budget))
+    if remaining < 1:
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-TIMEOUT",
+            "duration budget cannot admit another browser subrun",
+        )
+    return remaining
+
+
+def _run_artifact_bytes(path: Path, run_root: Path, *, label: str) -> bytes:
+    """Read a stable regular file that remains inside one participant run root."""
+    try:
+        resolved = path.resolve(strict=True)
+        root = run_root.resolve(strict=True)
+        if path.is_symlink() or not resolved.is_file() or not resolved.is_relative_to(root):
+            raise OSError
+        before = resolved.stat()
+        data = resolved.read_bytes()
+        after = resolved.stat()
+    except OSError as error:
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-REPLAY",
+            f"{label} must be a stable regular file inside its participant run",
+        ) from error
+    if before.st_size != len(data) or (before.st_size, before.st_mtime_ns) != (
+        after.st_size,
+        after.st_mtime_ns,
+    ):
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-REPLAY",
+            f"{label} changed while decisive replay evidence was reviewed",
+        )
+    return data
+
+
+def _validate_replay_application(capsule: Path) -> dict[str, Any]:
+    with TemporaryDirectory(prefix="sova-browser-swarm-replay-check-") as temporary:
+        result = render_capsule_timeline(capsule, Path(temporary) / "replay.html")
+    if (
+        result.get("opensAtDecisiveMoment") is not True
+        or result.get("decisiveCueDurationBound") is not True
+        or result.get("mediaDurationSeconds") is None
+    ):
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-REPLAY",
+            "decisive replay is not bound to a cue inside finalized media duration",
+        )
+    return result
+
+
+def _recording_evidence(
+    artifacts: BrowserCampaignArtifacts,
+    run_root: Path,
+    *,
+    recording_requested: bool,
+) -> _RecordingEvidence:
+    video_bytes = tuple(
+        _run_artifact_bytes(path, run_root, label="visual replay")
+        for path in artifacts.visual_replays
+    )
+    video_digests = tuple(sha256_digest(data) for data in video_bytes)
+    cues_bytes = (
+        None
+        if artifacts.replay_cues is None
+        else _run_artifact_bytes(artifacts.replay_cues, run_root, label="replay cues")
+    )
+    capsule_bytes = (
+        None
+        if artifacts.discovery_capsule is None
+        else _run_artifact_bytes(
+            artifacts.discovery_capsule,
+            run_root,
+            label="discovery capsule",
+        )
+    )
+    cues_digest = None if cues_bytes is None else sha256_digest(cues_bytes)
+    capsule_digest = None if capsule_bytes is None else sha256_digest(capsule_bytes)
+    if not recording_requested:
+        return _RecordingEvidence(
+            video_digests,
+            cues_digest,
+            capsule_digest,
+            opens_at_decisive_moment=False,
+        )
+    if len(video_bytes) != 1:
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-REPLAY",
+            "requested recording requires exactly one visual replay per browser subrun",
+        )
+    if artifacts.status != "pass":
+        if cues_bytes is not None or capsule_bytes is not None:
+            raise FormatError(
+                "SOVA-BROWSER-SWARM-REPLAY",
+                "an unconfirmed browser subrun cannot expose decisive replay evidence",
+            )
+        return _RecordingEvidence(
+            video_digests,
+            None,
+            None,
+            opens_at_decisive_moment=False,
+        )
+    if (
+        artifacts.reproduction_trace is None
+        or cues_bytes is None
+        or capsule_bytes is None
+        or artifacts.discovery_capsule is None
+    ):
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-REPLAY",
+            "a recorded reproduced pass requires one discovery capsule and replay cue index",
+        )
+    state = verify_artifact(artifacts.discovery_capsule).state
+    if state not in {VerificationState.VERIFIED, VerificationState.PARTIAL}:
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-REPLAY",
+            "decisive discovery capsule failed verification",
+        )
+    descriptors = PackageReader(artifacts.discovery_capsule).verify("sova.capsule")
+    trace_descriptors = [item for item in descriptors if item.role == "trace"]
+    media_descriptors = [item for item in descriptors if item.role == "visual-replay"]
+    cue_descriptors = [item for item in descriptors if item.role == "replay-cues"]
+    expected_trace_digests = {
+        sha256_digest(_run_artifact_bytes(path, run_root, label="participant trace"))
+        for path in (*artifacts.traces, artifacts.reproduction_trace)
+    }
+    if (
+        len(trace_descriptors) != _DECISIVE_TRACE_COUNT
+        or len(expected_trace_digests) != _DECISIVE_TRACE_COUNT
+        or {item.digest for item in trace_descriptors} != expected_trace_digests
+        or len(media_descriptors) != 1
+        or media_descriptors[0].digest != video_digests[0]
+        or len(cue_descriptors) != 1
+        or cue_descriptors[0].digest != cues_digest
+    ):
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-REPLAY",
+            "discovery capsule must bind exactly one attempt/reproduction pair, video, and cues",
+        )
+    replay = _validate_replay_application(artifacts.discovery_capsule)
+    return _RecordingEvidence(video_digests, cues_digest, capsule_digest, bool(replay))
+
+
+def _materialize_decisive_replay(source: _DecisiveReplaySource, root: Path) -> Path:
+    data = _run_artifact_bytes(source.capsule, source.run_root, label="decisive discovery capsule")
+    if sha256_digest(data) != source.capsule_digest:
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-REPLAY",
+            "decisive discovery capsule changed after signed coordinator selection",
+        )
+    destination = root / "swarm-finding.sova"
+    temporary = root / ".swarm-finding.partial.sova"
+    try:
+        temporary.write_bytes(data)
+        if temporary.read_bytes() != data:
+            raise FormatError(
+                "SOVA-BROWSER-SWARM-REPLAY",
+                "decisive replay capsule copy was not byte-identical",
+            )
+        state = verify_artifact(temporary).state
+        if state not in {VerificationState.VERIFIED, VerificationState.PARTIAL}:
+            raise FormatError(
+                "SOVA-BROWSER-SWARM-REPLAY",
+                "decisive replay capsule copy failed verification",
+            )
+        _validate_replay_application(temporary)
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+    if destination.read_bytes() != data:
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-REPLAY",
+            "exposed decisive replay capsule is not byte-identical to signed selection",
+        )
+    return destination
+
+
 def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
     target: TargetManifest,
     campaign: BrowserCampaign,
@@ -346,19 +636,15 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
     profile_lease: BrowserProfileLease,
     control_proof: ControlProof | None = None,
     provider_calls_authorized: bool,
+    headless: bool = True,
+    record_video: bool = False,
+    browser_cache: Path | None = None,
     cancellation: CancellationToken | None = None,
     event_observer: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> BrowserSwarmArtifacts:
     """Run sequential participant turns over one exclusively leased browser identity."""
     profile_lease.require_target(target.digest)
-    for participant in case.participants:
-        if any(
-            index >= len(campaign.candidates) for index in participant.allowed_candidate_indices
-        ):
-            raise FormatError(
-                "SOVA-BROWSER-SWARM-CANDIDATE",
-                "participant candidate grant is outside the campaign",
-            )
+    validate_browser_swarm_contract(campaign, case, budget)
     required = {participant.identifier for participant in case.participants}
     missing = sorted(required - set(models))
     if missing:
@@ -374,15 +660,17 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
             "undeclared participant model is present",
             details={"extra": extra},
         )
+    supported_types = {ProviderRoleModel, ScriptedModel, GVisorOciAgentAdapter}
     unsupported = sorted(
-        identifier
-        for identifier in required
-        if type(models[identifier]) not in {ProviderRoleModel, ScriptedModel}
+        identifier for identifier in required if type(models[identifier]) not in supported_types
     )
     if unsupported:
         raise FormatError(
             "SOVA-BROWSER-SWARM-MODEL",
-            "only built-in provider or scripted model adapters are admitted",
+            (
+                "only built-in provider or scripted model adapters, or exact attested "
+                "gVisor OCI agent adapters, are admitted"
+            ),
             details={"unsupported": unsupported},
         )
     if any(type(models[identifier]) is ProviderRoleModel for identifier in required) and not (
@@ -392,14 +680,6 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
             "SOVA-PROVIDER-CALLS-NOT-ALLOWED",
             "configured provider models require explicit authorization",
         )
-    if case.participants and budget.max_total_turns > (
-        len(case.participants) * budget.max_turns_per_agent
-    ):
-        raise FormatError(
-            "SOVA-BROWSER-SWARM-BUDGET",
-            "total turn budget exceeds the sum of per-agent grants",
-        )
-
     root = destination.resolve()
     if root.exists() and any(root.iterdir()):
         raise FormatError("SOVA-BROWSER-SWARM-EXISTS", "destination is not empty")
@@ -414,12 +694,30 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
     live_path = root / "live-events.jsonl"
     journal = _EnvelopeJournal(live_path, event_observer)
     key = generate_ed25519_keypair()
+    provenance = _execution_provenance(required, models)
+    case_document = case.to_mapping()
+    budget_document = budget.to_mapping()
+    profile_evidence = profile_lease.trace_mapping()
+    authorization_scope = {
+        "targetDigest": target.digest,
+        "campaignDigest": campaign.digest,
+        "case": case_document,
+        "budget": budget_document,
+        "sharedBrowserProfile": profile_evidence,
+        "participantExecutionBindings": provenance.participant_bindings,
+    }
+    capability_contract = {
+        **authorization_scope,
+        "scheduler": "sequential-turns-exclusive-profile-lease",
+        "browserActions": "sova-human-approved-only",
+        "participantDirectTools": False,
+    }
     writer = TraceWriter(
         trace_path,
         capture_profile="forensic",
         authorization={
             "decision": "allowed",
-            "scopeDigest": target.digest,
+            "scopeDigest": sha256_digest(canonical_json_bytes(authorization_scope)),
             "decidedBy": "browser-subruns-require-exact-human-approval",
         },
         environment={
@@ -428,14 +726,18 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
             "codeDigest": sha256_digest(Path(__file__).read_bytes()),
             "model": {
                 "identifiers": sorted(models[name].model_id for name in required),
+                "participantBindings": provenance.participant_bindings,
             },
-            "dependencies": [{"name": "@playwright/mcp", "version": "0.0.78"}],
+            "dependencies": [
+                {"name": "@playwright/mcp", "version": "0.0.78"},
+                *provenance.dependencies,
+            ],
         },
         executor={
             "id": "sova:executor:browser-swarm-coordinator",
             "name": "sequential-shared-profile-browser-scheduler",
             "version": "0.1.0",
-            "capabilityDigest": campaign.digest,
+            "capabilityDigest": sha256_digest(canonical_json_bytes(capability_contract)),
         },
         signing_key=key,
         event_observer=lambda event: journal.observe("coordinator", event),
@@ -448,6 +750,7 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
     ledger: list[dict[str, Any]] = []
     run_roots: list[Path] = []
     trace_attachments: list[Path] = []
+    decisive_source: _DecisiveReplaySource | None = None
     observed = False
     stream_matches = True
     expected_channels = {"coordinator"}
@@ -457,10 +760,11 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
             "run.started",
             {
                 "runtime": "sova.browser-swarm/0.1.0",
-                "case": case.to_mapping(),
-                "budget": budget.to_mapping(),
-                "sharedBrowserProfile": profile_lease.trace_mapping(),
+                "case": case_document,
+                "budget": budget_document,
+                "sharedBrowserProfile": profile_evidence,
                 "scheduler": "sequential-turns-exclusive-profile-lease",
+                "participantExecution": provenance.participant_bindings,
             },
         )
         writer.append(
@@ -472,6 +776,14 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
                 "browserSecuritySandbox": False,
                 "participantDirectTools": False,
                 "browserActionsRequireHumanApproval": True,
+                "sandboxedExternalParticipants": list(provenance.sandboxed_external_participants),
+                "externalAgentIsolation": (
+                    "gvisor-runsc-user-kernel"
+                    if provenance.sandboxed_external_participants
+                    else "not-applicable"
+                ),
+                "externalAgentNetworkAuthority": "none",
+                "externalAgentBrowserAuthorityInherited": False,
             },
             parents=[parent] if parent else [],
         )
@@ -485,9 +797,7 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
                     continue
                 if cancellation is not None and cancellation.cancelled:
                     raise FormatError("SOVA-BROWSER-SWARM-CANCELLED", "swarm was cancelled")
-                elapsed = time.monotonic() - started
-                if elapsed >= budget.max_duration_seconds:
-                    raise FormatError("SOVA-BROWSER-SWARM-TIMEOUT", "duration budget exhausted")
+                _remaining_duration(started, budget)
                 prompt = _prompt(
                     case,
                     participant,
@@ -516,6 +826,9 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
                     budget,
                     redactor=Redactor(context_id=f"browser-swarm:{participant.identifier}"),
                 )
+                # Model latency belongs to the same global wall-clock budget. A late
+                # response is evidence only and can never authorize browser work.
+                _remaining_duration(started, budget)
                 if candidate_index not in participant.allowed_candidate_indices:
                     raise FormatError(
                         "SOVA-BROWSER-SWARM-CANDIDATE",
@@ -564,7 +877,9 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
                 used_candidates.add(candidate_index)
                 total_turns += 1
                 turns_by_agent[participant.identifier] += 1
-                remaining = max(1, int(budget.max_duration_seconds - elapsed))
+                # Recompute immediately before browser execution; never reuse the
+                # pre-model timestamp or round a sub-second remainder up to one second.
+                remaining = _remaining_browser_seconds(started, budget)
                 subcampaign = _single_candidate_campaign(
                     campaign,
                     participant.identifier,
@@ -593,7 +908,13 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
                     event_observer=observe,
                     profile_lease=profile_lease,
                     cancellation=cancellation,
+                    headless=headless,
+                    record_video=record_video,
+                    browser_cache=browser_cache,
                 )
+                # The participant runner has its own bound, but coordinator overhead
+                # and scheduling latency also count against the global swarm deadline.
+                _remaining_duration(started, budget)
                 run_roots.append(run_root)
                 expected_channels.update(
                     f"{channel_prefix}/attempt-{index:03d}"
@@ -639,6 +960,35 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
                         "SOVA-BROWSER-SWARM-REPORT",
                         "participant browser report is malformed",
                     )
+                recording = _recording_evidence(
+                    artifacts,
+                    run_root,
+                    recording_requested=record_video,
+                )
+                selected_as_decisive = False
+                if artifacts.status == "pass" and record_video and decisive_source is None:
+                    if (
+                        artifacts.discovery_capsule is None
+                        or recording.discovery_capsule_digest is None
+                        or len(recording.visual_replay_digests) != 1
+                        or recording.replay_cues_digest is None
+                        or not recording.opens_at_decisive_moment
+                    ):
+                        raise FormatError(
+                            "SOVA-BROWSER-SWARM-REPLAY",
+                            "first reproduced pass lacks complete decisive replay evidence",
+                        )
+                    decisive_source = _DecisiveReplaySource(
+                        participant.identifier,
+                        round_index,
+                        candidate_index,
+                        run_root,
+                        artifacts.discovery_capsule,
+                        recording.discovery_capsule_digest,
+                        recording.visual_replay_digests[0],
+                        recording.replay_cues_digest,
+                    )
+                    selected_as_decisive = True
                 summary = {
                     "participant": participant.identifier,
                     "round": round_index,
@@ -655,6 +1005,11 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
                         if artifacts.reproduction_trace is None
                         else sha256_digest(artifacts.reproduction_trace.read_bytes())
                     ),
+                    "discoveryCapsuleDigest": recording.discovery_capsule_digest,
+                    "visualReplayDigests": list(recording.visual_replay_digests),
+                    "replayCuesDigest": recording.replay_cues_digest,
+                    "opensAtDecisiveMoment": recording.opens_at_decisive_moment,
+                    "selectedAsDecisiveReplay": selected_as_decisive,
                 }
                 ledger.append(summary)
                 result_event = writer.append(
@@ -687,6 +1042,9 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
                 "turnsByAgent": turns_by_agent,
                 "tokenCount": total_tokens if budget.max_total_tokens is not None else None,
                 "sharedLedgerDigest": sha256_digest(canonical_json_bytes(ledger)),
+                "decisiveReplayCapsuleDigest": (
+                    None if decisive_source is None else decisive_source.capsule_digest
+                ),
             },
         )
         writer.finalize(completion=completion)
@@ -707,13 +1065,34 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
             "SOVA-BROWSER-SWARM-EVIDENCE",
             "live channels do not match the signed participant/coordinator traces",
         )
+    decisive_replay_capsule = (
+        None if decisive_source is None else _materialize_decisive_replay(decisive_source, root)
+    )
+    decisive_replay = (
+        None
+        if decisive_source is None
+        else {
+            "selectionPolicy": "first-confirmed-in-execution-order",
+            "participant": decisive_source.participant,
+            "round": decisive_source.round_index,
+            "candidateIndex": decisive_source.candidate_index,
+            "capsule": "swarm-finding.sova",
+            "capsuleDigest": decisive_source.capsule_digest,
+            "visualReplayDigest": decisive_source.visual_replay_digest,
+            "replayCuesDigest": decisive_source.replay_cues_digest,
+            "byteIdenticalToParticipantDiscovery": True,
+            "opensAtDecisiveMoment": True,
+        }
+    )
     summary_document = {
         "artifactType": "sova.browser-swarm-summary",
         "schemaVersion": "0.1.0",
-        "case": case.to_mapping(),
-        "budget": budget.to_mapping(),
+        "case": case_document,
+        "budget": budget_document,
+        "participantExecution": provenance.participant_bindings,
         "ledger": ledger,
         "status": "pass" if observed else "not-observed",
+        "decisiveReplay": decisive_replay,
     }
     manifest = capsule_manifest_template(
         title=case.title,
@@ -730,7 +1109,19 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
     manifest["limitations"] = [
         "Participants select only operator-declared candidates and cannot directly call tools.",
         "Turns are sequential because a browser profile has one exclusive writer.",
+        (
+            "Optional external participant code runs only in attested gVisor containers with "
+            "no network, credentials, host mounts, target tools, or inherited browser authority."
+        ),
         "Declared browser sensors do not provide total host or hidden-thought observability.",
+        (
+            "Video records only trusted browser subruns, not participant planning, provider "
+            "reasoning, container internals, or total host activity."
+        ),
+        (
+            "swarm.sova is an aggregate audit capsule; only swarm-finding.sova, when present, "
+            "is an unambiguous one-step decisive replay capsule."
+        ),
     ]
     build_capsule(
         capsule_path,
@@ -747,13 +1138,16 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
         raise FormatError("SOVA-BROWSER-SWARM-CAPSULE", "aggregate capsule failed verification")
     report = {
         **summary_document,
-        "profile": profile_lease.trace_mapping(),
+        "profile": profile_evidence,
         "scheduler": {
             "mode": "sequential-turns",
             "reason": "exclusive browser identity prevents concurrent profile corruption",
             "sharedOpaqueSession": True,
             "rawCredentialsSharedWithModels": False,
         },
+        "participantExecution": provenance.participant_bindings,
+        "nativeCodeExecuted": bool(provenance.sandboxed_external_participants),
+        "sandboxedExternalParticipants": list(provenance.sandboxed_external_participants),
         "evidence": {
             "coordinatorSignatureValid": True,
             "participantTraceCount": len(trace_attachments),
@@ -761,6 +1155,8 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
             "liveChannelStreamMatchesSignedTraces": stream_matches,
             "liveStreamDigest": sha256_digest(live_path.read_bytes()),
             "capsuleVerification": capsule_state.value,
+            "decisiveReplayApplicationVerified": decisive_replay_capsule is not None,
+            "decisiveReplayByteIdentical": decisive_replay_capsule is not None,
         },
         "sensors": {
             "coordinator": "healthy",
@@ -775,6 +1171,10 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
         "artifacts": {
             "trace": trace_path.name,
             "capsule": capsule_path.name,
+            "aggregateCapsuleRole": "audit-only",
+            "decisiveReplayCapsule": (
+                None if decisive_replay_capsule is None else decisive_replay_capsule.name
+            ),
             "liveEvents": live_path.name,
             "participantRuns": [path.relative_to(root).as_posix() for path in run_roots],
         },
@@ -785,6 +1185,11 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
             "perAgentBudgets": True,
             "liveRedactedEventStreaming": True,
             "freshHumanApprovalPerBrowserSubrun": True,
+            "attestedGVisorExternalAgents": bool(provenance.sandboxed_external_participants),
+            "externalAgentsHaveDirectBrowserAuthority": False,
+            "browserSubrunsRecorded": record_video and bool(run_roots),
+            "decisiveReplayCueRecorded": decisive_replay_capsule is not None,
+            "participantPlanningRecordedOnVideo": False,
             "unrestrictedParallelSwarm": False,
             "browserSecuritySandbox": False,
             "privateModelThoughtsCaptured": False,
@@ -799,6 +1204,7 @@ def run_browser_swarm(  # noqa: PLR0912, PLR0913, PLR0915, PLR0917
         report_path,
         live_path,
         tuple(run_roots),
+        decisive_replay_capsule,
     )
 
 
@@ -808,4 +1214,5 @@ __all__ = [
     "BrowserSwarmCase",
     "BrowserSwarmParticipant",
     "run_browser_swarm",
+    "validate_browser_swarm_contract",
 ]

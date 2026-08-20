@@ -5,11 +5,11 @@
 ## Purpose
 
 The browser swarm is SOVA's bounded multi-role Arena lane for an exactly
-authorized website. Several scripted or provider-backed roles take turns over
-one target-bound persistent browser identity. Each role may select only an
-operator-authored candidate sequence from its explicit grant. SOVA, not the
-model, owns browser execution, authorization, judging, sensors, evidence, and
-the final verdict.
+authorized website. Several scripted, provider-backed, or explicitly admitted
+OCI roles take turns over one target-bound persistent browser identity. Each
+role may select only an operator-authored candidate sequence from its explicit
+grant. SOVA, not the model, owns browser execution, authorization, judging,
+sensors, evidence, and the final verdict.
 
 This lane exists for cooperative testing where roles need the same signed-in
 browser state without copying cookies or credentials between models. It is not
@@ -28,8 +28,11 @@ An exact `sova.browser-swarm/0.1.0` document declares:
 
 Unknown fields and versions fail closed. Participant identifiers are restricted
 to path-safe ASCII IDs. Configured models must be SOVA's built-in deterministic
-or credential-late provider adapters. Provider use requires the explicit CLI
-permission flag.
+or credential-late provider adapters. An optional `ociParticipants` array may
+instead bind a participant to an exact digest-pinned
+`sova.oci-agent-runtime/0.1.0`; the CLI admits it only through the exact attested
+gVisor adapter and refuses runtime substitution. Provider calls and sandboxed
+native agent code require separate explicit CLI permission flags.
 
 Participant output has exactly two fields:
 
@@ -74,9 +77,19 @@ The coordinator records signed canonical events for:
 Every browser attempt and reproduction remains a separately signed
 `.sova-trace`. The live journal carries a trace channel with each already
 redacted durable event. Completion requires exact event parity between the
-live channels and every finalized signed trace. The aggregate `.sova` capsule
-contains the coordinator trace, uniquely named participant traces, target,
-campaign, and swarm summary for offline verification.
+live channels and every finalized signed trace. The aggregate `swarm.sova`
+capsule contains the coordinator trace, uniquely named participant traces,
+target, campaign, and swarm summary for offline audit; its multiple traces make
+it intentionally unsuitable as an implicit one-step replay source.
+
+With `--record-video`, every trusted browser subrun must return exactly one
+recording. The first reproduced pass in execution order is eligible only when
+its discovery capsule binds exactly one attempt/reproduction pair, one video,
+and one cue index, and the replay application confirms that the passing cue is
+inside the finalized media duration. SOVA then copies that already verified
+participant discovery capsule byte-for-byte to `swarm-finding.sova`. The signed
+coordinator trace binds the selected capsule, video, cue, and reproduction
+digests. Missing or ambiguous decisive evidence fails the run closed.
 
 Declared browser sensors include SOVA actions, outcomes, authorization, oracles,
 and adapter-observed snapshots, console, network requests, and screenshot
@@ -90,20 +103,28 @@ sova arena swarm-web target.json campaign.json browser-swarm.json output \
   --control-proof control-proof.json \
   --browser-profile-vault .sova/browser-profiles \
   --browser-profile-handle profile:0123456789abcdef0123456789abcdef \
-  --allow-provider-calls --stream-jsonl
+  --allow-provider-calls --headed --record-video \
+  --playwright-browser-cache .cache/playwright-browsers --stream-jsonl
+sova replay output/swarm-finding.sova
 ```
 
 `--allow-provider-calls` is needed only when the document contains provider
 models. The command always requires a human-operated terminal, an explicit
 target-bound profile, valid proof-of-control where required, and per-subrun
-approval.
+approval. `--allow-sandboxed-agent-code --docker /path/to/docker` is additionally
+required for declared OCI participants. `swarm-finding.sova` is nullable: it is
+created only when recording was requested and a pass was reproduced with
+complete duration-bound replay evidence.
 
 ## Validated properties
 
 Mandatory offline tests cover strict parsing, role and candidate grants,
 path-traversal identifiers, budgets, cancellation, direct-tool refusal,
-redaction-before-transfer, signed subtraces, unique capsule trace paths, live
-stream parity, malformed documents, and CLI delegation. An opt-in installed
+redaction-before-transfer, signed subtraces, full coordinator authorization and
+execution-provenance digest binding, unique capsule trace paths, live stream
+parity, recording-option forwarding, byte-identical decisive replay selection,
+missing/ambiguous recording refusal, malformed documents, and CLI delegation.
+An opt-in installed
 Chrome test executes two roles against the self-owned loopback fixture across
 separate Playwright MCP processes, reuses one leased profile, observes and
 reproduces the planted conditional behavior, and verifies the aggregate trace
@@ -114,6 +135,10 @@ and capsule offline.
 - Scheduler turns are sequential, not parallel.
 - Models select reviewed recipes; they do not freely navigate or invent tools.
 - Browser confinement is not a security sandbox.
+- Video covers trusted browser subruns only. It does not record participant
+  planning, provider reasoning, OCI internals, or total host activity.
+- `swarm.sova` is audit-only for this workflow. Use `swarm-finding.sova` for
+  one-step decisive replay when that nullable artifact exists.
 - The public real-runtime proof uses deterministic model roles and one owned
   loopback fixture; provider quality and arbitrary-site compatibility remain
   optional external validation.

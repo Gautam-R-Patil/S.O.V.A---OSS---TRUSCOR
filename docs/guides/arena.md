@@ -197,7 +197,10 @@ sova arena swarm-web website-target.json browser-campaign.json `
   --control-proof control-proof.json `
   --browser-profile-vault .\.sova\browser-profiles `
   --browser-profile-handle profile:0123456789abcdef0123456789abcdef `
+  --headed --record-video `
+  --playwright-browser-cache .\.cache\playwright-browsers `
   --stream-jsonl
+sova replay .\arena-swarm-output\swarm-finding.sova
 ```
 
 Each role can select only its granted operator-authored candidates. Turns use
@@ -205,6 +208,20 @@ one exclusive profile lease and are sequential. The agents share redacted
 observable results, not cookies, credentials, profile paths, or browser tools.
 Add `--allow-provider-calls` only when the swarm document selects provider
 models.
+
+When recording is requested and a browser subrun reproduces a pass, the first
+such pass in execution order becomes the byte-identical, verified
+`swarm-finding.sova` one-step replay source. Its cue must be bound inside the
+finalized video duration. The aggregate `swarm.sova` remains an audit capsule
+with multiple traces and is not the implicit decisive replay artifact. Video
+covers browser subruns, not model planning, provider reasoning, or total host
+activity. If no pass is reproduced, the report returns a null
+`decisiveReplayCapsule`.
+
+The document may also declare digest-pinned OCI participants. They require
+`--allow-sandboxed-agent-code --docker ...` and a registered, ready, attested
+gVisor `runsc` lane. They receive no direct browser, target-tool, network,
+credential, host-mount, or container-engine authority.
 
 ## Connect a live viewer
 

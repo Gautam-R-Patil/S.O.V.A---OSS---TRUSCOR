@@ -484,7 +484,8 @@ The pre-alpha now includes:
 - an executor-backed browser swarm where bounded model roles take sequential
   turns over one target-bound opaque browser identity, share only redacted
   observations, and produce signed coordinator and participant traces plus a
-  portable aggregate capsule.
+  portable audit capsule; optional recording emits a byte-identical verified
+  `swarm-finding.sova` for the first reproduced pass with duration-bound cues.
 - a three-phase blinded causal-validation protocol with label-free frozen
   predictions, committed and optionally DSSE-pinned answer keys, stochastic
   CPU-only fixtures, abstention-aware metrics, and explicit external-study
@@ -696,7 +697,9 @@ sova arena swarm-web ./website-target.json ./browser-campaign.json \
   ./examples/arena/browser-swarm.json ./arena-swarm-output \
   --browser-profile-vault ./.sova/browser-profiles \
   --browser-profile-handle profile:0123456789abcdef0123456789abcdef \
-  --stream-jsonl
+  --headed --record-video \
+  --playwright-browser-cache ./.cache/playwright-browsers --stream-jsonl
+sova replay ./arena-swarm-output/swarm-finding.sova
 sova leaderboard build ./leaderboard.json ./leaderboard-output
 sova ctf build ./ctf.json ./ctf-catalog.json
 sova replay clip ./clip.json ./replay.y4m

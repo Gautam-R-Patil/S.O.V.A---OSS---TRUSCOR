@@ -150,7 +150,14 @@ specification](../specifications/semantic-browser-workflow-0.1.md).
 turns over one opaque target-bound browser profile. A role selects only a
 granted operator-authored campaign candidate; SOVA applies fresh human browser
 approval, records per-role signed subtraces plus a signed coordinator trace,
-and packages the exact live-channel evidence. See the
+and packages the exact live-channel evidence. Optional digest-pinned OCI roles
+require separate sandboxed-code authorization and an attested gVisor lane. Add
+`--headed --record-video --playwright-browser-cache PATH` to observe and record
+trusted browser subruns. On a reproduced pass, the first complete duration-bound
+recording is exposed byte-for-byte as nullable `swarm-finding.sova`; run
+`sova replay OUTPUT/swarm-finding.sova`. The aggregate `swarm.sova` remains
+audit-only, and video does not capture participant planning or total host
+activity. See the
 [browser swarm specification](../specifications/executor-backed-browser-swarm-0.1.md).
 
 `rehearse agent-run` asks one tool-free provider strategist to propose a strict,

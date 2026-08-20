@@ -988,6 +988,7 @@ def test_browser_swarm_cli_requires_profile_and_streams_channels(
         report=tmp_path / "report.json",
         trace=tmp_path / "swarm.sova-trace",
         capsule=tmp_path / "swarm.sova",
+        decisive_replay_capsule=tmp_path / "swarm-finding.sova",
         live_events=tmp_path / "live-events.jsonl",
         participant_runs=(tmp_path / "participant",),
     )
@@ -1003,6 +1004,9 @@ def test_browser_swarm_cli_requires_profile_and_streams_channels(
         assert options["profile_lease"] is lease
         assert options["control_proof"] is proof
         assert options["provider_calls_authorized"] is False
+        assert options["headless"] is False
+        assert options["record_video"] is True
+        assert options["browser_cache"] == tmp_path / "playwright-cache"
         options["event_observer"]("coordinator", {"kind": "run.started", "sequence": 0})
         return artifacts
 
@@ -1015,9 +1019,14 @@ def test_browser_swarm_cli_requires_profile_and_streams_channels(
         control_proof=tmp_path / "proof.json",
         package_runner=None,
         browser_executable=None,
+        playwright_browser_cache=tmp_path / "playwright-cache",
+        headed=True,
+        record_video=True,
         browser_profile_vault=tmp_path / "profiles",
         browser_profile_handle="profile:" + "a" * 32,
         allow_provider_calls=False,
+        allow_sandboxed_agent_code=False,
+        docker=None,
         stream_jsonl=True,
     )
     assert cli._arena_swarm_web(args) == 0
@@ -1026,14 +1035,79 @@ def test_browser_swarm_cli_requires_profile_and_streams_channels(
     assert output[0]["channel"] == "coordinator"
     assert output[-1]["artifactType"] == "sova.browser-swarm-cli-result"
     assert output[-1]["participantRuns"] == [str(tmp_path / "participant")]
+    assert output[-1]["decisiveReplayCapsule"] == str(tmp_path / "swarm-finding.sova")
 
     missing = argparse.Namespace(**(vars(args) | {"browser_profile_handle": None}))
     with pytest.raises(FormatError, match="requires an explicit target-bound profile"):
         cli._arena_swarm_web(missing)
 
+    monkeypatch.setattr(
+        cli,
+        "_load_object",
+        lambda path: {"ociParticipants": [{}]} if path == args.specification else {},
+    )
+    with pytest.raises(FormatError, match="--allow-sandboxed-agent-code"):
+        cli._arena_swarm_web(args)
+
     denied = vars(args) | {"authorize_contained_fixture": False}
     with pytest.raises(FormatError, match="explicit --authorize-contained-fixture"):
         cli._arena_chamber(argparse.Namespace(**denied))
+
+
+def test_browser_swarm_cli_prevalidates_campaign_contract_before_oci_setup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _tty(monkeypatch)
+    specification = tmp_path / "swarm.json"
+    document = {"ociParticipants": [{"id": "agent"}]}
+    target = object()
+    campaign = object()
+    monkeypatch.setattr(
+        cli,
+        "_load_object",
+        lambda path: document if path == specification else {},
+    )
+    monkeypatch.setattr(cli, "target_manifest_from_mapping", lambda _value: target)
+    monkeypatch.setattr(cli, "browser_campaign_from_mapping", lambda _value: campaign)
+
+    def reject_before_oci(
+        value: object,
+        loaded_campaign: object,
+        **options: Any,
+    ) -> None:
+        assert value is document
+        assert loaded_campaign is campaign
+        assert options["provider_calls_authorized"] is False
+        raise FormatError(
+            "SOVA-BROWSER-SWARM-CANDIDATE",
+            "participant candidate grant is outside the campaign",
+        )
+
+    monkeypatch.setattr(cli, "validate_browser_swarm_document", reject_before_oci)
+    monkeypatch.setattr(
+        cli,
+        "_campaign_executables",
+        lambda _args: pytest.fail("executable or OCI setup ran before complete validation"),
+    )
+    with pytest.raises(FormatError, match="outside the campaign"):
+        cli._arena_swarm_web(
+            argparse.Namespace(
+                manifest=tmp_path / "target.json",
+                campaign=tmp_path / "campaign.json",
+                specification=specification,
+                destination=tmp_path / "output",
+                control_proof=None,
+                package_runner=None,
+                browser_executable=None,
+                browser_profile_vault=tmp_path / "profiles",
+                browser_profile_handle="profile:" + "a" * 32,
+                allow_provider_calls=False,
+                allow_sandboxed_agent_code=True,
+                docker=None,
+                stream_jsonl=False,
+            )
+        )
 
 
 def test_provider_rehearsal_cli_requires_permission_tty_and_delegates(

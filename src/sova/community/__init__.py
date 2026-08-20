@@ -22,7 +22,10 @@ from sova.community.browser_swarm import (
     BrowserSwarmParticipant,
     run_browser_swarm,
 )
-from sova.community.browser_swarm_config import run_browser_swarm_document
+from sova.community.browser_swarm_config import (
+    run_browser_swarm_document,
+    validate_browser_swarm_document,
+)
 from sova.community.chamber import (
     ArenaChamberAction,
     ArenaChamberArtifacts,
@@ -86,5 +89,6 @@ __all__ = [
     "run_browser_swarm_document",
     "run_local_arena",
     "validate_agent_arena_document",
+    "validate_browser_swarm_document",
     "verify_probe_response",
 ]
