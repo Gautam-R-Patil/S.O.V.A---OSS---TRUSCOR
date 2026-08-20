@@ -424,9 +424,9 @@ The pre-alpha now includes:
   a bounded integrity-checked loopback live tail;
 - explicit opt-in headed-browser WebM capture, typed visual-replay packaging,
   digest-bound decisive-oracle cueing, and one-step `sova replay FINDING.sova`
-  rendering that selects the exact trace event and opens its bounded decisive
-  video window in one inert self-contained local page (`--no-open` renders
-  without launching a browser);
+  rendering that selects the exact trace event and asks the operating system to
+  open one inert self-contained local page with its duration-bounded decisive
+  video window selected (`--no-open` renders without requesting a browser);
 - numerator/denominator, Wilson uncertainty, condition sensitivity, and
   optional calibrated-judge reporting;
 - a bounded MCP stdio client, pinned open-source launch recipes, capability
@@ -469,15 +469,18 @@ The pre-alpha now includes:
   network, inter-agent, safety, authorization, state, and oracle events into
   the same signed trace exposed live; plus an authorized provider-backed
   website Arena lane.
-- an adaptive semantic website Arena where a provider or conforming OCI planner
-  can discover same-origin pages and build new plans from typed navigation,
-  history, form, keyboard, pointer, drag, modal, and bounded tab primitives,
-  while SOVA enforces independent budgets, exact batch approval, deterministic
-  persisted oracles, clean reproduction, recordings, and decisive replay cues.
-- a strict third-party agent protocol backed by exact digest-pinned images and
-  mandatory attested gVisor execution with no network, credentials, host mounts,
-  writable root, capabilities, or container-engine socket; there is no fallback
-  to an ordinary container.
+- an adaptive semantic website Arena where a provider—or a conforming OCI
+  planner when a registered, attested live gVisor host is available—can discover
+  same-origin pages and build new plans from typed navigation, history, form,
+  keyboard, pointer, drag, modal, and bounded tab primitives, while SOVA
+  enforces independent budgets, exact batch approval, deterministic persisted
+  oracles, clean reproduction, recordings, and decisive replay cues.
+- a strict third-party agent protocol that conditionally admits exact
+  digest-pinned images only through mandatory attested gVisor execution with no
+  network, credentials, host mounts, writable root, capabilities, or
+  container-engine socket; mandatory contract/failure-path tests pass, no
+  ordinary-container fallback exists, and live use still requires a registered
+  `runsc` host.
 - an executor-backed browser swarm where bounded model roles take sequential
   turns over one target-bound opaque browser identity, share only redacted
   observations, and produce signed coordinator and participant traces plus a
@@ -983,7 +986,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `sova compose` | Typed metadata-only graph, four bounded search strategies, fresh-evidence minimization, element-removal attribution, portable capsule fragment, and deterministic composition-only fixture implemented in [ADR-0021](./docs/decisions/0021-bounded-composition-only-search.md); comparative search superiority remains unproven |
 | `sova rehearse` | Credential-stripped substitute workspace, distinct user/attacker evidence, signed traces, review, and selective export implemented in [ADR-0022](./docs/decisions/0022-substitute-only-rehearsal-and-selective-promotion.md); the built-in backend is not a security sandbox |
 | `sova trace`, `diff`, `sentinel`, `monitor`, `ci`, and `self-check` | Deterministic local recorder, three-axis drift, one-shot sentinel/CI, and a durable scheduler with workspace-bound jobs, OS overlap exclusion, restart recovery, bounded retention, signed traces, and an HTTPS HMAC/idempotency/acknowledgement alert adapter. Service-manager templates ship for Linux, macOS, and Windows; remote collection, remediation, HA, and uptime remain deployment claims |
-| Registry, `sync`, adapters, `contribute`, and self-hosted community service | Offline content-addressed registry plus a loopback service with token-gated bounded staging, signer-pinned asynchronous verification, atomic promotion, signed live index, SSE events, standard-profile leaderboard, and an exact endpoint/key-digest health contract. A non-root, read-only, capability-dropped digest-pinned container/Caddy TLS blueprint ships, but a production deployment, operator, identity policy, moderation, backups/restore drills, abuse controls, and uptime evidence remain external gates |
+| Registry, `sync`, adapters, `contribute`, and self-hosted community service | Offline content-addressed registry plus a loopback service with token-gated bounded staging, signer-pinned asynchronous verification, atomic promotion, signed live index, SSE events, standard-profile leaderboard, and an exact endpoint/key-digest health contract. The documented container/Caddy launch path requires immutable-image preflight, exact equality between resolved Compose images and the two validated digest references, validation and protected staging of external operator inputs, and persistent-volume ownership repair before the non-root, read-only-root, capability-dropped service starts. This is a deployment blueprint, not a hosted or production-attested community; operator identity policy, moderation, backups/restore drills, abuse controls, monitoring, incident response, independent review, and uptime evidence remain external gates |
 | Local MCP | MCP `2025-11-25` stdio, safe tools, three exact-gated tools, out-of-band human approval, manifest pin, and self-check implemented in [ADR-0025](./docs/decisions/0025-local-mcp-out-of-band-authorization.md) |
 | Extension SDK, providers, targets, interoperability | Experimental fail-closed contracts, import-free discovery, machine-local digest-pinned preparation, exact human-approved subprocess execution, a preregistered paired provider/model experiment matrix, Python and Node offline verifiers, a no-network conformance kit, and a strict OCI agent protocol with signed `describe`/`self-test`/`respond` conformance. Ordinary extension host execution is not a sandbox; external implementation ownership, provider transferability, and adoption remain unproven |
 | Probe, Arena, leaderboard, CTF, replay media | Deterministic standard-profile Arena, provider/OCI-capable message Arena, real-time sensor-instrumented multi-agent chamber, authorized provider-backed website Arena, adaptive multi-page semantic website exploration, and browser-swarm lanes are implemented with signed observable evidence. Installed-Chrome validation on a controlled loopback fixture covers semantic navigation, history, forms, drag, modal handling, bounded tabs, clean reproduction, video, and exact-moment replay. The prepared all-nine AI Goat provider campaign remains unrun because the final availability probe was rate-limited. Protocol-conforming third-party OCI agents are conditionally admitted only through an attested live gVisor `runsc` host and have no direct browser authority; mandatory tests pass, but this host has no registered live `runsc` lane. “Fully sensed” is bounded to declared healthy sensor families; total host observability, provider-quality comparison, and public comparative results remain unproven |

@@ -60,15 +60,17 @@ new environment family requires an admitted executor adapter, normalized
 events, explicit sensor-health reporting, conformance tests, and a new format
 version when semantics change.
 
-`arena agent-run` can nevertheless include third-party native agents through a
-separate OCI adapter. Each agent must implement the strict SOVA JSON protocol,
-use an exact digest-pinned image, and pass signed conformance through an attested
-gVisor `runsc` runtime. It receives messages, not environment tools, and runs
-with no network, credentials, host mounts, writable root, capabilities, or
-container-engine socket. Use `ociParticipants` plus
+On a registered, ready, attested live gVisor host, `arena agent-run` can
+conditionally include third-party native agents through a separate OCI adapter.
+Each agent must implement the strict SOVA JSON protocol, use an exact
+digest-pinned image, and pass signed conformance through the `runsc` runtime. It
+receives messages, not environment tools, and runs with no network, credentials,
+host mounts, writable root, capabilities, or container-engine socket. Use
+`ociParticipants` plus
 `--allow-sandboxed-agent-code --docker ...`; provider participants retain the
 separate `--allow-provider-calls` gate. There is no fallback to a weaker
-container runtime.
+container runtime. Mandatory contract and failure-path tests pass, but this
+checkout has no recorded live `runsc` execution.
 
 ## Test an authorized website
 
@@ -97,9 +99,10 @@ signed traces. Render the proof directly:
 sova replay .\arena-web-output\browser\discovery.sova
 ```
 
-The one-step command writes `discovery-replay.html` beside the capsule and opens
-only that local file. Add `--no-open` for automation, or retain the explicit
-`sova replay capsule CAPSULE OUTPUT` form when a fixed output path is required.
+The one-step command writes `discovery-replay.html` beside the capsule and asks
+the operating system to open only that local file. Add `--no-open` for
+automation, or retain the explicit `sova replay capsule CAPSULE OUTPUT` form
+when a fixed output path is required.
 The replay defaults to the decisive cue belonging to the selected primary trace.
 Selection is deterministic: `run.sova-trace`, then `reproduction.sova-trace`,
 then the lexically first remaining trace. Arena campaign and semantic-discovery

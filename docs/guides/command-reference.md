@@ -56,7 +56,7 @@ only that the finite declared candidate set was exhausted.
 Trace playback, controlled re-execution, and semantic reproduction are distinct
 operations. No command claims to capture hidden chain-of-thought.
 
-`sova replay FINDING.sova` is the launch-ready human interface. It verifies the
+`sova replay FINDING.sova` is the one-step human interface. It verifies the
 capsule, derives `FINDING-replay.html` beside it, selects its decisive evidence,
 and asks the operating system to open only that generated local HTML file. It
 never opens a recorded URL or executes a recorded action. Use `--no-open` for
@@ -74,8 +74,8 @@ paths; selection flags are required when a capsule has multiple possible
 comparisons or recordings. Video capture itself is opt-in on browser detonation and
 provider-backed `arena web` through `--headed --record-video` and requires a
 caller-managed Playwright FFmpeg cache. A recorded passing oracle is packaged
-with a media-digest-bound cue; capsule replay selects that trace event and
-opens at its bounded video offset. `opensAtDecisiveMoment` is true only when the
+with a media-digest-bound cue; capsule replay selects that trace event and its
+bounded video window. `opensAtDecisiveMoment` is true only when the
 selected WebM/MP4 exposes a finite container duration (or a finalized WebM block
 timeline) and both the decisive cue and chapter fall within it; a magic-byte-only
 or too-short recording cannot receive that state. Recordings may contain
@@ -139,8 +139,10 @@ digest-bound human approval; only deterministic persisted oracles can declare a
 finding; and a second clean reproduction is required. The resulting discovery
 capsule exposes unambiguous trace-role selections for decisive discovery and
 controlled reproduction while retaining earlier exploration traces as
-content-addressed history attachments. `replay capsule` opens at the exact
-reproduced oracle cue rather than at an unrelated full-session point. See the
+content-addressed history attachments. One-step `sova replay FINDING.sova`
+requests opening the generated local proof with the duration-bounded reproduced
+oracle cue selected; `replay capsule` renders the same selection to an explicit
+output path without requesting a browser. See the
 [semantic browser workflow
 specification](../specifications/semantic-browser-workflow-0.1.md).
 

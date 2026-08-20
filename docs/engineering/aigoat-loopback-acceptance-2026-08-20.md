@@ -64,12 +64,14 @@ the leaked training response, and SOVA's trace-sequence-linked exploit chapter.
 
 ## All-nine expansion status
 
-The current semantic Arena implementation can plan the full declared AI Goat
-surface, including the multi-page Knowledge Base create/synchronize/chat flows
-for Challenges 3, 7, and 8. All nine generated missions pass the static target,
-action-surface, reset, same-origin proxy, offline-embedding, and UI-contract
-preflights. This implementation result does **not** upgrade the historical
-Challenge 1 provider result into an all-nine pass.
+The prepared semantic Arena acceptance package defines bounded missions for all
+nine challenges, including declared multi-page Knowledge Base
+create/synchronize/chat flows for Challenges 3, 7, and 8. All nine mission
+documents pass the static target, action-surface, reset, same-origin proxy,
+offline-embedding, and UI-contract preflights. That is input and contract
+validation only: no provider or OCI planner completed Challenges 2 through 9 in
+this checkout, and it does **not** upgrade the historical Challenge 1 provider
+result into an all-nine pass.
 
 The final secret-free OpenRouter availability receipt records one request to the
 primary free model, `SOVA-PROVIDER-RATE-LIMIT`, no `Retry-After`, a free-tier
@@ -99,11 +101,12 @@ above was run separately because it is credentialed and operator-authorized.
 
 ## Coverage boundary and next acceptance
 
-Challenges 2 through 9 are now supported by the bounded semantic mission
-contract, including the Knowledge Base workflows, but they remain **not run -
-unproven** in a provider-backed all-nine campaign. The next acceptance requires
-usable provider quota, completion of every mission and clean reproduction,
-offline verification of each signed capsule/trace, and duration-bounded decisive
-replay cues. Free-roaming arbitrary browser/tool authority, cross-origin access,
-host access, and universal UI coverage are intentionally not inferred from this
-implementation or the historical Challenge 1 result.
+Challenges 2 through 9 now have prepared mission documents accepted by the
+bounded semantic mission contract, including the Knowledge Base workflows, but
+they remain **not run - unproven** in a provider-backed all-nine campaign. The
+next acceptance requires usable provider quota, completion of every mission and
+clean reproduction, offline verification of each signed capsule/trace, and
+duration-bounded decisive replay cues. Free-roaming arbitrary browser/tool
+authority, cross-origin access, host access, and universal UI coverage are
+intentionally not inferred from this implementation or the historical
+Challenge 1 result.
