@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import base64
 import http.client
+import io
 import json
+import struct
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
@@ -23,6 +25,7 @@ from sova.replay import (
     render_capsule_timeline,
     render_timeline_html,
 )
+from sova.replay import render as replay_render
 from sova.replay import service as replay_service
 from sova.trace import TraceWriter
 from sova.trace.integrity import event_hash
@@ -48,6 +51,93 @@ def _trace(path: Path, *, hostile: bool = False) -> None:
         parents=[first],
     )
     writer.finalize()
+
+
+def _ebml_size(value: int) -> bytes:
+    if value < 0x7F:
+        return bytes((0x80 | value,))
+    if value < 0x3FFF:
+        return bytes((0x40 | (value >> 8), value & 0xFF))
+    raise AssertionError
+
+
+def _ebml(identifier: bytes, payload: bytes) -> bytes:
+    return identifier + _ebml_size(len(payload)) + payload
+
+
+def _synthetic_webm(*, duration_seconds: float = 12.0) -> bytes:
+    info = _ebml(b"\x2a\xd7\xb1", (1_000_000).to_bytes(3, "big")) + _ebml(
+        b"\x44\x89", struct.pack(">d", duration_seconds * 1000)
+    )
+    segment = b"".join(
+        (
+            _ebml(b"\x15\x49\xa9\x66", info),
+            _ebml(b"\x16\x54\xae\x6b", b"\xae\x80"),
+            _ebml(b"\x1f\x43\xb6\x75", b"\xe7\x81\x00"),
+        )
+    )
+    return _ebml(b"\x1a\x45\xdf\xa3", b"") + _ebml(b"\x18\x53\x80\x67", segment)
+
+
+def _synthetic_webm_timeline() -> bytes:
+    info = _ebml(b"\x2a\xd7\xb1", (1_000_000).to_bytes(3, "big"))
+    simple_block = b"\x81" + (2500).to_bytes(2, "big", signed=True) + b"\x80"
+    grouped_block = b"\x81" + (3000).to_bytes(2, "big", signed=True) + b"\x80"
+    cluster = b"".join(
+        (
+            _ebml(b"\xe7", (1000).to_bytes(2, "big")),
+            _ebml(b"\xa3", simple_block),
+            _ebml(b"\xa0", _ebml(b"\xec", b"ignored") + _ebml(b"\xa1", grouped_block)),
+        )
+    )
+    segment = b"".join(
+        (
+            _ebml(b"\x15\x49\xa9\x66", info),
+            _ebml(b"\x16\x54\xae\x6b", b"\xae\x80"),
+            _ebml(b"\x1f\x43\xb6\x75", cluster),
+        )
+    )
+    return _ebml(b"\x1a\x45\xdf\xa3", b"") + _ebml(b"\x18\x53\x80\x67", segment)
+
+
+def _mp4_box(kind: bytes, payload: bytes) -> bytes:
+    return (len(payload) + 8).to_bytes(4, "big") + kind + payload
+
+
+def _mp4_extended_box(kind: bytes, payload: bytes) -> bytes:
+    return b"\x00\x00\x00\x01" + kind + (len(payload) + 16).to_bytes(8, "big") + payload
+
+
+def _mp4_to_end_box(kind: bytes, payload: bytes) -> bytes:
+    return b"\x00\x00\x00\x00" + kind + payload
+
+
+def _synthetic_mp4(*, duration_seconds: float = 12.0) -> bytes:
+    timescale = 1000
+    movie_header = (
+        b"\x00\x00\x00\x00"
+        + (0).to_bytes(4, "big")
+        + (0).to_bytes(4, "big")
+        + timescale.to_bytes(4, "big")
+        + int(duration_seconds * timescale).to_bytes(4, "big")
+    )
+    return _mp4_box(b"ftyp", b"isom\x00\x00\x00\x00isom") + _mp4_box(
+        b"moov", _mp4_box(b"mvhd", movie_header)
+    )
+
+
+def _synthetic_mp4_v1(*, duration_seconds: float = 13.25) -> bytes:
+    timescale = 1000
+    movie_header = (
+        b"\x01\x00\x00\x00"
+        + (0).to_bytes(8, "big")
+        + (0).to_bytes(8, "big")
+        + timescale.to_bytes(4, "big")
+        + int(duration_seconds * timescale).to_bytes(8, "big")
+    )
+    return _mp4_box(b"ftyp", b"isom\x00\x00\x00\x00isom") + _mp4_extended_box(
+        b"moov", _mp4_to_end_box(b"mvhd", movie_header)
+    )
 
 
 def _request(
@@ -117,7 +207,7 @@ def test_static_replay_embeds_reviewed_browser_video_without_executing_trace_con
     source = tmp_path / "recorded.sova-trace"
     _trace(source)
     media = tmp_path / "browser-session.webm"
-    payload = b"\x1a\x45\xdf\xa3sova-replay-video"
+    payload = _synthetic_webm()
     media.write_bytes(payload)
     destination = tmp_path / "recorded-replay.html"
 
@@ -138,7 +228,7 @@ def test_replay_cues_open_on_digest_bound_decisive_oracle_moment(tmp_path: Path)
     assert event_id is not None
     writer.finalize()
     video = tmp_path / "browser-session.webm"
-    video.write_bytes(b"\x1a\x45\xdf\xa3decisive-video")
+    video.write_bytes(_synthetic_webm())
     cues = tmp_path / "replay-cues.json"
     cue_document = {
         "artifactType": "sova.replay-cues",
@@ -170,7 +260,7 @@ def test_replay_cues_open_on_digest_bound_decisive_oracle_moment(tmp_path: Path)
     cues.write_bytes(canonical_json_bytes(cue_document) + b"\n")
     destination = tmp_path / "decisive-replay.html"
 
-    render_timeline_html(source, destination, media=video, replay_cues=cues)
+    replay = render_timeline_html(source, destination, media=video, replay_cues=cues)
 
     rendered = destination.read_text(encoding="utf-8")
     assert 'id="breakpoint"' in rendered
@@ -178,6 +268,10 @@ def test_replay_cues_open_on_digest_bound_decisive_oracle_moment(tmp_path: Path)
     assert '"defaultCueId":"decisive-01"' in rendered
     assert "same-host-monotonic-recorder-start-rpc-bound" in rendered
     assert "seekCue(cue,false)" in rendered
+    assert replay["opensAtDecisiveMoment"] is True
+    assert replay["decisiveCue"]["eventId"] == event_id
+    assert replay["decisiveCueSource"] == "primary"
+    assert replay["mediaDurationSeconds"] == "12.000000"
 
     manifest = capsule_manifest_template(
         title="Decisive replay", summary="Digest-bound replay cue fixture.", author="Tests"
@@ -194,14 +288,14 @@ def test_replay_cues_open_on_digest_bound_decisive_oracle_moment(tmp_path: Path)
     report = render_capsule_timeline(capsule, tmp_path / "capsule-decisive.html")
     assert report["opensAtDecisiveMoment"] is True
     assert report["replayCues"] is not None
+    assert report["decisiveCue"]["eventId"] == event_id
+    assert report["decisiveCueDurationBound"] is True
 
 
 def test_replay_cues_default_to_the_selected_primary_trace(tmp_path: Path) -> None:
     discovery = tmp_path / "discovery.sova-trace"
     discovery_writer = TraceWriter(discovery)
-    discovery_event = discovery_writer.append(
-        "oracle.completed", {"status": "pass", "results": []}
-    )
+    discovery_event = discovery_writer.append("oracle.completed", {"status": "pass", "results": []})
     assert discovery_event is not None
     discovery_writer.finalize()
     reproduction = tmp_path / "reproduction.sova-trace"
@@ -212,7 +306,7 @@ def test_replay_cues_default_to_the_selected_primary_trace(tmp_path: Path) -> No
     assert reproduction_event is not None
     reproduction_writer.finalize()
     video = tmp_path / "browser-session.webm"
-    video.write_bytes(b"\x1a\x45\xdf\xa3two-trace-video")
+    video.write_bytes(_synthetic_webm())
     cues = tmp_path / "replay-cues.json"
     cue_template = {
         "label": "Exploit confirmed",
@@ -259,7 +353,7 @@ def test_replay_cues_default_to_the_selected_primary_trace(tmp_path: Path) -> No
     )
 
     destination = tmp_path / "two-trace-replay.html"
-    render_timeline_html(
+    replay = render_timeline_html(
         reproduction,
         destination,
         comparison=discovery,
@@ -269,6 +363,67 @@ def test_replay_cues_default_to_the_selected_primary_trace(tmp_path: Path) -> No
 
     rendered = destination.read_text(encoding="utf-8")
     assert '"defaultCueId":"decisive-reproduction"' in rendered
+    assert replay["decisiveCueSource"] == "primary"
+
+
+def test_comparison_only_decisive_cue_is_indexed_and_selected(tmp_path: Path) -> None:
+    primary = tmp_path / "primary.sova-trace"
+    _trace(primary)
+    comparison = tmp_path / "comparison.sova-trace"
+    writer = TraceWriter(comparison)
+    event_id = writer.append("oracle.completed", {"status": "pass", "results": []})
+    assert event_id is not None
+    writer.finalize()
+    video = tmp_path / "comparison.webm"
+    video.write_bytes(_synthetic_webm())
+    cues = tmp_path / "replay-cues.json"
+    cues.write_bytes(
+        canonical_json_bytes(
+            {
+                "artifactType": "sova.replay-cues",
+                "schemaVersion": "0.1.0",
+                "mediaName": video.name,
+                "mediaDigest": sha256_digest(video.read_bytes()),
+                "synchronization": {
+                    "method": "same-host-monotonic-recorder-start-rpc-bound",
+                    "uncertaintyMs": "1.000",
+                    "frameTimestampAttested": False,
+                    "statement": "Fixture.",
+                },
+                "cues": [
+                    {
+                        "id": "comparison-only",
+                        "label": "Exploit confirmed",
+                        "channel": "comparison",
+                        "eventId": event_id,
+                        "eventKind": "oracle.completed",
+                        "eventSequence": 0,
+                        "oracleStatus": "pass",
+                        "offsetSeconds": "4.000000",
+                        "chapterOffsetSeconds": "4.100000",
+                        "preRollSeconds": "2.000000",
+                        "postRollSeconds": "3.000000",
+                    }
+                ],
+            }
+        )
+        + b"\n"
+    )
+
+    destination = tmp_path / "comparison-cue.html"
+    replay = render_timeline_html(
+        primary,
+        destination,
+        comparison=comparison,
+        media=video,
+        replay_cues=cues,
+    )
+
+    rendered = destination.read_text(encoding="utf-8")
+    assert replay["opensAtDecisiveMoment"] is True
+    assert replay["decisiveCueSource"] == "comparison"
+    assert "comparison.forEach(e=>byId.set(e.id,e))" in rendered
+    assert "showComparisonCue(event)" in rendered
 
 
 def test_replay_cues_reject_empty_or_duplicate_indexes(tmp_path: Path) -> None:
@@ -278,9 +433,9 @@ def test_replay_cues_reject_empty_or_duplicate_indexes(tmp_path: Path) -> None:
     assert event_id is not None
     writer.finalize()
     video = tmp_path / "browser-session.webm"
-    video.write_bytes(b"\x1a\x45\xdf\xa3cue-policy-video")
+    video.write_bytes(_synthetic_webm())
     cues = tmp_path / "replay-cues.json"
-    document = {
+    document: dict[str, Any] = {
         "artifactType": "sova.replay-cues",
         "schemaVersion": "0.1.0",
         "mediaName": video.name,
@@ -348,7 +503,7 @@ def test_replay_cues_reject_wrong_media_binding(tmp_path: Path) -> None:
     assert event_id is not None
     writer.finalize()
     video = tmp_path / "browser-session.webm"
-    video.write_bytes(b"\x1a\x45\xdf\xa3binding-video")
+    video.write_bytes(_synthetic_webm())
     cues = tmp_path / "replay-cues.json"
     cues.write_bytes(
         canonical_json_bytes(
@@ -375,6 +530,173 @@ def test_replay_cues_reject_wrong_media_binding(tmp_path: Path) -> None:
             media=video,
             replay_cues=cues,
         )
+
+
+def test_decisive_open_claim_requires_bounded_container_duration(tmp_path: Path) -> None:
+    trace = tmp_path / "duration.sova-trace"
+    writer = TraceWriter(trace)
+    event_id = writer.append("oracle.completed", {"status": "pass", "results": []})
+    assert event_id is not None
+    writer.finalize()
+
+    def cue_document(media: Path) -> dict[str, Any]:
+        return {
+            "artifactType": "sova.replay-cues",
+            "schemaVersion": "0.1.0",
+            "mediaName": media.name,
+            "mediaDigest": sha256_digest(media.read_bytes()),
+            "synchronization": {
+                "method": "same-host-monotonic-recorder-start-rpc-bound",
+                "uncertaintyMs": "1.000",
+                "frameTimestampAttested": False,
+                "statement": "Fixture.",
+            },
+            "cues": [
+                {
+                    "id": "duration-bound",
+                    "label": "Exploit confirmed",
+                    "channel": "primary",
+                    "eventId": event_id,
+                    "eventKind": "oracle.completed",
+                    "eventSequence": 0,
+                    "oracleStatus": "pass",
+                    "offsetSeconds": "4.000000",
+                    "chapterOffsetSeconds": "4.100000",
+                    "preRollSeconds": "2.000000",
+                    "postRollSeconds": "3.000000",
+                }
+            ],
+        }
+
+    malformed = tmp_path / "malformed.webm"
+    malformed.write_bytes(b"\x1a\x45\xdf\xa3not-a-finalized-webm")
+    cues = tmp_path / "malformed-cues.json"
+    cues.write_bytes(canonical_json_bytes(cue_document(malformed)) + b"\n")
+    report = render_timeline_html(
+        trace,
+        tmp_path / "malformed.html",
+        media=malformed,
+        replay_cues=cues,
+    )
+    assert report["decisiveCue"] is not None
+    assert report["decisiveCueDurationBound"] is False
+    assert report["opensAtDecisiveMoment"] is False
+
+    too_short = tmp_path / "too-short.webm"
+    too_short.write_bytes(_synthetic_webm(duration_seconds=1))
+    cues.write_bytes(canonical_json_bytes(cue_document(too_short)) + b"\n")
+    with pytest.raises(FormatError, match="outside the finalized media duration"):
+        render_timeline_html(
+            trace,
+            tmp_path / "too-short.html",
+            media=too_short,
+            replay_cues=cues,
+        )
+
+
+def test_webm_duration_parser_accepts_finalized_blocks_and_rejects_bad_ebml() -> None:
+    assert replay_render._webm_duration_seconds(_synthetic_webm_timeline()) == pytest.approx(4.0)
+
+    duration32 = _ebml(b"\x2a\xd7\xb1", (1_000_000).to_bytes(3, "big")) + _ebml(
+        b"\x44\x89", struct.pack(">f", 5000.0)
+    )
+
+    def webm(info: bytes, *, cluster: bytes = b"\xe7\x81\x00") -> bytes:
+        segment = b"".join(
+            (
+                _ebml(b"\x15\x49\xa9\x66", info),
+                _ebml(b"\x16\x54\xae\x6b", b"\xae\x80"),
+                _ebml(b"\x1f\x43\xb6\x75", cluster),
+            )
+        )
+        return _ebml(b"\x1a\x45\xdf\xa3", b"") + _ebml(b"\x18\x53\x80\x67", segment)
+
+    assert replay_render._webm_duration_seconds(webm(duration32)) == pytest.approx(5.0)
+    assert replay_render._ebml_vint(b"", 0, identifier=True) is None
+    assert replay_render._ebml_vint(b"\x00", 0, identifier=True) is None
+    assert replay_render._ebml_vint(b"\x40", 0, identifier=False) is None
+    assert replay_render._ebml_vint(b"\xff", 0, identifier=False) == (None, 1)
+    assert replay_render._ebml_elements(b"\x81\xff", 0, 2) == [(0x81, 2, 2)]
+    assert replay_render._ebml_elements(b"\x00", 0, 1) is None
+    assert replay_render._ebml_elements(b"\x81", 0, 1) is None
+    assert replay_render._ebml_elements(b"\x81\x82\x00", 0, 3) is None
+
+    header = _ebml(b"\x1a\x45\xdf\xa3", b"")
+    segment_without_info = _ebml(
+        b"\x18\x53\x80\x67",
+        _ebml(b"\x16\x54\xae\x6b", b"\xae\x80") + _ebml(b"\x1f\x43\xb6\x75", b"\xe7\x81\x00"),
+    )
+    valid_info = _ebml(b"\x2a\xd7\xb1", (1_000_000).to_bytes(3, "big"))
+    no_tracks = header + _ebml(
+        b"\x18\x53\x80\x67",
+        _ebml(b"\x15\x49\xa9\x66", duration32) + _ebml(b"\x1f\x43\xb6\x75", b"\xe7\x81\x00"),
+    )
+    malformed_info = webm(b"\x81")
+    malformed_cluster = webm(valid_info, cluster=b"\x81")
+    malformed_group = webm(
+        valid_info,
+        cluster=_ebml(b"\xe7", b"\x00") + _ebml(b"\xa0", b"\x81"),
+    )
+    invalid_scale = _ebml(b"\x2a\xd7\xb1", b"\x00") + _ebml(b"\x44\x89", struct.pack(">d", 1000.0))
+    non_finite_duration = _ebml(b"\x2a\xd7\xb1", (1_000_000).to_bytes(3, "big")) + _ebml(
+        b"\x44\x89", struct.pack(">d", float("nan"))
+    )
+    malformed_documents: tuple[bytes, ...] = (
+        b"",
+        header,
+        header + _ebml(b"\x18\x53\x80\x67", b"\x81"),
+        header + segment_without_info,
+        no_tracks,
+        malformed_info,
+        malformed_cluster,
+        malformed_group,
+        webm(invalid_scale),
+        webm(non_finite_duration),
+        webm(valid_info),
+    )
+    assert all(replay_render._webm_duration_seconds(value) is None for value in malformed_documents)
+    assert replay_render._block_relative_timecode(b"") is None
+    assert replay_render._block_relative_timecode(b"\x81") is None
+
+
+def test_mp4_duration_parser_accepts_v1_and_rejects_malformed_box_graphs() -> None:
+    assert replay_render._mp4_duration_seconds(_synthetic_mp4()) == pytest.approx(12.0)
+    assert replay_render._mp4_duration_seconds(_synthetic_mp4_v1()) == pytest.approx(13.25)
+
+    ftyp = _mp4_box(b"ftyp", b"isom\x00\x00\x00\x00isom")
+    version_zero = (
+        b"\x00\x00\x00\x00"
+        + (0).to_bytes(4, "big")
+        + (0).to_bytes(4, "big")
+        + (1000).to_bytes(4, "big")
+        + (1000).to_bytes(4, "big")
+    )
+    malformed_documents = (
+        b"\x00" * 7,
+        b"\x00\x00\x00\x01ftyp\x00\x00\x00",
+        b"\x00\x00\x00\x04ftyp",
+        b"\x00\x00\x01\x00ftyp",
+        _mp4_box(b"free", b"fixture"),
+        ftyp,
+        ftyp + _mp4_box(b"moov", b"") + _mp4_box(b"moov", b""),
+        ftyp + _mp4_box(b"moov", b"\x00" * 7),
+        ftyp + _mp4_box(b"moov", b""),
+        ftyp + _mp4_box(b"moov", _mp4_box(b"mvhd", b"\x00" * 19)),
+        ftyp
+        + _mp4_box(
+            b"moov",
+            _mp4_box(b"mvhd", version_zero) + _mp4_box(b"mvhd", version_zero),
+        ),
+        ftyp + _mp4_box(b"moov", _mp4_box(b"mvhd", b"\x02" + b"\x00" * 31)),
+        ftyp + _mp4_box(b"moov", _mp4_box(b"mvhd", b"\x01" + b"\x00" * 19)),
+        ftyp
+        + _mp4_box(
+            b"moov",
+            _mp4_box(b"mvhd", version_zero[:12] + b"\x00\x00\x00\x00" + version_zero[16:]),
+        ),
+        ftyp + _mp4_box(b"moov", _mp4_box(b"mvhd", version_zero[:16] + b"\x00" * 4)),
+    )
+    assert all(replay_render._mp4_duration_seconds(value) is None for value in malformed_documents)
 
 
 def test_static_replay_refuses_empty_unsupported_and_linked_media(tmp_path: Path) -> None:
@@ -412,7 +734,7 @@ def test_capsule_replay_selects_run_reproduction_and_embedded_video(
     reproduction = tmp_path / "reproduction.sova-trace"
     _trace(run)
     _trace(reproduction)
-    video = b"\x1a\x45\xdf\xa3capsule-video"
+    video = _synthetic_webm()
     manifest = capsule_manifest_template(
         title="Recorded behavior", summary="Capsule-native replay fixture.", author="Tests"
     )
@@ -437,6 +759,102 @@ def test_capsule_replay_selects_run_reproduction_and_embedded_video(
     rendered = destination.read_text(encoding="utf-8")
     assert "Synchronized comparison" in rendered
     assert f"data:video/webm;base64,{base64.b64encode(video).decode('ascii')}" in rendered
+
+
+def test_one_step_replay_derives_opens_and_reports_decisive_local_file(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    trace = tmp_path / "reproduction.sova-trace"
+    writer = TraceWriter(trace)
+    event_id = writer.append("oracle.completed", {"status": "pass", "results": []})
+    assert event_id is not None
+    writer.finalize()
+    video = _synthetic_webm()
+    cue_document = {
+        "artifactType": "sova.replay-cues",
+        "schemaVersion": "0.1.0",
+        "mediaName": "session.webm",
+        "mediaDigest": sha256_digest(video),
+        "synchronization": {
+            "method": "same-host-monotonic-recorder-start-rpc-bound",
+            "uncertaintyMs": "1.000",
+            "frameTimestampAttested": False,
+            "statement": "Fixture.",
+        },
+        "cues": [
+            {
+                "id": "decisive-reproduction",
+                "label": "Exploit confirmed",
+                "channel": "reproduction",
+                "eventId": event_id,
+                "eventKind": "oracle.completed",
+                "eventSequence": 0,
+                "oracleStatus": "pass",
+                "offsetSeconds": "4.000000",
+                "chapterOffsetSeconds": "4.100000",
+                "preRollSeconds": "2.000000",
+                "postRollSeconds": "3.000000",
+            }
+        ],
+    }
+    manifest = capsule_manifest_template(
+        title="One-step replay", summary="CLI decisive replay fixture.", author="Tests"
+    )
+    manifest["license"] = "Apache-2.0"
+    manifest["safety"]["impact"] = "none"
+    capsule = tmp_path / "finding.sova"
+    build_capsule(
+        capsule,
+        manifest,
+        attachments={
+            "session.webm": video,
+            "replay-cues.json": canonical_json_bytes(cue_document),
+        },
+        traces=[trace],
+    )
+    opened: list[str] = []
+
+    def open_local(uri: str, *, new: int, autoraise: bool) -> bool:
+        assert new == 2
+        assert autoraise is True
+        opened.append(uri)
+        return True
+
+    monkeypatch.setattr("sova.cli.webbrowser.open", open_local)
+
+    assert main(["replay", str(capsule)]) == 0
+    report = json.loads(capsys.readouterr().out)
+    expected = tmp_path / "finding-replay.html"
+    assert report["destination"] == str(expected.resolve())
+    assert report["localUri"] == expected.resolve().as_uri()
+    assert report["openRequested"] is True
+    assert report["opened"] is True
+    assert report["opensAtDecisiveMoment"] is True
+    assert report["decisiveCue"]["eventId"] == event_id
+    assert report["decisiveCueSource"] == "primary"
+    assert opened == [expected.resolve().as_uri()]
+    assert expected.is_file()
+
+    automated = tmp_path / "automation.html"
+    assert (
+        main(
+            [
+                "replay",
+                "open",
+                str(capsule),
+                "--output",
+                str(automated),
+                "--no-open",
+            ]
+        )
+        == 0
+    )
+    no_open_report = json.loads(capsys.readouterr().out)
+    assert no_open_report["openRequested"] is False
+    assert no_open_report["opened"] is None
+    assert opened == [expected.resolve().as_uri()]
 
 
 def test_capsule_replay_requires_explicit_choices_when_evidence_is_ambiguous(
@@ -536,8 +954,8 @@ def test_capsule_replay_requires_explicit_media_and_refuses_bad_declared_type(
         manifest,
         traces=[trace],
         attachments={
-            "first.webm": b"\x1a\x45\xdf\xa3first",
-            "second.webm": b"\x1a\x45\xdf\xa3second",
+            "first.webm": _synthetic_webm(),
+            "second.webm": _synthetic_webm(duration_seconds=13),
         },
     )
     with pytest.raises(FormatError, match="multiple visual recordings"):
@@ -573,6 +991,60 @@ def test_capsule_replay_requires_explicit_media_and_refuses_bad_declared_type(
         render_capsule_timeline(bad_capsule, tmp_path / "bad-media.html")
 
 
+def test_capsule_replay_rejects_ambiguous_and_mistyped_cue_indexes(tmp_path: Path) -> None:
+    trace = tmp_path / "run.sova-trace"
+    _trace(trace)
+    manifest = capsule_manifest_template(
+        title="Cue object policy", summary="Typed replay cue fixture.", author="Tests"
+    )
+
+    def writer_with_media() -> PackageWriter:
+        writer = PackageWriter(manifest)
+        writer.add_bytes(
+            role="trace",
+            path="traces/run.sova-trace",
+            media_type="application/vnd.sova.trace+zip",
+            data=trace.read_bytes(),
+        )
+        writer.add_bytes(
+            role="visual-replay",
+            path="evidence/session.webm",
+            media_type="video/webm",
+            data=_synthetic_webm(),
+        )
+        return writer
+
+    ambiguous = tmp_path / "ambiguous-cues.sova"
+    writer = writer_with_media()
+    writer.add_bytes(
+        role="replay-cues",
+        path="evidence/first-replay-cues.json",
+        media_type="application/json",
+        data=b"{}",
+    )
+    writer.add_bytes(
+        role="replay-cues",
+        path="evidence/second-replay-cues.json",
+        media_type="application/json",
+        data=b"{}",
+    )
+    writer.write(ambiguous)
+    with pytest.raises(FormatError, match="multiple replay cue indexes"):
+        render_capsule_timeline(ambiguous, tmp_path / "ambiguous-cues.html")
+
+    mistyped = tmp_path / "mistyped-cues.sova"
+    writer = writer_with_media()
+    writer.add_bytes(
+        role="replay-cues",
+        path="evidence/replay-cues.txt",
+        media_type="text/plain",
+        data=b"{}",
+    )
+    writer.write(mistyped)
+    with pytest.raises(FormatError, match="must declare application/json"):
+        render_capsule_timeline(mistyped, tmp_path / "mistyped-cues.html")
+
+
 def test_replay_media_path_mp4_and_link_guards_are_deterministic(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -582,7 +1054,7 @@ def test_replay_media_path_mp4_and_link_guards_are_deterministic(
         render_timeline_html(trace, tmp_path / "missing.html", media=tmp_path / "missing.webm")
 
     mp4 = tmp_path / "session.mp4"
-    mp4.write_bytes(b"\x00\x00\x00\x14ftypisom")
+    mp4.write_bytes(_synthetic_mp4())
     render_timeline_html(trace, tmp_path / "mp4.html", media=mp4)
     assert "data:video/mp4;base64" in (tmp_path / "mp4.html").read_text(encoding="utf-8")
     invalid_mp4 = tmp_path / "invalid.mp4"
@@ -600,6 +1072,132 @@ def test_replay_media_path_mp4_and_link_guards_are_deterministic(
     monkeypatch.setattr(type(linked), "is_symlink", pretend_link)
     with pytest.raises(FormatError, match="must not be a link"):
         render_timeline_html(trace, tmp_path / "forced-link.html", media=linked)
+
+
+def test_replay_renderer_refuses_output_aliases_links_event_overflow_and_media_races(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source.sova-trace"
+    comparison = tmp_path / "comparison.sova-trace"
+    _trace(source)
+    _trace(comparison)
+
+    with pytest.raises(FormatError, match="destination separate from every source trace"):
+        render_timeline_html(source, source)
+    with pytest.raises(FormatError, match="destination separate from every source trace"):
+        render_timeline_html(source, comparison, comparison=comparison)
+
+    destination = tmp_path / "linked-output.html"
+    original_is_symlink = type(destination).is_symlink
+
+    def pretend_output_link(path: Path) -> bool:
+        return path == destination or original_is_symlink(path)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(type(destination), "is_symlink", pretend_output_link)
+        with pytest.raises(FormatError, match="must not be a symbolic link"):
+            render_timeline_html(source, destination)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(replay_render, "_MAX_RENDER_EVENTS", 1)
+        with pytest.raises(FormatError, match="50,000-event"):
+            render_timeline_html(source, tmp_path / "too-many-events.html")
+
+    media = tmp_path / "changing.webm"
+    payload = _synthetic_webm()
+    media.write_bytes(payload)
+    resolved_media = media.resolve()
+    original_open = type(media).open
+
+    def shortened_media(path: Path, *args: Any, **kwargs: Any) -> Any:
+        if path == resolved_media:
+            return io.BytesIO(payload[:-1])
+        return original_open(path, *args, **kwargs)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(type(media), "open", shortened_media)
+        with pytest.raises(FormatError, match="changed during bounded rendering"):
+            replay_render._reviewed_media(media)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(replay_render, "_MAX_MEDIA_BYTES", len(payload) - 1)
+        with pytest.raises(FormatError, match="128 MiB"):
+            replay_render._reviewed_media(media)
+
+
+def test_replay_cue_reader_rejects_missing_racing_and_malformed_indexes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    media_path = tmp_path / "session.webm"
+    media_path.write_bytes(_synthetic_webm())
+    media = replay_render._reviewed_media(media_path)
+    assert media is not None
+    cue_path = tmp_path / "replay-cues.json"
+    cue_path.write_bytes(b"{}")
+
+    with pytest.raises(FormatError, match="require reviewed visual media"):
+        replay_render._reviewed_replay_cues(cue_path, None, {}, set())
+    with pytest.raises(FormatError, match="regular non-link file"):
+        replay_render._reviewed_replay_cues(tmp_path / "missing.json", media, {}, set())
+
+    cue_path.write_bytes(b"")
+    with pytest.raises(FormatError, match="256 KiB limit"):
+        replay_render._reviewed_replay_cues(cue_path, media, {}, set())
+
+    cue_path.write_bytes(b"{}")
+    original_read_bytes = type(cue_path).read_bytes
+
+    def shortened_index(path: Path) -> bytes:
+        if path == cue_path:
+            return b"{"
+        return original_read_bytes(path)
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(type(cue_path), "read_bytes", shortened_index)
+        with pytest.raises(FormatError, match="changed during bounded rendering"):
+            replay_render._reviewed_replay_cues(cue_path, media, {}, set())
+
+    cue_path.write_bytes(b"[]")
+    with pytest.raises(FormatError, match="root must be an object"):
+        replay_render._reviewed_replay_cues(cue_path, media, {}, set())
+
+    base_document: dict[str, Any] = {
+        "artifactType": "sova.replay-cues",
+        "schemaVersion": "0.1.0",
+        "mediaName": media_path.name,
+        "mediaDigest": media["digest"],
+        "synchronization": {
+            "method": "same-host-monotonic-recorder-start-rpc-bound",
+            "uncertaintyMs": "1.000",
+            "frameTimestampAttested": False,
+            "statement": "Fixture.",
+        },
+        "cues": [{}],
+    }
+    malformed_documents: tuple[dict[str, Any], ...] = (
+        {},
+        {**base_document, "synchronization": []},
+        {
+            **base_document,
+            "synchronization": {
+                **base_document["synchronization"],
+                "uncertaintyMs": "not-canonical",
+            },
+        },
+        base_document,
+    )
+    messages = (
+        "unsupported replay cue document",
+        "invalid cue synchronization metadata",
+        "invalid cue synchronization bounds",
+        "invalid decisive replay cue",
+    )
+    for document, message in zip(malformed_documents, messages, strict=True):
+        cue_path.write_bytes(canonical_json_bytes(document))
+        with pytest.raises(FormatError, match=message):
+            replay_render._reviewed_replay_cues(cue_path, media, {}, set())
 
 
 def test_live_prefix_is_validated_then_transitions_to_sealed_trace(tmp_path: Path) -> None:
@@ -622,7 +1220,7 @@ def test_loopback_replay_service_uses_capability_url_sse_and_security_headers(
     source = tmp_path / "served.sova-trace"
     _trace(source)
     service = ReplayHTTPService(
-        ReplayServiceConfig(source, hold_seconds=0.1, poll_seconds=0.02)
+        ReplayServiceConfig(source, hold_seconds=2.0, poll_seconds=0.02)
     ).start()
     try:
         status, headers, page = _request(service.url)

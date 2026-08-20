@@ -14,6 +14,18 @@ from sova.runtime.evidence import (
     proposal_from_mapping,
 )
 from sova.runtime.experience import ExperienceRecord, LocalExperienceStore
+from sova.runtime.oci_agent import (
+    GVisorOciAgentAdapter,
+    OciAgentApproval,
+    OciAgentApprovalPrompt,
+    OciAgentConformanceArtifacts,
+    OciAgentInvocation,
+    OciAgentResponse,
+    OciAgentRuntime,
+    authorize_oci_agent_adapter,
+    oci_agent_runtime_from_mapping,
+    run_oci_agent_conformance,
+)
 from sova.runtime.orchestration import (
     ModelResponse,
     ModelRouter,
@@ -54,10 +66,17 @@ __all__ = [
     "EvidenceFirewall",
     "ExecutionReliabilityPlane",
     "ExperienceRecord",
+    "GVisorOciAgentAdapter",
     "JudgeProposal",
     "LocalExperienceStore",
     "ModelResponse",
     "ModelRouter",
+    "OciAgentApproval",
+    "OciAgentApprovalPrompt",
+    "OciAgentConformanceArtifacts",
+    "OciAgentInvocation",
+    "OciAgentResponse",
+    "OciAgentRuntime",
     "OrchestrationResult",
     "OrchestrationRuntime",
     "OutcomeVerifier",
@@ -77,7 +96,10 @@ __all__ = [
     "VerdictProposition",
     "VerdictStatus",
     "VerificationResult",
+    "authorize_oci_agent_adapter",
     "calibrate_verdicts",
+    "oci_agent_runtime_from_mapping",
     "proposal_from_mapping",
+    "run_oci_agent_conformance",
     "standard_profile",
 ]

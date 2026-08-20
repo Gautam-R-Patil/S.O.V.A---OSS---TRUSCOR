@@ -43,10 +43,12 @@ class _Runner:
         timeout_seconds: float,
         cancellation: CancellationToken,
         max_output_bytes: int,
+        stdin_data: bytes | None = None,
     ) -> DockerCommandResult:
         assert timeout_seconds > 0
         assert max_output_bytes >= 1024
         assert not cancellation.cancelled
+        assert stdin_data is None
         self.calls.append(argv)
         return self.results.pop(0)
 
@@ -150,6 +152,20 @@ def test_bounded_command_runner_normalizes_process_edges() -> None:
     assert completed.returncode == 0
     assert completed.stdout.strip() == b"bounded"
 
+    stdin = runner.run(
+        (
+            sys.executable,
+            "-c",
+            "import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())",
+        ),
+        timeout_seconds=5,
+        cancellation=CancellationToken(),
+        max_output_bytes=1024,
+        stdin_data=b"bounded stdin",
+    )
+    assert stdin.state == "completed"
+    assert stdin.stdout == b"bounded stdin"
+
     missing = runner.run(
         (str(Path(sys.executable).with_name("sova-definitely-missing.exe")),),
         timeout_seconds=1,
@@ -212,7 +228,7 @@ def test_executor_emits_exact_hardened_argv_and_verifies_cleanup(tmp_path: Path)
             *_attestation_results(),
             _completed(b"observed\n"),
             _completed(code=1),
-            _completed(code=1),
+            _completed(),
         ]
     )
     executor = DockerDesktopOciExecutor(_docker(tmp_path), IMAGE, runner=runner)
@@ -250,7 +266,7 @@ def test_executor_emits_exact_hardened_argv_and_verifies_cleanup(tmp_path: Path)
     entrypoint_index = command.index("--entrypoint")
     assert command[entrypoint_index + 1] == "/bin/echo"
     assert command[-2:] == (IMAGE, "safe")
-    assert runner.calls[-1][1] == "inspect"
+    assert runner.calls[-1][1:3] == ("container", "ls")
 
 
 def test_executor_fails_closed_on_cleanup_input_and_cancellation(tmp_path: Path) -> None:
@@ -270,6 +286,23 @@ def test_executor_fails_closed_on_cleanup_input_and_cancellation(tmp_path: Path)
     )
     assert outcome.status == OutcomeStatus.PARTIAL
     assert outcome.error_code == "SOVA-OCI-CLEANUP-UNVERIFIED"
+
+    daemon_outage = _Runner(
+        [
+            *_attestation_results(),
+            _completed(b"observed"),
+            _completed(code=1),
+            _completed(code=1),
+        ]
+    )
+    outage_executor = DockerDesktopOciExecutor(_docker(tmp_path), IMAGE, runner=daemon_outage)
+    outage = outage_executor.execute(
+        ActionRequest("daemon-outage", "process.exec", {"argv": ["/bin/true"]}, 1),
+        ExecutionContext(tmp_path, {"decision": "allowed"}),
+        CancellationToken(),
+    )
+    assert outage.status == OutcomeStatus.PARTIAL
+    assert outage.output["cleanupVerified"] is False
 
     invalid_inputs: tuple[dict[str, Any], ...] = (
         {"argv": ["relative"]},

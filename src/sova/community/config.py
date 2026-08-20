@@ -12,13 +12,24 @@ from sova.community.agent_arena import (
     AgentArenaMatch,
     run_agent_arena,
 )
-from sova.community.arena import ArenaCase, ArenaMatch, ArenaProfile, run_local_arena
+from sova.community.arena import (
+    STANDARD_ARENA_PROFILE,
+    ArenaCase,
+    ArenaMatch,
+    ArenaProfile,
+    run_local_arena,
+)
 from sova.community.ctf import CTFScenario, build_ctf_catalog
 from sova.community.leaderboard import LeaderboardSubmission, build_static_leaderboard
 from sova.community.media import ReplayClipSpec, ReplayFrame, render_replay_clip
 from sova.formats.errors import FormatError
 from sova.models import ScriptedModel, ScriptedTurn
 from sova.providers import ProviderRoute, provider_model_from_route
+from sova.runtime import (
+    GVisorOciAgentAdapter,
+    OciAgentRuntime,
+    oci_agent_runtime_from_mapping,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -176,15 +187,24 @@ def _number(value: object, path: str) -> float:
         raise FormatError("SOVA-COMMUNITY-TYPE", f"{path} must be a number") from error
 
 
-def run_agent_arena_document(
+def _agent_arena_document_parts(  # noqa: PLR0915 - complete pre-execution validation
     document: dict[str, Any],
-    destination: Path,
     *,
-    secret_resolver: Callable[[str], str | None],
     provider_calls_authorized: bool,
-) -> AgentArenaArtifacts:
-    """Run a strict secret-free provider-capable local Arena document."""
-    _fields(document, "$", required=("profile", "budget", "participants", "matches"))
+) -> tuple[
+    ArenaProfile,
+    AgentArenaBudget,
+    tuple[tuple[str, ProviderRoute], ...],
+    tuple[tuple[str, OciAgentRuntime], ...],
+    tuple[AgentArenaMatch, ...],
+]:
+    """Parse the complete Arena document without invoking any participant."""
+    _fields(
+        document,
+        "$",
+        required=("profile", "budget", "participants", "matches"),
+        optional=("ociParticipants",),
+    )
     profile_value = _object(document["profile"], "$.profile")
     _fields(
         profile_value,
@@ -201,6 +221,11 @@ def run_agent_arena_document(
             "$.profile.sensorPolicy",
         ),
     )
+    if profile.standard or profile.identifier == STANDARD_ARENA_PROFILE.identifier:
+        raise FormatError(
+            "SOVA-AGENT-ARENA-PROFILE",
+            "provider-capable Arena runs must use a custom non-comparable profile",
+        )
     budget_value = _object(document["budget"], "$.budget")
     _fields(
         budget_value,
@@ -223,8 +248,15 @@ def run_agent_arena_document(
         token_budget,
         _text(budget_value["contentCapture"], "$.budget.contentCapture"),
     )
-    models: dict[str, RoleModel] = {}
-    for index, raw_participant in enumerate(_sequence(document["participants"], "$.participants")):
+    provider_participants = _sequence(document["participants"], "$.participants")
+    if provider_participants and not provider_calls_authorized:
+        raise FormatError(
+            "SOVA-PROVIDER-CALLS-NOT-ALLOWED",
+            "provider-backed Arena participants require explicit provider-call authorization",
+        )
+    provider_specs: list[tuple[str, ProviderRoute]] = []
+    participant_ids: set[str] = set()
+    for index, raw_participant in enumerate(provider_participants):
         path = f"$.participants[{index}]"
         participant = _object(raw_participant, path)
         _fields(
@@ -240,7 +272,7 @@ def run_agent_arena_document(
             ),
         )
         identifier = _text(participant["id"], f"{path}.id")
-        if identifier in models:
+        if identifier in participant_ids:
             raise FormatError("SOVA-AGENT-ARENA-PARTICIPANT", "participant id is duplicated")
         route = ProviderRoute(
             _text(participant["provider"], f"{path}.provider"),
@@ -249,11 +281,26 @@ def run_agent_arena_document(
             _integer(participant["maxOutputTokens"], f"{path}.maxOutputTokens"),
             _number(participant["timeoutSeconds"], f"{path}.timeoutSeconds"),
         )
-        models[identifier] = provider_model_from_route(
-            route,
-            role=f"agent-arena:{identifier}",
-            secret_resolver=secret_resolver,
-        )
+        participant_ids.add(identifier)
+        provider_specs.append((identifier, route))
+    external_specs: list[tuple[str, OciAgentRuntime]] = []
+    for index, raw_participant in enumerate(
+        _sequence(document.get("ociParticipants", []), "$.ociParticipants")
+    ):
+        path = f"$.ociParticipants[{index}]"
+        participant = _object(raw_participant, path)
+        _fields(participant, path, required=("id", "runtime"))
+        identifier = _text(participant["id"], f"{path}.id")
+        runtime = oci_agent_runtime_from_mapping(_object(participant["runtime"], f"{path}.runtime"))
+        if runtime.identifier != identifier:
+            raise FormatError(
+                "SOVA-AGENT-ARENA-EXTERNAL",
+                "OCI participant id must match its runtime id",
+            )
+        if identifier in participant_ids:
+            raise FormatError("SOVA-AGENT-ARENA-PARTICIPANT", "participant id is duplicated")
+        participant_ids.add(identifier)
+        external_specs.append((identifier, runtime))
     matches: list[AgentArenaMatch] = []
     for index, raw_match in enumerate(_sequence(document["matches"], "$.matches")):
         path = f"$.matches[{index}]"
@@ -288,13 +335,99 @@ def run_agent_arena_document(
                 ),
             )
         )
+    if not matches:
+        raise FormatError("SOVA-AGENT-ARENA-MATCH", "agent Arena needs at least one match")
+    required = {
+        participant
+        for match in matches
+        for participant in (match.challenger, match.defender, match.judge)
+    }
+    missing = sorted(required - participant_ids)
+    if missing:
+        raise FormatError(
+            "SOVA-AGENT-ARENA-PARTICIPANT",
+            "agent Arena participant is unavailable",
+            details={"missing": missing},
+        )
+    return (
+        profile,
+        budget,
+        tuple(provider_specs),
+        tuple(external_specs),
+        tuple(matches),
+    )
+
+
+def validate_agent_arena_document(
+    document: dict[str, Any],
+    *,
+    provider_calls_authorized: bool,
+) -> None:
+    """Validate the complete document before any provider or native-code setup."""
+    _agent_arena_document_parts(
+        document,
+        provider_calls_authorized=provider_calls_authorized,
+    )
+
+
+def run_agent_arena_document(
+    document: dict[str, Any],
+    destination: Path,
+    *,
+    secret_resolver: Callable[[str], str | None],
+    provider_calls_authorized: bool,
+    external_models: Mapping[str, RoleModel] | None = None,
+) -> AgentArenaArtifacts:
+    """Run strict provider and/or attested OCI agents in a local Arena document."""
+    profile, budget, provider_specs, external_specs, matches = _agent_arena_document_parts(
+        document,
+        provider_calls_authorized=provider_calls_authorized,
+    )
+    models: dict[str, RoleModel] = {
+        identifier: provider_model_from_route(
+            route,
+            role=f"agent-arena:{identifier}",
+            secret_resolver=secret_resolver,
+        )
+        for identifier, route in provider_specs
+    }
+    external = {} if external_models is None else dict(external_models)
+    for identifier, runtime in external_specs:
+        model = external.get(identifier)
+        if model is None:
+            raise FormatError(
+                "SOVA-AGENT-ARENA-EXTERNAL",
+                "declared OCI participant has no authorized external model adapter",
+                details={"participant": identifier},
+            )
+        if type(model) is not GVisorOciAgentAdapter:
+            raise FormatError(
+                "SOVA-AGENT-ARENA-MODEL-TYPE",
+                "OCI participants require the exact gVisor OCI agent adapter",
+                details={"participant": identifier},
+            )
+        if model.runtime.digest != runtime.digest:
+            raise FormatError(
+                "SOVA-AGENT-ARENA-SUBSTITUTION",
+                "authorized OCI adapter does not match the declared runtime",
+                details={"participant": identifier},
+            )
+        models[identifier] = model
+    declared_external = {identifier for identifier, _runtime in external_specs}
+    undeclared = sorted(set(external) - declared_external)
+    if undeclared:
+        raise FormatError(
+            "SOVA-AGENT-ARENA-EXTERNAL",
+            "external model adapter was not declared in the Arena document",
+            details={"participants": undeclared},
+        )
     return run_agent_arena(
         profile,
         matches,
         models,
         budget,
         destination,
-        provider_calls_authorized=provider_calls_authorized,
+        provider_calls_authorized=provider_calls_authorized or bool(external_specs),
     )
 
 

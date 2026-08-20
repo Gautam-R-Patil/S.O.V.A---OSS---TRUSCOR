@@ -12,6 +12,7 @@ from sova.cli import main
 from sova.formats import strict_json_loads
 from sova.providers import (
     FakeTransport,
+    HttpRequest,
     HttpResponse,
     ModelRequest,
     OpenAIAdapter,
@@ -24,7 +25,7 @@ from sova.providers import (
     provider_model_router,
     provider_runtime_from_mapping,
 )
-from sova.runtime import RoleKind
+from sova.runtime import ModelRouter, RoleKind
 
 
 def _response(text: str) -> HttpResponse:
@@ -37,6 +38,21 @@ def _response(text: str) -> HttpResponse:
                 "status": "completed",
                 "output_text": text,
                 "usage": {"input_tokens": 7, "output_tokens": 3},
+            }
+        ).encode(),
+    )
+
+
+def _openrouter_response(text: str) -> HttpResponse:
+    return HttpResponse(
+        200,
+        {},
+        json.dumps(
+            {
+                "id": "openrouter-response-fixture",
+                "model": "provider/concrete-free-model",
+                "choices": [{"finish_reason": "stop", "message": {"content": text}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 4},
             }
         ).encode(),
     )
@@ -177,6 +193,208 @@ def test_rate_limit_retry_header_is_case_insensitive_and_stays_bounded() -> None
     assert delays == [2.5]
 
 
+@pytest.mark.parametrize("status", (500, 502, 503, 504))
+def test_transient_http_failures_retry_with_bounded_backoff(status: int) -> None:
+    transport = FakeTransport(
+        (
+            HttpResponse(status, {}, b"{}"),
+            _openrouter_response('{"observations":["ready"]}'),
+        )
+    )
+    delays: list[float] = []
+    adapter = OpenRouterAdapter(
+        transport,
+        secret_resolver=lambda _name: "fixture-secret",
+        rate_limit_retries=2,
+        sleeper=delays.append,
+    )
+
+    result = adapter.complete(
+        ModelRequest(
+            "provider/free-model:free",
+            ({"role": "user", "content": "fixture"},),
+        )
+    )
+
+    assert result.text == '{"observations":["ready"]}'
+    assert delays == [1.0]
+    assert len(transport.requests) == 2
+
+
+def test_non_transient_http_failure_is_not_retried() -> None:
+    transport = FakeTransport((HttpResponse(401, {}, b"{}"), _openrouter_response('{"ok":true}')))
+    delays: list[float] = []
+    adapter = OpenRouterAdapter(
+        transport,
+        secret_resolver=lambda _name: "fixture-secret",
+        rate_limit_retries=2,
+        sleeper=delays.append,
+    )
+
+    with pytest.raises(ProviderError) as caught:
+        adapter.complete(
+            ModelRequest(
+                "provider/free-model:free",
+                ({"role": "user", "content": "fixture"},),
+            )
+        )
+
+    assert caught.value.issue.code == "SOVA-PROVIDER-HTTP"
+    assert caught.value.issue.details == {"status": 401}
+    assert delays == []
+    assert len(transport.requests) == 1
+
+
+class _NetworkThenSuccessTransport:
+    def __init__(self, failures: int, response: HttpResponse) -> None:
+        self.failures = failures
+        self.response = response
+        self.requests: list[HttpRequest] = []
+
+    def send(self, request: HttpRequest, *, timeout: float) -> HttpResponse:
+        del timeout
+        self.requests.append(request)
+        if len(self.requests) <= self.failures:
+            raise ProviderError("SOVA-PROVIDER-NETWORK", "fixture network failure")
+        return self.response
+
+
+def test_network_failures_retry_only_within_the_declared_bound() -> None:
+    transport = _NetworkThenSuccessTransport(
+        2,
+        _openrouter_response('{"observations":["ready"]}'),
+    )
+    delays: list[float] = []
+    adapter = OpenRouterAdapter(
+        transport,
+        secret_resolver=lambda _name: "fixture-secret",
+        rate_limit_retries=2,
+        sleeper=delays.append,
+    )
+
+    result = adapter.complete(
+        ModelRequest(
+            "provider/free-model:free",
+            ({"role": "user", "content": "fixture"},),
+        )
+    )
+
+    assert result.text == '{"observations":["ready"]}'
+    assert delays == [1.0, 2.0]
+    assert len(transport.requests) == 3
+
+
+@pytest.mark.parametrize("retry_count", (0, 2))
+def test_network_failure_exhaustion_reports_the_exact_retry_bound(retry_count: int) -> None:
+    transport = _NetworkThenSuccessTransport(
+        retry_count + 1,
+        _openrouter_response('{"observations":["unreachable"]}'),
+    )
+    delays: list[float] = []
+    adapter = OpenRouterAdapter(
+        transport,
+        secret_resolver=lambda _name: "fixture-secret",
+        rate_limit_retries=retry_count,
+        sleeper=delays.append,
+    )
+
+    with pytest.raises(ProviderError) as caught:
+        adapter.complete(
+            ModelRequest(
+                "provider/free-model:free",
+                ({"role": "user", "content": "fixture"},),
+            )
+        )
+
+    assert caught.value.issue.code == "SOVA-PROVIDER-NETWORK"
+    assert len(transport.requests) == retry_count + 1
+    assert len(delays) == retry_count
+    assert caught.value.issue.details == (None if retry_count == 0 else {"retryCount": retry_count})
+
+
+class _ProviderErrorTransport:
+    def __init__(self, error: ProviderError) -> None:
+        self.error = error
+        self.requests = 0
+
+    def send(self, request: HttpRequest, *, timeout: float) -> HttpResponse:
+        del request, timeout
+        self.requests += 1
+        raise self.error
+
+
+def test_non_network_provider_error_is_never_retried() -> None:
+    transport = _ProviderErrorTransport(
+        ProviderError("SOVA-PROVIDER-CREDENTIAL", "fixture credential failure")
+    )
+    delays: list[float] = []
+    adapter = OpenRouterAdapter(
+        transport,
+        secret_resolver=lambda _name: "fixture-secret",
+        rate_limit_retries=2,
+        sleeper=delays.append,
+    )
+
+    with pytest.raises(ProviderError) as caught:
+        adapter.complete(
+            ModelRequest(
+                "provider/free-model:free",
+                ({"role": "user", "content": "fixture"},),
+            )
+        )
+
+    assert caught.value.issue.code == "SOVA-PROVIDER-CREDENTIAL"
+    assert transport.requests == 1
+    assert delays == []
+
+
+@pytest.mark.parametrize("retry_after", ("invalid", "0", "31"))
+def test_invalid_or_unbounded_retry_after_is_not_followed(retry_after: str) -> None:
+    transport = FakeTransport((HttpResponse(429, {"retry-after": retry_after}, b"{}"),))
+    delays: list[float] = []
+    adapter = OpenRouterAdapter(
+        transport,
+        secret_resolver=lambda _name: "fixture-secret",
+        rate_limit_retries=2,
+        sleeper=delays.append,
+    )
+
+    with pytest.raises(ProviderError) as caught:
+        adapter.complete(
+            ModelRequest(
+                "provider/free-model:free",
+                ({"role": "user", "content": "fixture"},),
+            )
+        )
+
+    assert caught.value.issue.code == "SOVA-PROVIDER-RATE-LIMIT"
+    assert caught.value.issue.details == {"retryAfter": retry_after, "retryCount": 0}
+    assert delays == []
+
+
+def test_non_openrouter_rate_limit_without_retry_header_fails_immediately() -> None:
+    transport = FakeTransport((HttpResponse(429, {}, b"{}"),))
+    delays: list[float] = []
+    adapter = OpenAIAdapter(
+        transport,
+        secret_resolver=lambda _name: "fixture-secret",
+        rate_limit_retries=2,
+        sleeper=delays.append,
+    )
+
+    with pytest.raises(ProviderError) as caught:
+        adapter.complete(
+            ModelRequest(
+                "provider/model",
+                ({"role": "user", "content": "fixture"},),
+            )
+        )
+
+    assert caught.value.issue.code == "SOVA-PROVIDER-RATE-LIMIT"
+    assert caught.value.issue.details == {"retryAfter": None, "retryCount": 0}
+    assert delays == []
+
+
 @pytest.mark.parametrize("retry_count", (-1, 3))
 def test_provider_rate_limit_retry_count_is_bounded(retry_count: int) -> None:
     with pytest.raises(ProviderError, match="retry count"):
@@ -219,6 +437,97 @@ def test_provider_runtime_config_round_trip_is_secret_free_and_lazy() -> None:
     assert "secret" not in rendered.casefold()
 
 
+def test_provider_runtime_preserves_bounded_ordered_model_fallbacks() -> None:
+    route = ProviderRoute(
+        "openrouter",
+        "provider/primary:free",
+        fallback_models=("provider/fallback-a:free", "provider/fallback-b:free"),
+    )
+    source = ProviderRuntimeConfig(
+        dict.fromkeys(
+            (
+                RoleKind.RECON,
+                RoleKind.EXPLORER,
+                RoleKind.STRATEGIST,
+                RoleKind.ATTACKER,
+                RoleKind.JUDGE,
+            ),
+            route,
+        )
+    )
+
+    parsed = provider_runtime_from_mapping(source.to_mapping())
+    router = provider_model_router(parsed, secret_resolver=lambda _name: "fixture-secret")
+
+    assert parsed == source
+    assert parsed.routes[RoleKind.EXPLORER].to_mapping()["fallbackModels"] == [
+        "provider/fallback-a:free",
+        "provider/fallback-b:free",
+    ]
+    assert router.model_ids()[RoleKind.EXPLORER] == (
+        "openrouter:provider/primary:free:explorer",
+        "openrouter:provider/fallback-a:free:explorer",
+        "openrouter:provider/fallback-b:free:explorer",
+    )
+
+
+@pytest.mark.parametrize(
+    "fallbacks",
+    (
+        ("provider/primary:free",),
+        ("provider/fallback:free", "provider/fallback:free"),
+        ("a", "b", "c", "d"),
+    ),
+)
+def test_provider_route_rejects_unsafe_fallback_sets(fallbacks: tuple[str, ...]) -> None:
+    with pytest.raises(ProviderError, match="fallback models"):
+        ProviderRoute(
+            "openrouter",
+            "provider/primary:free",
+            fallback_models=fallbacks,
+        )
+
+
+def test_model_router_records_safe_provider_code_before_fallback_success() -> None:
+    delays: list[float] = []
+    failed = ProviderRoleModel(
+        OpenRouterAdapter(
+            FakeTransport(
+                (
+                    HttpResponse(503, {}, b"{}"),
+                    HttpResponse(503, {}, b"{}"),
+                    HttpResponse(503, {}, b"{}"),
+                )
+            ),
+            secret_resolver=lambda _name: "fixture-secret",
+            rate_limit_retries=2,
+            sleeper=delays.append,
+        ),
+        "provider/primary:free",
+        RoleKind.EXPLORER,
+    )
+    fallback = ProviderRoleModel(
+        OpenRouterAdapter(
+            FakeTransport((_openrouter_response('{"status":"blocked"}'),)),
+            secret_resolver=lambda _name: "fixture-secret",
+        ),
+        "provider/fallback:free",
+        RoleKind.EXPLORER,
+    )
+
+    invocation = ModelRouter({RoleKind.EXPLORER: (failed, fallback)}).invoke(
+        RoleKind.EXPLORER,
+        "fixture",
+        output_budget=4096,
+    )
+
+    assert invocation.model_id == "openrouter:provider/fallback:free:explorer"
+    assert invocation.fallback_errors == (
+        "openrouter:provider/primary:free:explorer:SOVA-PROVIDER-HTTP",
+    )
+    assert delays == [1.0, 2.0]
+
+
 def test_provider_runtime_config_fails_closed_on_missing_roles_and_bad_numbers() -> None:
     value = _config().to_mapping()
     del value["routes"]["judge"]
@@ -229,6 +538,24 @@ def test_provider_runtime_config_fails_closed_on_missing_roles_and_bad_numbers()
     value["routes"]["attacker"]["timeoutSeconds"] = "0"
     with pytest.raises(ProviderError, match="timeout"):
         provider_runtime_from_mapping(value)
+
+    assert (
+        ModelRequest(
+            "local-slow-model",
+            ({"role": "user", "content": "fixture"},),
+            timeout_seconds=300,
+        ).timeout_seconds
+        == 300
+    )
+    with pytest.raises(ProviderError, match="within 300 seconds"):
+        ModelRequest(
+            "local-too-slow-model",
+            ({"role": "user", "content": "fixture"},),
+            timeout_seconds=301,
+        )
+    assert ProviderRoute("ollama", "local-slow-model", timeout_seconds=300).timeout_seconds == 300
+    with pytest.raises(ProviderError, match="remote provider route timeout"):
+        ProviderRoute("openai", "remote-model", timeout_seconds=61)
 
 
 def test_agent_browser_cli_requires_explicit_provider_permission_before_io(
@@ -377,6 +704,14 @@ def test_provider_route_rejects_unsupported_provider_or_empty_model(
         (
             lambda value: value["routes"]["recon"].update(maxOutputTokens=True),
             "token limit",
+        ),
+        (
+            lambda value: value["routes"]["recon"].update(fallbackModels="not-a-list"),
+            "fallback models",
+        ),
+        (
+            lambda value: value["routes"]["recon"].update(fallbackModels=[1]),
+            "fallback models",
         ),
         (lambda value: value["budgets"].update(maxModelTurns=True), "model-turn budget"),
         (lambda value: value["budgets"].update(maxTotalTokens="many"), "token budget"),

@@ -34,6 +34,7 @@ class _Runner:
     def __init__(self, results: list[DockerCommandResult]) -> None:
         self.results = list(results)
         self.calls: list[tuple[str, ...]] = []
+        self.stdin: list[bytes | None] = []
 
     def run(
         self,
@@ -42,11 +43,13 @@ class _Runner:
         timeout_seconds: float,
         cancellation: CancellationToken,
         max_output_bytes: int,
+        stdin_data: bytes | None = None,
     ) -> DockerCommandResult:
         assert timeout_seconds > 0
         assert not cancellation.cancelled
         assert max_output_bytes >= 1024
         self.calls.append(argv)
+        self.stdin.append(stdin_data)
         return self.results.pop(0)
 
 
@@ -99,7 +102,7 @@ def test_gvisor_executor_emits_hardened_runtime_and_verifies_cleanup(tmp_path: P
             *_attestation_results(),
             _completed(b"65534\n"),
             _completed(code=1),
-            _completed(code=1),
+            _completed(),
         ]
     )
     executor = GVisorOciExecutor(_docker(tmp_path), IMAGE, runner=runner)
@@ -127,6 +130,38 @@ def test_gvisor_executor_emits_hardened_runtime_and_verifies_cleanup(tmp_path: P
     ):
         assert required in command
     assert not {"--mount", "--volume", "--privileged"} & set(command)
+    assert "--interactive" not in command
+    assert runner.stdin[3] is None
+
+
+def test_gvisor_executor_passes_bounded_stdin_without_command_line_exposure(
+    tmp_path: Path,
+) -> None:
+    runner = _Runner(
+        [
+            *_attestation_results(),
+            _completed(b"ok\n"),
+            _completed(code=1),
+            _completed(),
+        ]
+    )
+    executor = GVisorOciExecutor(_docker(tmp_path), IMAGE, runner=runner)
+    payload = '{"mission":"bounded"}'
+    outcome = executor.execute(
+        ActionRequest(
+            "stdin",
+            "process.exec",
+            {"argv": ["/opt/sova/agent", "--sova-request-stdin"], "stdin": payload},
+            10,
+        ),
+        ExecutionContext(tmp_path, {"decision": "allowed"}),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.SUCCEEDED
+    command = runner.calls[3]
+    assert "--interactive" in command
+    assert payload not in command
+    assert runner.stdin[3] == payload.encode()
 
 
 def test_gvisor_executor_fails_closed_on_bad_inputs_and_unready_runtime(tmp_path: Path) -> None:
@@ -134,8 +169,10 @@ def test_gvisor_executor_fails_closed_on_bad_inputs_and_unready_runtime(tmp_path
         attest_gvisor(tmp_path / "missing-docker", IMAGE, runner=_Runner([]))
     with pytest.raises(FormatError, match="repository@sha256"):
         attest_gvisor(_docker(tmp_path), "example.invalid/latest", runner=_Runner([]))
-    with pytest.raises(FormatError, match="runtime name"):
+    with pytest.raises(FormatError, match="exactly runsc"):
         attest_gvisor(_docker(tmp_path), IMAGE, runtime="../runsc", runner=_Runner([]))
+    with pytest.raises(FormatError, match="exactly runsc"):
+        attest_gvisor(_docker(tmp_path), IMAGE, runtime="runc", runner=_Runner([]))
 
     unavailable = GVisorOciExecutor(
         _docker(tmp_path),
@@ -221,6 +258,8 @@ def test_gvisor_executor_cancellation_status_cleanup_and_argv_bounds(tmp_path: P
         {"argv": ["relative"]},
         {"argv": [r"/bin\bad"]},
         {"argv": ["/bin/echo", "x" * (64 * 1024)]},
+        {"argv": ["/bin/true"], "stdin": b"not text"},
+        {"argv": ["/bin/true"], "stdin": "x" * (64 * 1024 + 1)},
     )
     for inputs in invalid_inputs:
         with pytest.raises(FormatError):
@@ -235,7 +274,7 @@ def test_gvisor_executor_cancellation_status_cleanup_and_argv_bounds(tmp_path: P
             *_attestation_results(),
             _completed(b"partial output"),
             _completed(),
-            _completed(),
+            _completed(b"sova-runsc-still-present"),
         ]
     )
     partial_executor = GVisorOciExecutor(_docker(tmp_path), IMAGE, runner=cleanup_failure)
@@ -246,6 +285,23 @@ def test_gvisor_executor_cancellation_status_cleanup_and_argv_bounds(tmp_path: P
     )
     assert partial.status == OutcomeStatus.PARTIAL
     assert partial.output["cleanupVerified"] is False
+
+    daemon_outage = _Runner(
+        [
+            *_attestation_results(),
+            _completed(b"observed"),
+            _completed(code=1),
+            _completed(code=1),
+        ]
+    )
+    outage_executor = GVisorOciExecutor(_docker(tmp_path), IMAGE, runner=daemon_outage)
+    outage = outage_executor.execute(
+        ActionRequest("daemon-outage", "process.exec", {"argv": ["/bin/true"]}, 1),
+        ExecutionContext(tmp_path, {"decision": "allowed"}),
+        CancellationToken(),
+    )
+    assert outage.status == OutcomeStatus.PARTIAL
+    assert outage.output["cleanupVerified"] is False
 
 
 @pytest.mark.integration

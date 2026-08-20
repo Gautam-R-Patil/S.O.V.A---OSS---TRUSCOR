@@ -1,4 +1,42 @@
+name: sova-community
+
 services:
+  registry-data-init:
+    image: ${SOVA_IMAGE:?set SOVA_IMAGE to an immutable digest-pinned image}
+    restart: "no"
+    init: true
+    user: "0:0"
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, DAC_READ_SEARCH, FOWNER]
+    security_opt:
+      - no-new-privileges:true
+    network_mode: none
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.25
+    volumes:
+      - registry-data:/var/lib/sova
+      - registry-operator:/run/sova/operator
+      - type: bind
+        source: ${SOVA_OPERATOR_DIR:?set SOVA_OPERATOR_DIR to an absolute directory outside the repository}
+        target: /run/sova/source
+        read_only: true
+    entrypoint:
+      - /bin/sh
+      - -eu
+      - -c
+    command:
+      - |
+        chown -R 65532:65532 /var/lib/sova
+        chmod 0750 /var/lib/sova
+        touch /var/lib/sova/.sova-volume-owner-v1
+        chown 65532:65532 /var/lib/sova/.sova-volume-owner-v1
+        chmod 0640 /var/lib/sova/.sova-volume-owner-v1
+        install -d -o 65532 -g 65532 -m 0700 /run/sova/operator
+        install -o 65532 -g 65532 -m 0400 /run/sova/source/service.token /run/sova/operator/service.token
+        install -o 65532 -g 65532 -m 0400 /run/sova/source/methodology.md /run/sova/operator/methodology.md
+
   registry:
     image: ${SOVA_IMAGE:?set SOVA_IMAGE to an immutable digest-pinned image}
     restart: unless-stopped
@@ -13,13 +51,15 @@ services:
     cpus: 1.0
     ports:
       - "443:443"
+    depends_on:
+      registry-data-init:
+        condition: service_completed_successfully
     volumes:
       - registry-data:/var/lib/sova
-      - ./operator:/run/sova/operator:ro
+      - registry-operator:/run/sova/operator:ro
     tmpfs:
       - /tmp:size=64m,mode=1777,noexec,nosuid,nodev
     command:
-      - sova
       - registry
       - serve
       - /var/lib/sova
@@ -34,7 +74,13 @@ services:
       - --port
       - "8736"
     healthcheck:
-      test: [CMD, sova, --version]
+      test:
+        - CMD
+        - sova
+        - registry
+        - healthcheck
+        - --url
+        - http://127.0.0.1:8736/v1/health
       interval: 30s
       timeout: 5s
       retries: 3
@@ -63,5 +109,6 @@ services:
 
 volumes:
   registry-data: {}
+  registry-operator: {}
   caddy-data: {}
   caddy-config: {}

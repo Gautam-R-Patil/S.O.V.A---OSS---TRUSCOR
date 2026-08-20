@@ -19,17 +19,23 @@ from sova.formats import strict_json_loads
 from sova.formats.errors import FormatError
 
 _MAX_PROVIDER_RESPONSE = 8 * 1024 * 1024
-_MAX_TIMEOUT_SECONDS = 60
+# Local CPU-only model runtimes can legitimately need more than one minute for
+# a bounded structured response.  Defaults remain short, while the portable
+# provider contract permits an explicitly configured five-minute ceiling.
+_MAX_TIMEOUT_SECONDS = 300
+_MAX_REMOTE_TIMEOUT_SECONDS = 60
 _MAX_MODEL_NAME = 256
 _MAX_TEMPERATURE = 2
 _MAX_OUTPUT_TOKENS = 32768
 _RATE_LIMIT_STATUS = 429
+_TRANSIENT_HTTP_STATUSES = frozenset({_RATE_LIMIT_STATUS, 500, 502, 503, 504})
 _HTTP_SUCCESS_MIN = 200
 _HTTP_SUCCESS_MAX = 300
 _MIN_SWAP_CONFIGURATIONS = 2
 _MAX_RATE_LIMIT_RETRIES = 2
 _MAX_RETRY_DELAY_SECONDS = 30.0
 _OPENROUTER_FALLBACK_RETRY_SECONDS = 10.0
+_TRANSIENT_FALLBACK_RETRY_SECONDS = 1.0
 
 
 class ProviderError(FormatError):
@@ -87,9 +93,15 @@ class UrllibTransport:
         origin = f"{parsed.scheme}://{parsed.netloc}"
         if origin not in self.allowed_origins or parsed.username or parsed.password:
             raise ProviderError("SOVA-PROVIDER-ORIGIN", "request origin is not pinned")
-        if not 0 < timeout <= _MAX_TIMEOUT_SECONDS:
+        maximum_timeout = (
+            _MAX_TIMEOUT_SECONDS
+            if parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+            else _MAX_REMOTE_TIMEOUT_SECONDS
+        )
+        if not 0 < timeout <= maximum_timeout:
             raise ProviderError(
-                "SOVA-PROVIDER-TIMEOUT", "provider timeout must be within 60 seconds"
+                "SOVA-PROVIDER-TIMEOUT",
+                f"provider timeout must be within {maximum_timeout} seconds for this origin",
             )
         opener = urllib.request.build_opener(
             _NoRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context())
@@ -150,7 +162,7 @@ class ModelRequest:
         if not 0 < self.timeout_seconds <= _MAX_TIMEOUT_SECONDS:
             raise ProviderError(
                 "SOVA-PROVIDER-TIMEOUT",
-                "provider timeout must be within 60 seconds",
+                "provider timeout must be within 300 seconds",
             )
         for message in self.messages:
             if set(message) != {"role", "content"} or message["role"] not in {
@@ -257,27 +269,55 @@ class ProviderAdapter:
     def complete(self, request: ModelRequest) -> ModelResult:
         retry_count = 0
         while True:
-            response = self.transport.send(self._request(request), timeout=request.timeout_seconds)
-            if response.status != _RATE_LIMIT_STATUS:
+            try:
+                response = self.transport.send(
+                    self._request(request), timeout=request.timeout_seconds
+                )
+            except ProviderError as error:
+                if error.issue.code != "SOVA-PROVIDER-NETWORK":
+                    raise
+                if retry_count >= self.rate_limit_retries:
+                    if not self.rate_limit_retries:
+                        raise
+                    raise ProviderError(
+                        "SOVA-PROVIDER-NETWORK",
+                        "provider request failed after bounded retries",
+                        details={"retryCount": retry_count},
+                    ) from error
+                network_delay = _bounded_transient_backoff(retry_count)
+                retry_count += 1
+                self.sleeper(network_delay)
+                continue
+            if response.status not in _TRANSIENT_HTTP_STATUSES:
                 break
             retry_after = _header_value(response.headers, "retry-after")
-            delay = _rate_limit_delay(self.provider, retry_after)
-            if retry_count >= self.rate_limit_retries or delay is None:
-                details: dict[str, Any] = {"retryAfter": retry_after}
-                if self.rate_limit_retries:
-                    details["retryCount"] = retry_count
-                raise ProviderError(
-                    "SOVA-PROVIDER-RATE-LIMIT",
-                    "provider rate limit reached",
-                    details=details,
-                )
+            retry_delay = _transient_retry_delay(
+                self.provider,
+                status=response.status,
+                retry_after=retry_after,
+                retry_count=retry_count,
+            )
+            if retry_count >= self.rate_limit_retries or retry_delay is None:
+                if response.status == _RATE_LIMIT_STATUS:
+                    details: dict[str, Any] = {"retryAfter": retry_after}
+                    if self.rate_limit_retries:
+                        details["retryCount"] = retry_count
+                    raise ProviderError(
+                        "SOVA-PROVIDER-RATE-LIMIT",
+                        "provider rate limit reached",
+                        details=details,
+                    )
+                break
             retry_count += 1
-            self.sleeper(delay)
+            self.sleeper(retry_delay)
         if not _HTTP_SUCCESS_MIN <= response.status < _HTTP_SUCCESS_MAX:
+            details = {"status": response.status}
+            if self.rate_limit_retries and response.status in _TRANSIENT_HTTP_STATUSES:
+                details["retryCount"] = retry_count
             raise ProviderError(
                 "SOVA-PROVIDER-HTTP",
                 "provider returned an error",
-                details={"status": response.status},
+                details=details,
             )
         decoded = strict_json_loads(response.body, max_bytes=_MAX_PROVIDER_RESPONSE)
         if not isinstance(decoded, dict):
@@ -324,10 +364,34 @@ def _rate_limit_delay(provider: str, retry_after: str | None) -> float | None:
             delay = float(retry_after)
         except ValueError:
             return None
-        return delay if 0 < delay <= _MAX_RETRY_DELAY_SECONDS else None
+        if not 0 < delay <= _MAX_RETRY_DELAY_SECONDS:
+            return None
+        return float(delay)
     if provider == "openrouter":
         return _OPENROUTER_FALLBACK_RETRY_SECONDS
     return None
+
+
+def _transient_retry_delay(
+    provider: str,
+    *,
+    status: int | None,
+    retry_after: str | None,
+    retry_count: int,
+) -> float | None:
+    """Return one bounded retry delay for retryable transport failures only."""
+    if retry_after is not None:
+        return _rate_limit_delay(provider, retry_after)
+    if status == _RATE_LIMIT_STATUS:
+        return _rate_limit_delay(provider, None)
+    return _bounded_transient_backoff(retry_count)
+
+
+def _bounded_transient_backoff(retry_count: int) -> float:
+    return min(
+        _TRANSIENT_FALLBACK_RETRY_SECONDS * (2.0**retry_count),
+        _MAX_RETRY_DELAY_SECONDS,
+    )
 
 
 def _provider_json_bytes(value: dict[str, Any]) -> bytes:

@@ -10,6 +10,7 @@ import re
 import shutil
 import sys
 import threading
+import webbrowser
 from contextlib import contextmanager, suppress
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -48,6 +49,7 @@ from sova.community import (
     run_arena_chamber_document,
     run_arena_document,
     run_browser_swarm_document,
+    validate_agent_arena_document,
     verify_probe_response,
 )
 from sova.composition import (
@@ -71,7 +73,7 @@ from sova.evidence import (
     prepare_disclosure_package,
     render_evidence_report,
 )
-from sova.executors import attest_docker_desktop
+from sova.executors import GVisorOciExecutor, attest_docker_desktop, attest_gvisor
 from sova.extensions import (
     ExtensionApproval,
     ExtensionManifest,
@@ -116,11 +118,13 @@ from sova.live import (
     run_browser_campaign,
     run_browser_profile_handoff,
     run_live_browser_assessment,
+    run_live_semantic_browser_workflow,
     run_live_software_assessment,
     run_owned_action_lab_vertical_slice,
     run_owned_software_vertical_slice,
     run_owned_web_campaign,
     run_owned_web_vertical_slice,
+    semantic_browser_mission_from_mapping,
 )
 from sova.local_mcp import (
     LocalApprovalStore,
@@ -150,9 +154,11 @@ from sova.providers import provider_model_router, provider_runtime_from_mapping
 from sova.registry import (
     CommunityHTTPService,
     CommunityServiceConfig,
+    check_community_service_health,
     create_community_service_token,
     prepare_community_submission,
     prepare_contribution,
+    serialize_community_submission,
     sync_registry,
     verify_community_service_index,
     verify_registry,
@@ -181,8 +187,14 @@ from sova.reproduction import compare_observable_outcomes
 from sova.runtime import (
     BrowserProfileLease,
     BrowserProfileVault,
+    ModelRouter,
+    OciAgentApproval,
     ProfileKind,
+    RoleKind,
     RunProfile,
+    authorize_oci_agent_adapter,
+    oci_agent_runtime_from_mapping,
+    run_oci_agent_conformance,
     standard_profile,
 )
 from sova.safety import (
@@ -519,9 +531,43 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
 
     replay_parser = commands.add_parser(
         "replay",
-        help="use one explicitly named playback or semantic-reproduction mode",
+        help="open a finding at its decisive recording or use an explicit replay mode",
+        description=(
+            "Open a verified .sova finding with `sova replay FINDING.sova`, or choose one "
+            "of the explicit replay operations below."
+        ),
     )
     replay_commands = replay_parser.add_subparsers(dest="replay_command")
+    replay_parser.set_defaults(handler=_replay_help, replay_parser=replay_parser)
+    replay_open = replay_commands.add_parser(
+        "open",
+        help="render a .sova finding and open its decisive local replay",
+    )
+    replay_open.add_argument("source", type=_path)
+    replay_open.add_argument(
+        "--output",
+        type=_path,
+        help="HTML destination; defaults to FINDING-replay.html beside the capsule",
+    )
+    replay_open.add_argument(
+        "--no-open",
+        action="store_true",
+        help="render and report the replay without launching the local browser",
+    )
+    replay_open.add_argument(
+        "--primary-trace", help="exact internal package path shown by sova inspect"
+    )
+    open_comparison_group = replay_open.add_mutually_exclusive_group()
+    open_comparison_group.add_argument(
+        "--comparison-trace", help="exact internal package path shown by sova inspect"
+    )
+    open_comparison_group.add_argument("--no-comparison", action="store_true")
+    open_media_group = replay_open.add_mutually_exclusive_group()
+    open_media_group.add_argument(
+        "--media-object", help="exact internal visual-replay path shown by sova inspect"
+    )
+    open_media_group.add_argument("--no-media", action="store_true")
+    replay_open.set_defaults(handler=_replay_open)
     replay_modes = replay_commands.add_parser(
         "modes", help="describe the three non-interchangeable replay operations"
     )
@@ -654,6 +700,29 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         help="exact cached repository@sha256 image reference",
     )
     docker_attest_parser.set_defaults(handler=_safety_attest_docker)
+    gvisor_attest_parser = safety_commands.add_parser(
+        "attest-gvisor",
+        help=(
+            "attest a registered gVisor runsc runtime and cached digest-pinned image "
+            "without executing it"
+        ),
+    )
+    gvisor_attest_parser.add_argument(
+        "--docker",
+        type=_path,
+        help="Docker CLI path; auto-detected when omitted",
+    )
+    gvisor_attest_parser.add_argument(
+        "--image",
+        required=True,
+        help="exact cached repository@sha256 image reference",
+    )
+    gvisor_attest_parser.add_argument(
+        "--runtime",
+        default="runsc",
+        help="registered OCI runtime name (default: runsc)",
+    )
+    gvisor_attest_parser.set_defaults(handler=_safety_attest_gvisor)
 
     demo_parser = commands.add_parser(
         "demo",
@@ -1110,6 +1179,16 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     registry_verify_live.add_argument("--trusted-service-key-id", action="append", required=True)
     registry_verify_live.add_argument("--minimum-sequence", type=int, default=0)
     registry_verify_live.set_defaults(handler=_registry_verify_live_index)
+    registry_health = registry_commands.add_parser(
+        "healthcheck",
+        help="verify the exact loopback readiness contract used by hardened deployments",
+    )
+    registry_health.add_argument(
+        "--url",
+        default="http://127.0.0.1:8736/v1/health",
+        help="exact literal-loopback health URL",
+    )
+    registry_health.set_defaults(handler=_registry_healthcheck)
 
     monitor_parser = commands.add_parser(
         "monitor", help="run or inspect the durable local behavioral monitoring service"
@@ -1212,6 +1291,16 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         action="store_true",
         help="explicitly permit configured model-provider calls, which may incur cost",
     )
+    arena_agent_run.add_argument(
+        "--allow-sandboxed-agent-code",
+        action="store_true",
+        help="permit declared digest-pinned OCI participants through attested gVisor only",
+    )
+    arena_agent_run.add_argument(
+        "--docker",
+        type=_path,
+        help="Docker CLI path when OCI participants are declared",
+    )
     arena_agent_run.set_defaults(handler=_arena_agent_run)
     arena_chamber = arena_commands.add_parser(
         "chamber",
@@ -1264,6 +1353,56 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         help="stream each already-redacted hash-chained event with its trace channel",
     )
     arena_web.set_defaults(handler=_arena_web)
+    arena_explore_web = arena_commands.add_parser(
+        "explore-web",
+        help=(
+            "autonomously explore one exactly authorized website through SOVA's "
+            "typed browser policy with signed traces and fresh reproduction"
+        ),
+    )
+    arena_explore_web.add_argument("manifest", type=_path)
+    arena_explore_web.add_argument("mission", type=_path)
+    arena_explore_web.add_argument("provider_runtime", type=_path)
+    arena_explore_web.add_argument("destination", type=_path)
+    arena_explore_web.add_argument("--control-proof", type=_path)
+    arena_explore_web.add_argument("--package-runner", type=_path)
+    arena_explore_web.add_argument("--browser-executable", type=_path)
+    arena_explore_web.add_argument("--playwright-browser-cache", type=_path)
+    arena_explore_web.add_argument("--headed", action="store_true")
+    arena_explore_web.add_argument("--record-video", action="store_true")
+    arena_explore_web.add_argument(
+        "--docker",
+        type=_path,
+        help="Docker CLI path when provider_runtime is a sova.oci-agent-runtime document",
+    )
+    _add_browser_profile_arguments(arena_explore_web)
+    arena_explore_web.add_argument(
+        "--allow-provider-calls",
+        action="store_true",
+        help="explicitly permit configured model-provider calls, which may incur cost",
+    )
+    arena_explore_web.add_argument(
+        "--allow-sandboxed-agent-code",
+        action="store_true",
+        help=(
+            "permit a digest-pinned external agent image only through the required "
+            "attested gVisor profile and an additional exact approval"
+        ),
+    )
+    arena_explore_web.add_argument(
+        "--allow-target-observation-disclosure",
+        action="store_true",
+        help=(
+            "permit secret-redacted bounded accessibility snapshots from the controlled "
+            "target to be sent to the configured planning provider"
+        ),
+    )
+    arena_explore_web.add_argument(
+        "--stream-jsonl",
+        action="store_true",
+        help="stream each already-redacted signed event with its trace channel",
+    )
+    arena_explore_web.set_defaults(handler=_arena_explore_web)
     arena_swarm_web = arena_commands.add_parser(
         "swarm-web",
         help=(
@@ -1344,6 +1483,24 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     extension_run.add_argument("launch", type=_path)
     extension_run.add_argument("destination", type=_path)
     extension_run.set_defaults(handler=_extension_run)
+
+    agent_parser = commands.add_parser(
+        "agent",
+        help="attest and conform external agent images without granting host or target authority",
+    )
+    agent_commands = agent_parser.add_subparsers(dest="agent_command")
+    agent_conform = agent_commands.add_parser(
+        "conform-oci",
+        help="run digest-pinned external-agent conformance through an attested gVisor runtime",
+    )
+    agent_conform.add_argument("runtime", type=_path)
+    agent_conform.add_argument("destination", type=_path)
+    agent_conform.add_argument(
+        "--docker",
+        type=_path,
+        help="Docker CLI path; auto-detected when omitted",
+    )
+    agent_conform.set_defaults(handler=_agent_conform_oci)
 
     mcp_parser = commands.add_parser(
         "mcp", help="run or administer the local account-free SOVA MCP server"
@@ -1900,9 +2057,7 @@ def _campaign_output(artifacts: Any) -> dict[str, Any]:
         ),
         "visualReplays": [str(path) for path in getattr(artifacts, "visual_replays", ())],
         "replayCues": (
-            None
-            if getattr(artifacts, "replay_cues", None) is None
-            else str(artifacts.replay_cues)
+            None if getattr(artifacts, "replay_cues", None) is None else str(artifacts.replay_cues)
         ),
         "report": str(artifacts.report),
     }
@@ -2173,6 +2328,69 @@ def _replay_modes(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _replay_help(args: argparse.Namespace) -> int:
+    parser = args.replay_parser
+    if not isinstance(parser, argparse.ArgumentParser):  # pragma: no cover - parser invariant
+        raise TypeError
+    parser.print_help()
+    return 0
+
+
+def _capsule_replay_selection(args: argparse.Namespace) -> CapsuleReplaySelection:
+    return CapsuleReplaySelection(
+        primary_trace=args.primary_trace,
+        comparison_trace=args.comparison_trace,
+        media_object=args.media_object,
+        no_comparison=args.no_comparison,
+        no_media=args.no_media,
+    )
+
+
+def _derived_replay_destination(source: Path) -> Path:
+    return source.with_name(f"{source.stem}-replay.html")
+
+
+def _local_replay_uri(destination: Path) -> str:
+    resolved = destination.resolve(strict=True)
+    if not resolved.is_file() or resolved.suffix.casefold() not in {".htm", ".html"}:
+        raise FormatError(
+            "SOVA-REPLAY-LOCAL-FILE",
+            "generated replay must be one real local HTML file",
+        )
+    return resolved.as_uri()
+
+
+def _replay_open(args: argparse.Namespace) -> int:
+    destination = args.output or _derived_replay_destination(args.source)
+    report = render_capsule_timeline(
+        args.source,
+        destination,
+        selection=_capsule_replay_selection(args),
+    )
+    local_uri = _local_replay_uri(destination)
+    opened: bool | None = None
+    open_error: str | None = None
+    if not args.no_open:
+        try:
+            opened = bool(webbrowser.open(local_uri, new=2, autoraise=True))
+            if not opened:
+                open_error = "default-browser-refused-local-file"
+        except (OSError, webbrowser.Error):
+            opened = False
+            open_error = "default-browser-launch-failed"
+    report.update(
+        {
+            "destination": str(destination.resolve()),
+            "localUri": local_uri,
+            "openRequested": not args.no_open,
+            "opened": opened,
+            "openError": open_error,
+        }
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
 def _replay_timeline(args: argparse.Namespace) -> int:
     render_timeline_html(
         args.source,
@@ -2189,13 +2407,7 @@ def _replay_capsule(args: argparse.Namespace) -> int:
     report = render_capsule_timeline(
         args.source,
         args.destination,
-        selection=CapsuleReplaySelection(
-            primary_trace=args.primary_trace,
-            comparison_trace=args.comparison_trace,
-            media_object=args.media_object,
-            no_comparison=args.no_comparison,
-            no_media=args.no_media,
-        ),
+        selection=_capsule_replay_selection(args),
     )
     sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
     return 0
@@ -2303,16 +2515,102 @@ def _arena_run(args: argparse.Namespace) -> int:
 
 
 def _arena_agent_run(args: argparse.Namespace) -> int:
-    if not args.allow_provider_calls:
+    if not args.allow_provider_calls and not getattr(args, "allow_sandboxed_agent_code", False):
         raise FormatError(
             "SOVA-PROVIDER-CALLS-NOT-ALLOWED",
-            "agent Arena requires the explicit --allow-provider-calls flag",
+            "agent Arena requires explicit participant execution authorization",
         )
+    document = _load_object(args.specification)
+    provider_participants = document.get("participants")
+    oci_participants = document.get("ociParticipants", [])
+    if not isinstance(provider_participants, list) or not isinstance(oci_participants, list):
+        raise FormatError(
+            "SOVA-AGENT-ARENA-PARTICIPANT",
+            "Arena participants and ociParticipants must be arrays",
+        )
+    if provider_participants and not args.allow_provider_calls:
+        raise FormatError(
+            "SOVA-PROVIDER-CALLS-NOT-ALLOWED",
+            "provider-backed agent Arena participants require --allow-provider-calls",
+        )
+    if oci_participants and not getattr(args, "allow_sandboxed_agent_code", False):
+        raise FormatError(
+            "SOVA-OCI-AGENT-CODE-NOT-ALLOWED",
+            "OCI Arena participants require --allow-sandboxed-agent-code",
+        )
+    if oci_participants and not sys.stdin.isatty():
+        raise FormatError(
+            "SOVA-OCI-AGENT-INTERACTIVE",
+            "OCI Arena participants require a human-operated interactive terminal",
+        )
+    # Validate the complete profile, budgets, participant/runtime identities,
+    # matches, and references before attesting or executing any external image.
+    validate_agent_arena_document(
+        document,
+        provider_calls_authorized=args.allow_provider_calls,
+    )
+    external_models: dict[str, Any] = {}
+    if oci_participants:
+        if args.destination.exists() and (
+            args.destination.is_symlink()
+            or not args.destination.is_dir()
+            or any(args.destination.iterdir())
+        ):
+            raise FormatError(
+                "SOVA-AGENT-ARENA-EXISTS",
+                "agent Arena destination must be an empty real directory",
+            )
+        args.destination.resolve().mkdir(parents=True, exist_ok=True)
+        docker = _detected_path(
+            getattr(args, "docker", None),
+            ("docker", "docker.exe"),
+            "Docker CLI",
+        )
+        document_digest = sha256_digest(canonical_json_bytes(document))
+        for row in oci_participants:
+            if not isinstance(row, dict) or set(row) != {"id", "runtime"}:
+                raise FormatError(
+                    "SOVA-AGENT-ARENA-EXTERNAL",
+                    "OCI Arena participant fields are invalid",
+                )
+            identifier = row.get("id")
+            runtime_value = row.get("runtime")
+            if not isinstance(identifier, str) or not isinstance(runtime_value, dict):
+                raise FormatError(
+                    "SOVA-AGENT-ARENA-EXTERNAL",
+                    "OCI Arena participant values are invalid",
+                )
+            runtime = oci_agent_runtime_from_mapping(runtime_value)
+            if runtime.identifier != identifier:
+                raise FormatError(
+                    "SOVA-AGENT-ARENA-EXTERNAL",
+                    "OCI participant id must match its runtime id",
+                )
+            executor = GVisorOciExecutor(
+                docker,
+                runtime.image,
+                runtime=runtime.runtime,
+            )
+            adapter = authorize_oci_agent_adapter(
+                runtime,
+                executor,
+                args.destination,
+                use_scope={
+                    "purpose": "synthetic-agent-arena",
+                    "arenaDocumentDigest": document_digest,
+                    "participant": identifier,
+                    "targetToolsAvailable": False,
+                },
+                approval_prompt=_oci_agent_approval_prompt,
+            )
+            adapter.conform()
+            external_models[identifier] = adapter
     artifacts = run_agent_arena_document(
-        _load_object(args.specification),
+        document,
         args.destination,
         secret_resolver=os.getenv,
-        provider_calls_authorized=True,
+        provider_calls_authorized=args.allow_provider_calls,
+        external_models=external_models,
     )
     output = {
         "status": artifacts.status,
@@ -2408,6 +2706,123 @@ def _arena_web(args: argparse.Namespace) -> int:
             "schemaVersion": "0.1.0",
             "agentReport": str(artifacts.report),
             "agentOrchestrationTrace": str(artifacts.orchestration_trace),
+        }
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
+    return 0 if artifacts.status == "pass" else 2
+
+
+def _arena_explore_web(args: argparse.Namespace) -> int:
+    if not args.allow_target_observation_disclosure:
+        raise FormatError(
+            "SOVA-TARGET-OBSERVATION-DISCLOSURE-NOT-ALLOWED",
+            "semantic website exploration requires explicit disclosure authorization",
+        )
+    _require_live_campaign_terminal()
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    mission = semantic_browser_mission_from_mapping(_load_object(args.mission))
+    runtime_document = _load_object(args.provider_runtime)
+    runtime_type = runtime_document.get("artifactType")
+    if runtime_type == "sova.provider-runtime":
+        if not args.allow_provider_calls:
+            raise FormatError(
+                "SOVA-PROVIDER-CALLS-NOT-ALLOWED",
+                "provider-backed semantic exploration requires --allow-provider-calls",
+            )
+        runtime = provider_runtime_from_mapping(runtime_document)
+        if mission.max_planner_turns > runtime.max_model_turns:
+            raise FormatError(
+                "SOVA-SEMANTIC-BROWSER-RUNTIME-BUDGET",
+                "mission planner-turn budget exceeds the provider runtime budget",
+            )
+        if runtime.max_total_tokens is not None and (
+            mission.max_total_tokens is None or mission.max_total_tokens > runtime.max_total_tokens
+        ):
+            raise FormatError(
+                "SOVA-SEMANTIC-BROWSER-RUNTIME-BUDGET",
+                (
+                    "mission token budget must be present and no larger than the provider "
+                    "runtime budget"
+                ),
+            )
+        router = provider_model_router(runtime, secret_resolver=os.getenv)
+    elif runtime_type == "sova.oci-agent-runtime":
+        if not getattr(args, "allow_sandboxed_agent_code", False):
+            raise FormatError(
+                "SOVA-OCI-AGENT-CODE-NOT-ALLOWED",
+                "OCI agent exploration requires --allow-sandboxed-agent-code",
+            )
+        oci_runtime = oci_agent_runtime_from_mapping(runtime_document)
+        docker = _detected_path(
+            getattr(args, "docker", None),
+            ("docker", "docker.exe"),
+            "Docker CLI",
+        )
+        executor = GVisorOciExecutor(
+            docker,
+            oci_runtime.image,
+            runtime=oci_runtime.runtime,
+        )
+        args.destination.resolve().mkdir(parents=True, exist_ok=True)
+        adapter = authorize_oci_agent_adapter(
+            oci_runtime,
+            executor,
+            args.destination,
+            use_scope={
+                "purpose": "semantic-browser-planning",
+                "targetDigest": target.digest,
+                "missionDigest": mission.digest,
+                "browserAuthorityInherited": False,
+            },
+            approval_prompt=_oci_agent_approval_prompt,
+        )
+        adapter.conform()
+        router = ModelRouter({RoleKind.EXPLORER: (adapter,)})
+    else:
+        raise FormatError(
+            "SOVA-SEMANTIC-BROWSER-RUNTIME",
+            "planning runtime must be a provider or OCI agent runtime document",
+        )
+    proof = (
+        control_proof_from_mapping(_load_object(args.control_proof))
+        if args.control_proof is not None
+        else None
+    )
+    package_runner, browser = _campaign_executables(args)
+
+    def observe(channel: str, event: dict[str, Any]) -> None:
+        envelope = {
+            "artifactType": "sova.arena-semantic-browser-live-event",
+            "schemaVersion": "0.1.0",
+            "channel": channel,
+            "event": event,
+        }
+        sys.stdout.buffer.write(canonical_json_bytes(envelope) + b"\n")
+        sys.stdout.buffer.flush()
+
+    with _browser_profile_lease(args, target) as profile_lease:
+        artifacts = run_live_semantic_browser_workflow(
+            target,
+            mission,
+            args.destination,
+            router=router,
+            package_runner=package_runner,
+            browser_executable=browser,
+            approval_prompt=_live_campaign_prompt,
+            control_proof=proof,
+            browser_cache=getattr(args, "playwright_browser_cache", None),
+            profile_lease=profile_lease,
+            event_observer=observe if args.stream_jsonl else None,
+            headless=not getattr(args, "headed", False),
+            record_video=getattr(args, "record_video", False),
+        )
+    output = _campaign_output(artifacts)
+    output.update(
+        {
+            "artifactType": "sova.arena-semantic-browser-cli-result",
+            "schemaVersion": "0.1.0",
+            "mission": str(artifacts.mission),
+            "target": str(artifacts.target),
         }
     )
     sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
@@ -2549,6 +2964,38 @@ def _extension_run(args: argparse.Namespace) -> int:
     return 0 if artifacts.status == "pass" else 3
 
 
+def _oci_agent_approval_prompt(challenge: OciAgentApproval) -> str:
+    sys.stderr.write(json.dumps(challenge.summary, indent=2) + "\n")
+    sys.stderr.write(f"Type exactly: {challenge.exact_phrase}\n")
+    return input("approval> ")
+
+
+def _agent_conform_oci(args: argparse.Namespace) -> int:
+    if not sys.stdin.isatty():
+        raise FormatError(
+            "SOVA-OCI-AGENT-INTERACTIVE",
+            "external-agent execution requires a human-operated interactive terminal",
+        )
+    runtime = oci_agent_runtime_from_mapping(_load_object(args.runtime))
+    docker = _detected_path(args.docker, ("docker", "docker.exe"), "Docker CLI")
+    artifacts = run_oci_agent_conformance(
+        runtime,
+        docker,
+        args.destination,
+        approval_prompt=_oci_agent_approval_prompt,
+    )
+    output = {
+        "artifactType": "sova.oci-agent-cli-result",
+        "schemaVersion": "0.1.0",
+        "status": artifacts.status,
+        "runtime": str(artifacts.runtime),
+        "report": str(artifacts.report),
+        "trace": str(artifacts.trace),
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
+    return 0 if artifacts.status == "pass" else 3
+
+
 def _compare(args: argparse.Namespace) -> int:
     kinds = tuple(args.kind) if args.kind else ("model.response", "oracle.completed")
     result = compare_observable_outcomes(args.left, args.right, kinds=kinds)
@@ -2593,6 +3040,13 @@ def _safety_backends(_args: argparse.Namespace) -> int:
 def _safety_attest_docker(args: argparse.Namespace) -> int:
     docker = _detected_path(args.docker, ("docker", "docker.exe"), "Docker CLI")
     attestation = attest_docker_desktop(docker, args.image)
+    sys.stdout.buffer.write(canonical_json_bytes(attestation.to_mapping()) + b"\n")
+    return 0 if attestation.ready else 3
+
+
+def _safety_attest_gvisor(args: argparse.Namespace) -> int:
+    docker = _detected_path(args.docker, ("docker", "docker.exe"), "Docker CLI")
+    attestation = attest_gvisor(docker, args.image, runtime=args.runtime)
     sys.stdout.buffer.write(canonical_json_bytes(attestation.to_mapping()) + b"\n")
     return 0 if attestation.ready else 3
 
@@ -3652,13 +4106,14 @@ def _registry_prepare_upload(args: argparse.Namespace) -> int:
         capsule=args.capsule,
         trace=args.trace,
     )
+    payload = serialize_community_submission(document)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_bytes(canonical_json_bytes(document) + b"\n")
+    args.output.write_bytes(payload)
     summary = {
         "artifactType": "sova.community-upload-prepared",
         "schemaVersion": "0.1.0",
         "output": str(args.output.resolve()),
-        "submissionDigest": sha256_digest(canonical_json_bytes(document)),
+        "submissionDigest": sha256_digest(payload),
         "uploadPerformed": False,
     }
     sys.stdout.buffer.write(canonical_json_bytes(summary) + b"\n")
@@ -3671,6 +4126,12 @@ def _registry_verify_live_index(args: argparse.Namespace) -> int:
         trusted_service_key_ids=frozenset(args.trusted_service_key_id),
         minimum_sequence=args.minimum_sequence,
     )
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _registry_healthcheck(args: argparse.Namespace) -> int:
+    report = check_community_service_health(args.url)
     sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
     return 0
 
@@ -3772,10 +4233,27 @@ def _self_check_verify(args: argparse.Namespace) -> int:
     return 1 if report["status"] == "failed" else 0
 
 
+_REPLAY_SUBCOMMANDS = frozenset({"open", "modes", "timeline", "capsule", "serve", "study", "clip"})
+_REPLAY_SHORTCUT_MINIMUM_ARGUMENTS = 2
+
+
+def _rewrite_replay_shortcut(argv: Sequence[str] | None) -> list[str]:
+    values = list(sys.argv[1:] if argv is None else argv)
+    if (
+        len(values) >= _REPLAY_SHORTCUT_MINIMUM_ARGUMENTS
+        and values[0] == "replay"
+        and values[1] not in _REPLAY_SUBCOMMANDS
+        and not values[1].startswith("-")
+        and Path(values[1]).suffix.casefold() == ".sova"
+    ):
+        return ["replay", "open", *values[1:]]
+    return values
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Parse command-line arguments and return a process exit code."""
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(_rewrite_replay_shortcut(argv))
     handler = getattr(args, "handler", None)
     if handler is None:
         parser.print_help()

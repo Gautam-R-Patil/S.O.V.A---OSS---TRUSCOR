@@ -62,14 +62,29 @@ budget, timeout, response text, finish reason, response ID, and token usage.
 | Ollama | loopback `/api/chat`, `/api/tags` | none |
 
 Remote requests require a pinned HTTPS origin, reject redirects, and cap the
-response at 8 MiB. Ollama permits HTTP only on loopback. Secrets resolve at call
+response at 8 MiB. Provider calls default to 30 seconds. Remote-provider routes
+remain capped at 60 seconds; loopback Ollama routes may be explicitly bounded up
+to 300 seconds so CPU-only local models can complete. Higher values are rejected,
+and workflow-level duration budgets still apply. Ollama permits HTTP only on
+loopback. Secrets resolve at call
 time from an injected resolver, environment reference, or optional OS keyring
 and are never serialized into a SOVA result. Pricing is `not-pinned` unless an
 experiment explicitly freezes it; no cost is invented. Direct adapters fail
-fast on HTTP 429 and preserve the provider's retry-after value as an optional
-operational hint. Configured provider-role runtimes retry at most twice, honor
-a bounded numeric `Retry-After`, and use a ten-second fallback only for
-OpenRouter when that header is absent.
+fast on retryable failures and preserve the provider's retry-after value as an
+optional operational hint. Configured provider-role runtimes retry HTTP 429,
+500, 502, 503, 504, and transport-network failures at most twice. They honor a
+bounded numeric `Retry-After`; otherwise OpenRouter 429 uses a ten-second
+fallback and transient server/network failures use bounded one- and two-second
+backoff. Credentials, origin failures, other 4xx responses, malformed output,
+and policy validation failures are never retried.
+
+Each role route may declare up to three unique ordered `fallbackModels` in
+addition to its primary model. Every fallback uses the same provider, output,
+temperature, timeout, late-credential, and tool-isolation contract. The router
+records the failed model IDs and safe error classes before selecting a valid
+response; it never silently changes providers or treats failed output as an
+invocation. Duplicate fallbacks, the primary repeated as a fallback, and larger
+sets are rejected during configuration parsing.
 
 The configured route identifier and the provider-returned model identifier are
 separate provenance fields. This matters for router aliases such as

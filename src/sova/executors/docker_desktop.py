@@ -68,6 +68,7 @@ class DockerCommandRunner(Protocol):
         timeout_seconds: float,
         cancellation: CancellationToken,
         max_output_bytes: int,
+        stdin_data: bytes | None = None,
     ) -> DockerCommandResult: ...
 
 
@@ -81,17 +82,25 @@ class BoundedDockerCommandRunner:
         timeout_seconds: float,
         cancellation: CancellationToken,
         max_output_bytes: int,
+        stdin_data: bytes | None = None,
     ) -> DockerCommandResult:
         if _cancelled(cancellation):
             return DockerCommandResult("cancelled", None, b"", b"")
         creationflags = (
             int(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)) if os.name == "nt" else 0
         )
-        with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+        with (
+            tempfile.TemporaryFile() as stdin,
+            tempfile.TemporaryFile() as stdout,
+            tempfile.TemporaryFile() as stderr,
+        ):
+            if stdin_data is not None:
+                stdin.write(stdin_data)
+                stdin.seek(0)
             try:
                 process = subprocess.Popen(  # noqa: S603 - fixed argv, no shell
                     argv,
-                    stdin=subprocess.DEVNULL,
+                    stdin=stdin if stdin_data is not None else subprocess.DEVNULL,
                     stdout=stdout,
                     stderr=stderr,
                     shell=False,
@@ -584,13 +593,26 @@ class DockerDesktopOciExecutor:
             cancellation=token,
             max_output_bytes=1024 * 1024,
         )
-        inspection = self._runner.run(
-            (str(self._docker), "inspect", container_name),
+        absence = self._runner.run(
+            (
+                str(self._docker),
+                "container",
+                "ls",
+                "--all",
+                "--filter",
+                f"name=^/{container_name}$",
+                "--format",
+                "{{.Names}}",
+            ),
             timeout_seconds=10,
             cancellation=token,
             max_output_bytes=1024 * 1024,
         )
-        return inspection.state == "completed" and inspection.returncode != 0
+        # A failed ``inspect`` is ambiguous: it also occurs when the daemon is
+        # down.  Require a successful exact-name listing with no result.
+        return (
+            absence.state == "completed" and absence.returncode == 0 and not absence.stdout.strip()
+        )
 
 
 def _container_argv(inputs: dict[str, Any]) -> tuple[str, ...]:

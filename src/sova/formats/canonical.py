@@ -43,6 +43,7 @@ def strict_json_loads(
     max_bytes: int = DEFAULT_MAX_JSON_BYTES,
     max_depth: int = DEFAULT_MAX_DEPTH,
     max_items: int = DEFAULT_MAX_ITEMS,
+    max_string_bytes: int = DEFAULT_MAX_STRING_BYTES,
 ) -> Any:
     """Parse UTF-8 JSON while rejecting ambiguous and resource-hostile input."""
     if len(raw) > max_bytes:
@@ -73,11 +74,22 @@ def strict_json_loads(
             "invalid JSON document",
             details={"line": error.lineno, "column": error.colno},
         ) from error
-    _validate_tree(value, max_depth=max_depth, max_items=max_items)
+    _validate_tree(
+        value,
+        max_depth=max_depth,
+        max_items=max_items,
+        max_string_bytes=max_string_bytes,
+    )
     return value
 
 
-def _validate_tree(value: Any, *, max_depth: int, max_items: int) -> None:
+def _validate_tree(
+    value: Any,
+    *,
+    max_depth: int,
+    max_items: int,
+    max_string_bytes: int = DEFAULT_MAX_STRING_BYTES,
+) -> None:
     pending: list[tuple[Any, int]] = [(value, 0)]
     count = 0
     while pending:
@@ -103,7 +115,7 @@ def _validate_tree(value: Any, *, max_depth: int, max_items: int) -> None:
                     "SOVA-FORMAT-INVALID-UNICODE",
                     "JSON strings must contain Unicode scalar values, not lone surrogates",
                 ) from error
-            if len(encoded) > DEFAULT_MAX_STRING_BYTES:
+            if len(encoded) > max_string_bytes:
                 raise FormatError(
                     "SOVA-FORMAT-STRING-LIMIT",
                     "JSON string exceeds the configured byte limit",
@@ -210,7 +222,11 @@ def _canonical_render(value: Any, path: str = "$") -> str:
     )
 
 
-def canonical_json_bytes(value: Any) -> bytes:
+def canonical_json_bytes(
+    value: Any,
+    *,
+    max_string_bytes: int = DEFAULT_MAX_STRING_BYTES,
+) -> bytes:
     """Return deterministic UTF-8 bytes for the SOVA JCS/I-JSON subset.
 
     SOVA forbids binary floating-point values in canonical signed documents.
@@ -219,7 +235,12 @@ def canonical_json_bytes(value: Any) -> bytes:
     a strict subset of JCS rather than an implementation of its number
     serialization algorithm.
     """
-    _validate_tree(value, max_depth=DEFAULT_MAX_DEPTH, max_items=DEFAULT_MAX_ITEMS)
+    _validate_tree(
+        value,
+        max_depth=DEFAULT_MAX_DEPTH,
+        max_items=DEFAULT_MAX_ITEMS,
+        max_string_bytes=max_string_bytes,
+    )
     _reject_float_tree(value)
     try:
         rendered = _canonical_render(value)

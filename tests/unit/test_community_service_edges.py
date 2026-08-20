@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import copy
 import http.client
+import io
 import json
 import os
 import shutil
@@ -30,6 +31,7 @@ from sova.registry import (
     CommunityServiceLimits,
     create_community_service_token,
     prepare_community_submission,
+    serialize_community_submission,
     verify_community_service_index,
 )
 from sova.trace import sign_dsse_payload
@@ -139,6 +141,97 @@ def test_archive_and_service_key_preflights(tmp_path: Path) -> None:
     assert (clean / "service-signing-key.pub").is_file()
 
 
+def test_archive_preflight_rejects_compressed_nested_and_prefixed_secrets(tmp_path: Path) -> None:
+    secret_value = b'api_key="synthetic-credential-value"'
+    compressed_secret = tmp_path / "compressed-secret.zip"
+    with zipfile.ZipFile(compressed_secret, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("payload.json", secret_value)
+    with pytest.raises(FormatError, match="credential-shaped archive content"):
+        registry_module._archive_preflight(compressed_secret)
+
+    nested_buffer = io.BytesIO()
+    with zipfile.ZipFile(nested_buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("payload.json", secret_value)
+    for name, prefix in (
+        ("nested-secret.zip", b""),
+        ("self-extracting-nested-secret.zip", b"MZ-synthetic-stub"),
+    ):
+        outer = tmp_path / name
+        with zipfile.ZipFile(outer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("attachment.bin", prefix + nested_buffer.getvalue())
+        with pytest.raises(FormatError, match="credential-shaped archive content"):
+            registry_module._archive_preflight(outer)
+
+    boundary_secret = tmp_path / "boundary-secret.zip"
+    split_payload = (
+        b"x" * (registry_module._ARCHIVE_SCAN_CHUNK_BYTES - 4)
+        + b'api_key="synthetic-credential-value"'
+    )
+    with zipfile.ZipFile(boundary_secret, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("payload.json", split_payload)
+    with pytest.raises(FormatError, match="credential-shaped archive content"):
+        registry_module._archive_preflight(boundary_secret)
+
+
+def test_archive_preflight_bounds_nested_size_and_depth(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clean = io.BytesIO()
+    with zipfile.ZipFile(clean, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("payload.json", b'{"value":"safe"}')
+    outer = tmp_path / "nested-size.zip"
+    with zipfile.ZipFile(outer, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("attachment.bin", clean.getvalue())
+    with monkeypatch.context() as patcher:
+        patcher.setattr(registry_module, "_MAX_NESTED_ARCHIVE_BYTES", len(clean.getvalue()) - 1)
+        with pytest.raises(FormatError, match="nested archive exceeds"):
+            registry_module._archive_preflight(outer)
+
+    nested = clean.getvalue()
+    for _index in range(registry_module._MAX_NESTED_ARCHIVE_DEPTH + 1):
+        wrapper = io.BytesIO()
+        with zipfile.ZipFile(wrapper, "w", compression=zipfile.ZIP_STORED) as archive:
+            archive.writestr("attachment.bin", nested)
+        nested = wrapper.getvalue()
+    excessive_depth = tmp_path / "nested-depth.zip"
+    excessive_depth.write_bytes(nested)
+    with pytest.raises(FormatError, match="nested archive depth"):
+        registry_module._archive_preflight(excessive_depth)
+
+
+def test_registry_rejects_compressed_secret_and_discards_staging(tmp_path: Path) -> None:
+    secret_archive = io.BytesIO()
+    with zipfile.ZipFile(secret_archive, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("payload.json", b'api_key="synthetic-credential-value"')
+    clean_archive = io.BytesIO()
+    with zipfile.ZipFile(clean_archive, "w", compression=zipfile.ZIP_STORED) as archive:
+        archive.writestr("payload.json", b'{"value":"safe"}')
+    document = _raw_upload()
+    for row, data in zip(
+        document["files"],
+        (secret_archive.getvalue(), clean_archive.getvalue()),
+        strict=True,
+    ):
+        row.update(
+            data=base64.b64encode(data).decode("ascii"),
+            size=len(data),
+            digest=sha256_digest(data),
+        )
+
+    root = tmp_path / "service"
+    store = CommunityRegistryStore(_service_config(root, "sha256:" + "1" * 64))
+    queued = store.submit(document)
+    staging = root / "staging" / queued["id"]
+    assert staging.is_dir()
+    rejected = store.process_next()
+    assert rejected is not None
+    assert rejected["status"] == "rejected"
+    assert rejected["error"]["code"] == "SOVA-SERVICE-SECRET"
+    assert rejected["error"]["stagingCleanupFailed"] is False
+    assert not staging.exists()
+
+
 def test_token_limits_and_config_validation(tmp_path: Path) -> None:
     token = tmp_path / "token"
     create_community_service_token(token)
@@ -146,6 +239,7 @@ def test_token_limits_and_config_validation(tmp_path: Path) -> None:
         create_community_service_token(token)
     for values in (
         {"max_body_bytes": 0},
+        {"max_files": 1},
         {"max_files": 33},
         {"max_body_bytes": 4, "max_file_bytes": 5},
     ):
@@ -215,10 +309,96 @@ def test_prepare_and_parse_upload_edge_matrix(tmp_path: Path) -> None:
     )
     with pytest.raises(FormatError, match="credential-shaped plaintext"):
         registry_module._parse_upload(secret, CommunityServiceLimits())
-    with pytest.raises(FormatError, match="decoded submission"):
+    encoded_over_limit = copy.deepcopy(valid)
+    encoded_over_limit["files"][0]["data"] = "A" * (
+        CommunityServiceLimits().max_base64_bytes_per_file + 1
+    )
+    with pytest.raises(FormatError, match="base64 data exceeds"):
         registry_module._parse_upload(
-            valid,
-            CommunityServiceLimits(max_body_bytes=10, max_file_bytes=10, max_files=4),
+            encoded_over_limit,
+            CommunityServiceLimits(),
+        )
+
+
+def test_prepare_and_http_accept_more_than_four_mib_and_reject_over_limit(
+    tmp_path: Path,
+) -> None:
+    limits = CommunityServiceLimits()
+    capsule = tmp_path / "large.sova"
+    trace = tmp_path / "small.sova-trace"
+    raw_size = 4 * 1024 * 1024 + 1
+    capsule.write_bytes(b"x" * raw_size)
+    trace.write_bytes(b"trace")
+    document = prepare_community_submission(
+        kind="registry",
+        metadata={"requiredKeyId": "sha256:" + "1" * 64},
+        capsule=capsule,
+        trace=trace,
+        limits=limits,
+    )
+    payload = serialize_community_submission(document, limits=limits)
+    assert document["files"][0]["size"] == raw_size
+    assert len(document["files"][0]["data"]) > 4 * 1024 * 1024
+    assert len(payload) <= limits.max_body_bytes
+
+    service = CommunityHTTPService(
+        CommunityServiceConfig(
+            tmp_path / "large-service",
+            "x" * 24,
+            frozenset({"sha256:" + "1" * 64}),
+            "method",
+            limits=limits,
+        )
+    )
+    thread = threading.Thread(target=service.serve_forever, daemon=True)
+    thread.start()
+    host, port = service.address
+    try:
+        headers = {
+            "Authorization": "Bearer " + "x" * 24,
+            "Content-Type": "application/json",
+        }
+        status, _ = _http_raw(
+            host,
+            port,
+            "POST",
+            "/v1/submissions",
+            body=payload,
+            headers=headers,
+        )
+        assert status == 202
+        status, body = _http_raw(host, port, "GET", "/v1/health")
+        assert status == 200
+        assert json.loads(body)["uploadLimits"] == limits.to_mapping()
+        over_limit_headers = {
+            **headers,
+            "Content-Length": str(limits.max_body_bytes + 1),
+        }
+        assert (
+            _http_raw(
+                host,
+                port,
+                "POST",
+                "/v1/submissions",
+                body=b"{}",
+                headers=over_limit_headers,
+            )[0]
+            == 413
+        )
+    finally:
+        service.close()
+        thread.join(timeout=10)
+
+    oversized = tmp_path / "oversized.sova"
+    with oversized.open("wb") as stream:
+        stream.truncate(limits.max_file_bytes + 1)
+    with pytest.raises(FormatError, match="raw file limit"):
+        prepare_community_submission(
+            kind="registry",
+            metadata={"requiredKeyId": "sha256:" + "1" * 64},
+            capsule=oversized,
+            trace=trace,
+            limits=limits,
         )
 
 
@@ -409,15 +589,19 @@ def test_http_route_rate_and_lifecycle_edges(tmp_path: Path) -> None:
     service = CommunityHTTPService(config)
     service.close()  # Closing before serving must not block.
 
+    transport_limits = CommunityServiceLimits(
+        max_body_bytes=384 * 1024,
+        max_file_bytes=64,
+        max_files=2,
+        requests_per_minute=20,
+    )
     service = CommunityHTTPService(
         CommunityServiceConfig(
             tmp_path / "live",
             "x" * 24,
             frozenset({key_id}),
             "method",
-            limits=CommunityServiceLimits(
-                max_body_bytes=128, max_file_bytes=64, requests_per_minute=20
-            ),
+            limits=transport_limits,
         )
     )
     thread = threading.Thread(target=service.serve_forever, daemon=True)
@@ -436,7 +620,7 @@ def test_http_route_rate_and_lifecycle_edges(tmp_path: Path) -> None:
                 port,
                 "POST",
                 "/v1/submissions",
-                body=b"x" * 129,
+                body=b"x" * (transport_limits.max_body_bytes + 1),
                 headers=token,
             )[0]
             == 413

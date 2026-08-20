@@ -566,7 +566,14 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
         raise FormatError("SOVA-LIVE-CAMPAIGN-CANCELLED", "browser campaign was cancelled")
     if profile_lease is not None:
         profile_lease.require_target(target.digest)
-    origins, host, proof, control_status = verified_browser_control(target, control_proof)
+    control_now = datetime.now(UTC)
+    minimum_proof_window = timedelta(seconds=campaign.max_duration_seconds + 30)
+    origins, host, proof, control_status = verified_browser_control(
+        target,
+        control_proof,
+        now=control_now,
+        minimum_ttl=minimum_proof_window,
+    )
     entry_origin = urlsplit(campaign.entry_url)
     entry_host = entry_origin.hostname
     if entry_host is None:  # defensive if a forged dataclass bypasses validation
@@ -581,8 +588,7 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
             "SOVA-LIVE-CAMPAIGN-SCOPE",
             "campaign entryUrl is outside the target's admitted origin",
         )
-    minimum_proof_window = timedelta(seconds=campaign.max_duration_seconds + 30)
-    if proof.expires_at - datetime.now(UTC) < minimum_proof_window:
+    if proof.expires_at - control_now < minimum_proof_window:
         raise FormatError(
             "SOVA-LIVE-CAMPAIGN-PROOF-WINDOW",
             "target-control proof expires before the declared campaign can finish",
@@ -791,9 +797,7 @@ def run_browser_campaign(  # noqa: PLR0912, PLR0913, PLR0915
                 environment=environment,
                 fingerprints=fingerprints,
                 cancellation=cancellation,
-                event_observer=recorded_observer(
-                    recording, client, event_observer, "reproduction"
-                ),
+                event_observer=recorded_observer(recording, client, event_observer, "reproduction"),
             )
             TraceReader(reproduction_trace).verify(require_signature=True)
             comparison = compare_observable_outcomes(

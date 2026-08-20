@@ -423,9 +423,10 @@ The pre-alpha now includes:
   sensor lanes, search, recorded-link navigation, synchronized comparison, and
   a bounded integrity-checked loopback live tail;
 - explicit opt-in headed-browser WebM capture, typed visual-replay packaging,
-  digest-bound decisive-oracle cueing, and direct `sova replay capsule`
+  digest-bound decisive-oracle cueing, and one-step `sova replay FINDING.sova`
   rendering that selects the exact trace event and opens its bounded decisive
-  video window in one inert self-contained page;
+  video window in one inert self-contained local page (`--no-open` renders
+  without launching a browser);
 - numerator/denominator, Wilson uncertainty, condition sensitivity, and
   optional calibrated-judge reporting;
 - a bounded MCP stdio client, pinned open-source launch recipes, capability
@@ -468,6 +469,15 @@ The pre-alpha now includes:
   network, inter-agent, safety, authorization, state, and oracle events into
   the same signed trace exposed live; plus an authorized provider-backed
   website Arena lane.
+- an adaptive semantic website Arena where a provider or conforming OCI planner
+  can discover same-origin pages and build new plans from typed navigation,
+  history, form, keyboard, pointer, drag, modal, and bounded tab primitives,
+  while SOVA enforces independent budgets, exact batch approval, deterministic
+  persisted oracles, clean reproduction, recordings, and decisive replay cues.
+- a strict third-party agent protocol backed by exact digest-pinned images and
+  mandatory attested gVisor execution with no network, credentials, host mounts,
+  writable root, capabilities, or container-engine socket; there is no fallback
+  to an ordinary container.
 - an executor-backed browser swarm where bounded model roles take sequential
   turns over one target-bound opaque browser identity, share only redacted
   observations, and produce signed coordinator and participant traces plus a
@@ -541,7 +551,7 @@ the real-runtime evidence and every remaining external boundary.
 - Local sentinel runs.
 - Durable scheduled local snapshot monitoring with signed result traces.
 - CI policy and pull-request evidence.
-- Public, mirrorable registry of reviewed `.sova` artifacts.
+- Offline/operator-publishable, mirrorable registry of reviewed `.sova` artifacts.
 - Self-hosted loopback staging, verification, event, and leaderboard service.
 - Execution-based scanner adjudication.
 - Coordinated disclosure workflow.
@@ -573,6 +583,10 @@ sova playback ./run.sova-trace
 sova replay modes
 sova replay timeline ./run.sova-trace ./replay.html \
   --comparison ./fresh-run.sova-trace --media ./browser-session.webm
+sova replay ./evidence.sova
+# Automation can derive the same HTML without launching a browser:
+sova replay ./evidence.sova --no-open
+# The explicit destination-preserving interface remains available:
 sova replay capsule ./evidence.sova ./capsule-replay.html
 sova replay serve ./run.sova-trace --duration-seconds 30
 sova replay study ./run.sova-trace ./trial-1.sova-trace ./trial-2.sova-trace
@@ -663,8 +677,16 @@ sova arena web ./website-target.json ./browser-campaign.json ./provider-runtime.
   ./arena-web-output --control-proof ./control-proof.json \
   --allow-provider-calls --stream-jsonl --headed --record-video \
   --playwright-browser-cache ./.cache/playwright-browsers
-sova replay capsule ./arena-web-output/browser/discovery.sova \
-  ./arena-web-output/decisive-replay.html
+sova replay ./arena-web-output/browser/discovery.sova
+# Let one planner adaptively discover and traverse a multi-page same-origin UI.
+# The model can invent plans from typed actions, but each complete batch remains
+# separately approved and only a fresh reproduced oracle can confirm a finding.
+sova arena explore-web ./website-target.json ./semantic-browser-mission.json \
+  ./provider-runtime.json ./arena-explore-output \
+  --control-proof ./control-proof.json --allow-provider-calls \
+  --allow-target-observation-disclosure --headed --record-video \
+  --playwright-browser-cache ./.cache/playwright-browsers
+sova replay ./arena-explore-output/discovery.sova
 # Run several bounded roles over one operator-prepared, target-bound browser
 # profile. Scripted roles need no provider-call flag.
 sova arena swarm-web ./website-target.json ./browser-campaign.json \
@@ -681,6 +703,10 @@ sova replay clip ./clip.json ./replay.y4m
 sova extension discover
 sova extension prepare ./manifest.json ./launch.json --executable /absolute/python --working-directory /absolute/example --argument /absolute/example/safe_oracle.py
 sova extension run ./manifest.json ./launch.json ./extension-output
+
+# Attest and conform a third-party agent image before granting it any SOVA role.
+sova safety attest-gvisor --docker docker --image repo/agent@sha256:...
+sova agent conform-oci ./oci-agent-runtime.json ./agent-conformance --docker docker
 
 # Issue and verify a signed, nonce-bound probe response offline
 sova probe issue ./probe-issuance.json ./response.json
@@ -773,6 +799,15 @@ sova mcp init-control ./control.key
 # Launch broader live-target rehearsal only after a stronger admitted backend
 sova rehearse prepare ./authorized-target ./isolated-workspace
 ```
+
+The Internet-facing community blueprint uses the shipped SOVA image recipe and
+the mandatory `preflight.py build`, `check`, and `up` path. It rejects mutable
+image references, validates Compose's fully resolved image set, keeps operator
+secrets in an absolute directory outside the checkout, and repairs the named
+data volume plus stages the protected token into a separate read-only runtime
+volume for the non-root service before startup. Follow the exact
+[community deployment boundary](./deploy/community/README.md); this blueprint
+is not a production-hosting attestation.
 
 ### Is the registry “Metasploit for AI security”?
 
@@ -931,14 +966,14 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Dual-use and coordinated disclosure | [Policies active](./DUAL_USE_POLICY.md) |
 | `.sova` capsule and scenario schemas | Experimental `0.1.0` implemented with safe package tooling |
 | `.sova-trace` experimental contract | Experimental `0.1.0` implemented with streaming writer and offline verifier |
-| Scripted/local/isolated execution | Experimental executor contract and no-Atlas vertical slice implemented; local host execution is explicitly not a security sandbox. Docker Desktop and gVisor `runsc` backends require exact digest-pinned cached Linux images, no network/host mounts/daemon socket, non-root execution, bounded resources, post-run inspection, and cleanup. gVisor reduces direct host-kernel exposure but is not a separate VM; its live lane still requires a registered `runsc` runner |
+| Scripted/local/isolated execution | Experimental executor contract and no-Atlas vertical slice implemented; local host execution is explicitly not a security sandbox. Docker Desktop and gVisor `runsc` backends require exact digest-pinned cached Linux images, no network/host mounts/daemon socket, non-root execution, bounded resources, post-run inspection, and cleanup. The OCI agent adapter additionally requires read-only root, no credentials, strict JSON protocol binding, exact human authorization, and signed conformance evidence. gVisor reduces direct host-kernel exposure but is not a separate VM; its live lane still requires a registered `runsc` runner |
 | Authorization and containment | Experimental ACE kernel, closed exact-batch human review, per-action signed one-use tokens, effect budgets, proof-of-control validation, and backend admission implemented |
 | Synthetic detonation and sensors | Event-sourced fake world, inert canaries, sink-only collector, deterministic oracles, nine ground-truth target families, and a claim-conditioned sensor ledger covering direct/provider/derived/unavailable modes, drops, clock domains, ordering, and blind spots; total observability is explicitly denied |
 | `sova map` | Air-gapped typed inventory, provenance-separated reach closures, map schema, and tool-definition drift implemented in [ADR-0013](./docs/decisions/0013-provenance-separated-capability-map.md) |
 | SOVA Runtime | Provider-neutral isolated roles, standard/custom profiles, evidence firewall, local minimized experience, opaque sessions, and verified executor fallback implemented in [ADR-0014](./docs/decisions/0014-evidence-firewalled-runtime.md) |
 | `sova check` | Bundled synthetic and authorized live-browser checks with finite candidate sets, exact human approval, signed traces, controlled reproduction, and honest confirmed/not-observed/inconclusive states |
 | `sova detonate` | Real Playwright/Chrome website execution plus bounded trusted local-process execution on two credential-stripped copies; both require exact human approval and produce signed primary/reproduction traces plus evidence capsules. Browser detonation supports explicit opt-in headed WebM recording packaged as typed visual replay and rendered directly from the capsule. A four-class static/SPA/authenticated/popup owned-site matrix passed real Chrome. The contained action lab adds real disposable file, loopback SMTP email, loopback message, and settings effects with independent ground-truth receipts and a registry-ready module; this proves the controlled vertical, not arbitrary third-party agents. Windows/macOS Appium and Linux AT-SPI application-bound adapters exist at the executor API, but general native-desktop detonation still requires platform drivers, owned fixtures, and CLI integration |
-| `sova hunt` | Bounded operator-authored or provider-assisted candidate search executes in real Playwright/Chrome, records snapshot/console/network observations, detects near misses, reproduces the winning recipe under fresh approval, and emits signed traces plus an offline-verifiable discovery capsule. Deterministic tests verify isolated roles; one founder-authorized OpenRouter free-model run against loopback AI Goat Challenge 1 passed with controlled reproduction and digest-bound exact-moment video evidence on 2026-08-20. This is not general target coverage or provider-quality evidence; see the [bounded acceptance record](./docs/engineering/aigoat-loopback-acceptance-2026-08-20.md) |
+| `sova hunt` | Bounded operator-authored or provider-assisted candidate search executes in real Playwright/Chrome, records snapshot/console/network observations, detects near misses, reproduces the winning recipe under fresh approval, and emits signed traces plus an offline-verifiable discovery capsule. Deterministic tests verify isolated roles; one founder-authorized OpenRouter free-model run against loopback AI Goat Challenge 1 passed with controlled reproduction and digest-bound exact-moment video evidence on 2026-08-20. The expanded nine-mission semantic AI Goat lane—including Knowledge Base workflows—is implemented and statically preflighted, but the final OpenRouter availability probe returned `SOVA-PROVIDER-RATE-LIMIT`, so the all-nine campaign was not launched and is not claimed as passed. This is not general target coverage or provider-quality evidence; see the [bounded acceptance record](./docs/engineering/aigoat-loopback-acceptance-2026-08-20.md) |
 | Persistent browser sessions | Exact-target-bound opaque profiles, cross-process exclusive leases, bounded stale recovery, manual headful authentication/CAPTCHA handoff, campaign reuse, and installed-Chrome two-process fixture persistence are implemented; profile state remains sensitive local executor material, is not SOVA-encrypted, and is never embedded in capsules or traces |
 | MELRA/CUA adapters | MELRA `0.3.0-alpha.10` browser/terminal/computer probe and same-process session reuse passed live; checksum-pinned CUA `0.12.6` bounded reads passed, while live desktop mutation remains visibly blocked on this runner |
 | Sleeper demonstration | Implemented with named narrow baselines, two-dimensional search, signed discovery/reproduction traces, `.sova`, independent offline verification, and reset evidence |
@@ -948,15 +983,15 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `sova compose` | Typed metadata-only graph, four bounded search strategies, fresh-evidence minimization, element-removal attribution, portable capsule fragment, and deterministic composition-only fixture implemented in [ADR-0021](./docs/decisions/0021-bounded-composition-only-search.md); comparative search superiority remains unproven |
 | `sova rehearse` | Credential-stripped substitute workspace, distinct user/attacker evidence, signed traces, review, and selective export implemented in [ADR-0022](./docs/decisions/0022-substitute-only-rehearsal-and-selective-promotion.md); the built-in backend is not a security sandbox |
 | `sova trace`, `diff`, `sentinel`, `monitor`, `ci`, and `self-check` | Deterministic local recorder, three-axis drift, one-shot sentinel/CI, and a durable scheduler with workspace-bound jobs, OS overlap exclusion, restart recovery, bounded retention, signed traces, and an HTTPS HMAC/idempotency/acknowledgement alert adapter. Service-manager templates ship for Linux, macOS, and Windows; remote collection, remediation, HA, and uptime remain deployment claims |
-| Registry, `sync`, adapters, `contribute`, and self-hosted community service | Offline content-addressed registry plus a loopback service with token-gated bounded staging, signer-pinned asynchronous verification, atomic promotion, signed live index, SSE events, and standard-profile leaderboard. A digest-pinned container/Caddy TLS blueprint ships, but a production deployment, operator, moderation, backups, abuse controls, and uptime evidence remain external gates |
+| Registry, `sync`, adapters, `contribute`, and self-hosted community service | Offline content-addressed registry plus a loopback service with token-gated bounded staging, signer-pinned asynchronous verification, atomic promotion, signed live index, SSE events, standard-profile leaderboard, and an exact endpoint/key-digest health contract. A non-root, read-only, capability-dropped digest-pinned container/Caddy TLS blueprint ships, but a production deployment, operator, identity policy, moderation, backups/restore drills, abuse controls, and uptime evidence remain external gates |
 | Local MCP | MCP `2025-11-25` stdio, safe tools, three exact-gated tools, out-of-band human approval, manifest pin, and self-check implemented in [ADR-0025](./docs/decisions/0025-local-mcp-out-of-band-authorization.md) |
-| Extension SDK, providers, targets, interoperability | Experimental fail-closed contracts, import-free discovery, machine-local digest-pinned preparation, exact human-approved subprocess execution, a preregistered paired provider/model experiment matrix, Python and Node offline verifiers, and a no-network conformance kit. Host execution is not a sandbox; external implementation ownership, provider transferability, and adoption remain unproven |
-| Probe, Arena, leaderboard, CTF, replay media | Deterministic standard-profile Arena, provider-capable message Arena, real-time sensor-instrumented multi-agent chamber, authorized provider-backed website Arena, and an installed-Chrome-validated browser-swarm lane with bounded roles sharing one opaque target-bound session are implemented with signed observable evidence; “fully sensed” is bounded to declared healthy sensor families, while arbitrary untrusted-code containment, total host observability, provider-quality comparison, and public comparative results remain unproven |
+| Extension SDK, providers, targets, interoperability | Experimental fail-closed contracts, import-free discovery, machine-local digest-pinned preparation, exact human-approved subprocess execution, a preregistered paired provider/model experiment matrix, Python and Node offline verifiers, a no-network conformance kit, and a strict OCI agent protocol with signed `describe`/`self-test`/`respond` conformance. Ordinary extension host execution is not a sandbox; external implementation ownership, provider transferability, and adoption remain unproven |
+| Probe, Arena, leaderboard, CTF, replay media | Deterministic standard-profile Arena, provider/OCI-capable message Arena, real-time sensor-instrumented multi-agent chamber, authorized provider-backed website Arena, adaptive multi-page semantic website exploration, and browser-swarm lanes are implemented with signed observable evidence. Installed-Chrome validation on a controlled loopback fixture covers semantic navigation, history, forms, drag, modal handling, bounded tabs, clean reproduction, video, and exact-moment replay. The prepared all-nine AI Goat provider campaign remains unrun because the final availability probe was rate-limited. Protocol-conforming third-party OCI agents are conditionally admitted only through an attested live gVisor `runsc` host and have no direct browser authority; mandatory tests pass, but this host has no registered live `runsc` lane. “Fully sensed” is bounded to declared healthy sensor families; total host observability, provider-quality comparison, and public comparative results remain unproven |
 | Research/publication programme | Private source, opportunity, invention, and publication-readiness ledgers maintained; public novelty and submission remain human/external gates |
 | Onboarding and adoption | Account-free `init`, local `doctor`, reviewed data removal, installation/first-value/air-gap guides, and user pathways implemented |
 | Release and governance | Deterministic SBOM/checksum tools, twelve evidence-based stable gates, cross-platform acceptance CI, candidate-only keyless Sigstore signing, GitHub provenance attestation, public governance, and compatibility policy implemented. The workflow refuses to describe its artifact as stable 1.0; the first stable public release remains blocked on external receipts and founder approval |
 | Standards and long horizon | Neutral conformance kit, schema/change governance, archival policy, and open-ended research branches implemented; independent adoption remains unproven |
-| Remaining validation | Founder-authorized non-fixture targets, real Windows/macOS/Linux desktop-driver fixtures, a live gVisor or per-workload-VM runner, credentialed multi-provider studies, independent causal reviewers and implementation owners, production community/monitor deployments, strongest-baseline benchmarks, external user workflows, and a promoted stable release |
+| Remaining validation | Founder-authorized non-fixture targets, real Windows/macOS/Linux desktop-driver fixtures, a registered live gVisor host with independently built third-party agent images, credentialed multi-provider studies, independent causal reviewers and implementation owners, production community/monitor deployments, strongest-baseline benchmarks, external user workflows, and a promoted stable release |
 
 The first engineering objective is now implemented as a bounded synthetic
 no-Atlas/no-MELRA vertical slice:

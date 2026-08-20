@@ -1,0 +1,2 @@
+{"artifactType":"sova.oci-agent-runtime","budgets":{"maxPromptBytes":49152,"maxResponseBytes":1048576,"timeoutSeconds":60},"entrypoint":"/opt/sova/agent","id":"example-contained-agent","image":"registry.example/sova/example-contained-agent@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","runtime":"runsc","schemaVersion":"0.1.0","security":{"credentials":"none","hostMounts":"none","network":"none","requiredIsolation":"gvisor-runsc","rootFilesystem":"read-only"}}
+

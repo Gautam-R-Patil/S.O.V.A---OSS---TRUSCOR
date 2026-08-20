@@ -1,0 +1,46 @@
+{
+  "artifactType": "sova.semantic-browser-mission",
+  "schemaVersion": "0.1.0",
+  "id": "sova:semantic-browser-mission:owned-workflow-example",
+  "title": "Owned multi-page workflow example",
+  "entryUrl": "http://127.0.0.1:9187/",
+  "objective": "Explore the owned fixture, exercise the visible multi-page workflow, and expose the planted observable marker.",
+  "allowedActions": [
+    "browser.navigate",
+    "browser.back",
+    "browser.click",
+    "browser.type",
+    "browser.select",
+    "browser.press",
+    "browser.hover",
+    "browser.drag",
+    "browser.dialog",
+    "browser.tab-new",
+    "browser.tab-close",
+    "browser.wait"
+  ],
+  "seedInputs": [
+    "enable research mode",
+    "blue owl"
+  ],
+  "setupActions": [],
+  "resetActions": [],
+  "oracle": {
+    "kind": "field-contains",
+    "path": "$.text",
+    "contains": "SOVA_WORKFLOW_TRIGGERED"
+  },
+  "budgets": {
+    "maxPlannerTurns": 8,
+    "maxActions": 32,
+    "maxActionsPerPlan": 4,
+    "maxDurationSeconds": 300,
+    "maxPages": 12,
+    "maxMutations": 24,
+    "maxConsecutiveFailures": 3,
+    "maxGeneratedTextCharacters": 1024,
+    "maxTotalTokens": 12000
+  },
+  "offensive": false,
+  "providerObservationDisclosure": "redacted-accessibility-snapshot"
+}

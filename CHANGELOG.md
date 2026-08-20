@@ -11,12 +11,37 @@ have independent version ledgers.
 
 ### Security
 
+- Hardened community ingestion against secrets hidden in compressed, nested,
+  and self-extracting ZIP members; aligned raw-file, base64, HTTP, and reverse-
+  proxy limits; and made rejected staging cleanup fail closed.
+- Made OCI-agent admission require an exact digest-pinned image and attested
+  `runsc` runtime before and after approval, reject adapter substitution, bind
+  native-execution provenance into signed Arena traces, and verify cleanup even
+  when the container engine becomes unavailable.
 - Upgraded the runtime dependency to `cryptography 50.x` after the fixed stable
   release became available, retired the temporary PKCS#7 advisory exception,
   and restored a strict no-ignored-advisory dependency audit.
 
 ### Added
 
+- Adaptive semantic browser exploration for controlled targets, with
+  secret-redacted accessibility observations, a closed typed action algebra,
+  multi-page UI workflows, per-batch approval, one shared hard deadline,
+  prerequisite-failure guards, persisted-oracle reproduction, signed trace
+  history, WebM recording, and decisive replay cues.
+- A strict third-party OCI agent protocol plus `agent conform-oci` and Arena
+  integration through an attested gVisor `runsc` boundary. Agents can return
+  messages or reviewed browser plans but never inherit browser, host,
+  credential, target, or approval authority.
+- One-step `sova replay FINDING.sova` and explicit `replay open`, with safe
+  local-file launch, automation-friendly `--no-open`, selected cue receipts,
+  WebM/MP4 duration validation, comparison-side event selection, and exact
+  decisive playback windows.
+- A digest-gated community deployment blueprint and preflight that builds a
+  non-root SOVA image, validates immutable resolved Compose images, stages a
+  protected operator token through a no-network initializer, aligns proxy and
+  service limits, and launches with no implicit image pull. Internet operation
+  remains subject to the documented external production gates.
 - Provider-backed `arena web` now supports the same explicit `--headed
   --record-video` path as browser detonation. Passing deterministic oracle
   events create visible exploit-confirmed chapters and canonical,

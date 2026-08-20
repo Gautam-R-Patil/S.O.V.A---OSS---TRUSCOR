@@ -39,6 +39,7 @@ from sova.community.config import (
     render_replay_clip_document,
     run_agent_arena_document,
     run_arena_document,
+    validate_agent_arena_document,
 )
 from sova.community.ctf import CTFScenario, build_ctf_catalog
 from sova.community.leaderboard import LeaderboardSubmission, build_static_leaderboard
@@ -84,5 +85,6 @@ __all__ = [
     "run_browser_swarm",
     "run_browser_swarm_document",
     "run_local_arena",
+    "validate_agent_arena_document",
     "verify_probe_response",
 ]

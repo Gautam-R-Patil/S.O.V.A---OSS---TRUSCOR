@@ -4,7 +4,7 @@
 
 ## Result
 
-**PASS for the declared bounded lane.** SOVA ran its five provider roles through
+**PASS for the historical Challenge 1 bounded lane.** SOVA ran its five provider roles through
 OpenRouter, executed the reviewed candidate in a headed installed-Chrome session
 against the operator-controlled loopback AI Goat instance, observed a
 deterministic flag-leak oracle, reproduced the behavior under a separate fresh
@@ -52,40 +52,58 @@ bounded artifact integrity, not external signer identity or recorder honesty.
 | Browser WebM | `ebaec6a5c7394e531b8bd467bd2d2ae7b42560a2d994174eca7f03c546b9f781` |
 | Replay cue document | `93bc9f35cbcdae445ff178c16cd9c6a9f15d433dc3affe5dcdda4c01761a7675` |
 
-`sova replay capsule` verified the complete capsule, selected the typed replay
-cue object and bound WebM, selected the reproduction trace as primary, and
-reported `opensAtDecisiveMoment: true`. Extracted frames at both cue offsets
+`sova replay FINDING.sova` is now the primary one-step proof command; it verifies
+the complete capsule, renders local HTML, selects the typed replay cue and bound
+WebM, and opens only the generated local-file URI. `--no-open` renders the same
+proof for automation, while `sova replay capsule SOURCE DESTINATION` remains the
+explicit-output compatibility form. The recorded Challenge 1 capsule selects
+the reproduction trace as primary and reports `opensAtDecisiveMoment: true`.
+Extracted frames at both cue offsets
 showed the actual AI Goat challenge UI, the target's exploit-triggered state,
 the leaked training response, and SOVA's trace-sequence-linked exploit chapter.
 
+## All-nine expansion status
+
+The current semantic Arena implementation can plan the full declared AI Goat
+surface, including the multi-page Knowledge Base create/synchronize/chat flows
+for Challenges 3, 7, and 8. All nine generated missions pass the static target,
+action-surface, reset, same-origin proxy, offline-embedding, and UI-contract
+preflights. This implementation result does **not** upgrade the historical
+Challenge 1 provider result into an all-nine pass.
+
+The final secret-free OpenRouter availability receipt records one request to the
+primary free model, `SOVA-PROVIDER-RATE-LIMIT`, no `Retry-After`, a free-tier
+account, `providerCallCount: 1`, and `campaignLaunched: false`. Earlier probes
+observed the same account-level result across all four ordered free-model routes.
+SOVA therefore did not launch a campaign that could not obtain a planner turn.
+No credential is present in this record. The installed local `dolphin3:8b`
+fallback answered a trivial three-word probe only after about two minutes and
+had already timed out on structured browser planning, so it is not counted as
+all-nine provider evidence either.
+
 ## Release-wide validation in the same checkout
 
-- `1268 passed, 20 skipped` in the complete public test suite;
-- total statement/branch coverage rounded to `95%` with the recording module at
-  `93%`;
+- 1,506 tests collected: 1,485 passed, 21 capability-gated skips, zero failures;
+- total statement/branch coverage `95.61%` with the recording module at `93%`;
 - `ruff` clean;
-- `mypy` clean across 194 source files;
-- parser audit: 111 unique leaf commands, every leaf with a callable handler and
+- `mypy` clean across 347 checked source and test files;
+- parser audit: 116 unique leaf commands, every leaf with a callable handler and
   working `--help`;
 - source distribution and universal wheel built successfully; and
 - the isolated wheel returned `sova 0.1.0a0`.
 
-The 20 skips are explicit optional host/runtime lanes (Codex login, live CUA
+The 21 skips are explicit optional host/runtime lanes (Codex login, live CUA
 desktop, installed-browser matrix, MELRA, Docker, and gVisor). They are not
 silently counted as passes. The real installed-Chrome/OpenRouter AI Goat lane
 above was run separately because it is credentialed and operator-authorized.
 
 ## Coverage boundary and next acceptance
 
-AI Goat Challenges 2, 4, 5, 6, and 9 fit the current chat campaign contract but
-require separate provider-disclosure approval before their prompts and declared
-metadata are sent to OpenRouter. Challenges 3, 7, and 8 require multi-page
-Knowledge Base creation/synchronization plus chatbot interaction, which version
-0.1 of the provider-assisted website Arena cannot autonomously plan or execute.
-Those three are **unsupported by this lane**, not misses and not passes.
-
-The next defensible expansion is a typed multi-page workflow contract whose
-models can select only reviewed semantic actions and variables, while SOVA
-retains origin confinement, per-action authorization, deterministic oracles,
-recording, signed evidence, and exact-moment replay. Free-roaming arbitrary
-browser/tool authority is intentionally not inferred from this acceptance.
+Challenges 2 through 9 are now supported by the bounded semantic mission
+contract, including the Knowledge Base workflows, but they remain **not run -
+unproven** in a provider-backed all-nine campaign. The next acceptance requires
+usable provider quota, completion of every mission and clean reproduction,
+offline verification of each signed capsule/trace, and duration-bounded decisive
+replay cues. Free-roaming arbitrary browser/tool authority, cross-origin access,
+host access, and universal UI coverage are intentionally not inferred from this
+implementation or the historical Challenge 1 result.

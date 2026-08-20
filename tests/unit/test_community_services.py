@@ -32,6 +32,7 @@ from sova.registry import (
     CommunityRegistryStore,
     CommunityServiceConfig,
     CommunityServiceLimits,
+    check_community_service_health,
     verify_community_service_index,
 )
 from sova.trace import TraceReader
@@ -216,6 +217,9 @@ def test_loopback_http_service_upload_queue_sse_and_restart(tmp_path: Path) -> N
     try:
         status, _, _ = _request(base + "/v1/health")
         assert status == 200
+        health = check_community_service_health(base + "/v1/health")
+        assert health["status"] == "ready"
+        assert health["loopbackVerified"] is True
         status, _, _ = _request(
             base + "/v1/submissions",
             token="wrong-" + "synthetic-service-token",
@@ -463,6 +467,18 @@ def test_monitor_and_registry_service_cli_routes(
     assert served[0].token == token.read_text(encoding="utf-8")
     assert "submitted content is verified" in capfd.readouterr().err
 
+    monkeypatch.setattr(
+        "sova.cli.check_community_service_health",
+        lambda url: {
+            "artifactType": "sova.community-service-health-verification",
+            "schemaVersion": "0.1.0",
+            "status": "ready",
+            "url": url,
+        },
+    )
+    assert main(["registry", "healthcheck"]) == 0
+    assert json.loads(capfd.readouterr().out)["status"] == "ready"
+
     index_store = CommunityRegistryStore(
         _service_config(tmp_path / "index-service", "sha256:" + "2" * 64)
     )
@@ -517,3 +533,4 @@ def test_monitor_and_registry_service_cli_routes(
     )
     assert json.loads(capfd.readouterr().out)["uploadPerformed"] is False
     assert json.loads(upload.read_text(encoding="utf-8"))["files"]
+    assert upload.read_bytes().endswith(b"}")

@@ -182,7 +182,10 @@ class ModelRouter:
             try:
                 response = model.respond(prompt)
             except Exception as error:  # noqa: BLE001 - provider boundary
-                failures.append(f"{model.model_id}:{type(error).__name__}")
+                failure = (
+                    error.issue.code if isinstance(error, FormatError) else type(error).__name__
+                )
+                failures.append(f"{model.model_id}:{failure}")
                 continue
             response_bytes = canonical_json_bytes(
                 {

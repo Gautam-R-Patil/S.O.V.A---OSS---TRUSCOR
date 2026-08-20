@@ -79,6 +79,10 @@ labeled cases. Model-judge output is not deterministic execution evidence.
 
 - `sova playback TRACE`: canonical text event timeline.
 - `sova query TRACE`: filters by family prefix, actor, and sequence interval.
+- `sova replay FINDING.sova [--output OUTPUT.html] [--no-open]`: verifies the
+  capsule, writes one inert local replay, reports the selected decisive cue and
+  duration proof, and opens only the generated local file unless automation
+  disables launch. `sova replay open` is the explicit equivalent.
 - `sova replay timeline SOURCE OUTPUT [--comparison TRACE] [--media VIDEO]`:
   self-contained,
   inert, scrubbable, side-by-side HTML with play/pause, speed, sensor lanes,

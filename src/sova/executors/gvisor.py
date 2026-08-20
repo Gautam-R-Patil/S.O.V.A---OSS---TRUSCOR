@@ -35,9 +35,9 @@ if TYPE_CHECKING:
 
 _DIGEST_IMAGE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64}$")
 _CONTAINER_NAME = re.compile(r"^sova-runsc-[a-z0-9]{20}$")
-_RUNTIME_NAME = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
 _MAX_ARGS = 256
 _MAX_ARG_BYTES = 64 * 1024
+_MAX_STDIN_BYTES = 64 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,8 +83,11 @@ def attest_gvisor(
         raise FormatError("SOVA-GVISOR-DOCKER", "container engine executable must exist")
     if _DIGEST_IMAGE.fullmatch(image) is None:
         raise FormatError("SOVA-GVISOR-IMAGE", "image must be an exact repository@sha256 digest")
-    if _RUNTIME_NAME.fullmatch(runtime) is None:
-        raise FormatError("SOVA-GVISOR-RUNTIME", "runtime name is invalid")
+    if runtime != "runsc":
+        raise FormatError(
+            "SOVA-GVISOR-RUNTIME",
+            "gVisor isolation requires the Docker runtime name to be exactly runsc",
+        )
     command_runner = runner or BoundedDockerCommandRunner()
     cancellation = CancellationToken()
     info = command_runner.run(
@@ -198,8 +201,10 @@ def gvisor_backend_descriptor(attestation: GVisorAttestation) -> BackendDescript
 
 
 def _container_argv(inputs: dict[str, Any]) -> tuple[str, ...]:
-    if set(inputs) != {"argv"}:
-        raise FormatError("SOVA-GVISOR-INPUT", "gVisor execution accepts only argv")
+    if not {"argv"} <= set(inputs) <= {"argv", "stdin"}:
+        raise FormatError(
+            "SOVA-GVISOR-INPUT", "gVisor execution accepts only argv and optional stdin"
+        )
     argv = inputs.get("argv")
     if (
         not isinstance(argv, list)
@@ -215,8 +220,20 @@ def _container_argv(inputs: dict[str, Any]) -> tuple[str, ...]:
     return tuple(argv)
 
 
+def _container_stdin(inputs: dict[str, Any]) -> bytes | None:
+    value = inputs.get("stdin")
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise FormatError("SOVA-GVISOR-STDIN", "stdin must be a UTF-8 string")
+    encoded = value.encode("utf-8")
+    if len(encoded) > _MAX_STDIN_BYTES:
+        raise FormatError("SOVA-GVISOR-STDIN", "stdin exceeds the 64 KiB encoded budget")
+    return encoded
+
+
 class GVisorOciExecutor:
-    """Run exact container-local argv through an attested runsc runtime."""
+    """Run exact container-local argv and optional bounded stdin through runsc."""
 
     name = "sova-gvisor-runsc"
 
@@ -244,6 +261,16 @@ class GVisorOciExecutor:
     @property
     def attestation(self) -> GVisorAttestation:
         return self._attestation
+
+    def reattest(self) -> GVisorOciExecutor:
+        """Return a fresh executor after rechecking the same engine, image, and runtime."""
+        return GVisorOciExecutor(
+            self._docker,
+            self._image,
+            runtime=self._runtime,
+            policy=self._policy,
+            runner=self._runner,
+        )
 
     def capabilities(self) -> tuple[Capability, ...]:
         if not self._attestation.ready:
@@ -291,12 +318,14 @@ class GVisorOciExecutor:
                 error_code="SOVA-EXECUTOR-CANCELLED",
             )
         argv = _container_argv(request.inputs)
+        stdin_data = _container_stdin(request.inputs)
         name = f"sova-runsc-{uuid.uuid4().hex[:20]}"
         result = self._runner.run(
-            self._run_argv(name, argv),
+            self._run_argv(name, argv, stdin_enabled=stdin_data is not None),
             timeout_seconds=min(request.timeout_seconds, self._policy.max_runtime_seconds),
             cancellation=cancellation,
             max_output_bytes=self._policy.max_output_bytes,
+            stdin_data=stdin_data,
         )
         cleanup = self._cleanup(name)
         status = {
@@ -345,12 +374,19 @@ class GVisorOciExecutor:
             ),
         )
 
-    def _run_argv(self, name: str, argv: tuple[str, ...]) -> tuple[str, ...]:
+    def _run_argv(
+        self,
+        name: str,
+        argv: tuple[str, ...],
+        *,
+        stdin_enabled: bool,
+    ) -> tuple[str, ...]:
         if _CONTAINER_NAME.fullmatch(name) is None:  # pragma: no cover - generated locally
             raise FormatError("SOVA-GVISOR-NAME", "generated container name is invalid")
         return (
             str(self._docker),
             "run",
+            *(("--interactive",) if stdin_enabled else ()),
             "--rm",
             "--pull",
             "never",
@@ -395,13 +431,27 @@ class GVisorOciExecutor:
             cancellation=token,
             max_output_bytes=1024 * 1024,
         )
-        inspection = self._runner.run(
-            (str(self._docker), "inspect", name),
+        absence = self._runner.run(
+            (
+                str(self._docker),
+                "container",
+                "ls",
+                "--all",
+                "--filter",
+                f"name=^/{name}$",
+                "--format",
+                "{{.Names}}",
+            ),
             timeout_seconds=10,
             cancellation=token,
             max_output_bytes=1024 * 1024,
         )
-        return inspection.state == "completed" and inspection.returncode != 0
+        # A failed ``inspect`` cannot distinguish an absent container from an
+        # unavailable daemon.  A successful filtered listing proves both that
+        # the daemon answered and that the exact generated name is absent.
+        return (
+            absence.state == "completed" and absence.returncode == 0 and not absence.stdout.strip()
+        )
 
 
 __all__ = [

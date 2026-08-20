@@ -17,6 +17,7 @@ import pytest
 from sova import cli
 from sova.formats.errors import FormatError
 from sova.live import owned_web_target
+from sova.runtime import ModelRouter
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -93,6 +94,110 @@ def test_docker_attestation_cli_delegates_and_reports_readiness(
     assert cli.main(["safety", "attest-docker", "--docker", str(docker), "--image", image]) == 0
     assert observed == [(docker.resolve(), image)]
     assert json.loads(capfd.readouterr().out)["rawDaemonConfigurationIncluded"] is False
+
+
+def test_gvisor_attestation_cli_delegates_and_reports_readiness(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    docker = tmp_path / "docker.exe"
+    docker.write_bytes(b"fixture")
+    observed: list[tuple[Path, str, str]] = []
+
+    class _Attestation:
+        ready = True
+
+        @staticmethod
+        def to_mapping() -> dict[str, object]:
+            return {"readiness": "ready", "runtimeRegistered": True}
+
+    def attest(path: Path, image: str, *, runtime: str) -> _Attestation:
+        observed.append((path, image, runtime))
+        return _Attestation()
+
+    monkeypatch.setattr(cli, "attest_gvisor", attest)
+    image = "example.invalid/sova/fixture@sha256:" + "b" * 64
+    assert (
+        cli.main(
+            [
+                "safety",
+                "attest-gvisor",
+                "--docker",
+                str(docker),
+                "--image",
+                image,
+                "--runtime",
+                "runsc",
+            ]
+        )
+        == 0
+    )
+    assert observed == [(docker.resolve(), image, "runsc")]
+    assert json.loads(capfd.readouterr().out)["runtimeRegistered"] is True
+
+
+def test_oci_agent_conformance_cli_routes_digest_bound_approval(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    _tty(monkeypatch)
+    docker = tmp_path / "docker.exe"
+    docker.write_bytes(b"fixture")
+    runtime_path = tmp_path / "runtime.json"
+    runtime_path.write_text("{}", encoding="utf-8")
+    runtime = SimpleNamespace(identifier="fixture-agent")
+    monkeypatch.setattr(cli, "oci_agent_runtime_from_mapping", lambda _value: runtime)
+
+    def conform(
+        received_runtime: object,
+        received_docker: Path,
+        destination: Path,
+        *,
+        approval_prompt: Any,
+    ) -> Any:
+        assert received_runtime is runtime
+        assert received_docker == docker.resolve()
+        assert (
+            approval_prompt(SimpleNamespace(summary={"network": "none"}, exact_phrase="APPROVE"))
+            == "APPROVE"
+        )
+        return SimpleNamespace(
+            status="pass",
+            runtime=destination / "runtime.json",
+            report=destination / "report.json",
+            trace=destination / "conformance.sova-trace",
+        )
+
+    monkeypatch.setattr(cli, "run_oci_agent_conformance", conform)
+    destination = tmp_path / "result"
+    assert (
+        cli.main(
+            [
+                "agent",
+                "conform-oci",
+                str(runtime_path),
+                str(destination),
+                "--docker",
+                str(docker),
+            ]
+        )
+        == 0
+    )
+    output = json.loads(capfd.readouterr().out)
+    assert output["status"] == "pass"
+    assert output["trace"].endswith("conformance.sova-trace")
+
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: False))
+    with pytest.raises(FormatError, match="human-operated"):
+        cli._agent_conform_oci(
+            argparse.Namespace(
+                runtime=runtime_path,
+                destination=destination,
+                docker=docker,
+            )
+        )
 
 
 def test_browser_profile_cli_provisions_inspects_pairs_and_target_binds(
@@ -483,6 +588,354 @@ def test_all_campaign_cli_routes_delegate_with_no_target_tools_in_test(
     browser.status = "not-confirmed"
     assert cli._hunt_browser(external) == 2
     capfd.readouterr()
+
+
+def test_semantic_arena_cli_requires_disclosure_binds_budgets_and_streams(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    _tty(monkeypatch)
+    executable = tmp_path / "executable.exe"
+    target, proof, router = object(), object(), object()
+    runtime = SimpleNamespace(max_model_turns=5, max_total_tokens=100)
+    mission = SimpleNamespace(max_planner_turns=4, max_total_tokens=80)
+    semantic = _campaign_artifacts(tmp_path)
+    semantic.mission = tmp_path / "mission.json"
+    semantic.target = tmp_path / "target.json"
+    monkeypatch.setattr(cli, "_campaign_executables", lambda _args: (executable, executable))
+    monkeypatch.setattr(
+        cli,
+        "_load_object",
+        lambda path: (
+            {"artifactType": "sova.provider-runtime"} if path == tmp_path / "provider.json" else {}
+        ),
+    )
+    monkeypatch.setattr(cli, "target_manifest_from_mapping", lambda _value: target)
+    monkeypatch.setattr(cli, "semantic_browser_mission_from_mapping", lambda _value: mission)
+    monkeypatch.setattr(cli, "control_proof_from_mapping", lambda _value: proof)
+    monkeypatch.setattr(cli, "provider_runtime_from_mapping", lambda _value: runtime)
+    monkeypatch.setattr(cli, "provider_model_router", lambda *_args, **_kwargs: router)
+
+    def run_semantic(*args: object, **options: Any) -> Any:
+        assert args[:2] == (target, mission)
+        assert options["router"] is router
+        assert options["control_proof"] is proof
+        options["event_observer"]("semantic-browser", {"kind": "run.started", "seq": 2})
+        return semantic
+
+    monkeypatch.setattr(cli, "run_live_semantic_browser_workflow", run_semantic)
+    semantic_args = argparse.Namespace(
+        destination=tmp_path / "result",
+        package_runner=None,
+        browser_executable=None,
+        manifest=tmp_path / "target.json",
+        mission=tmp_path / "mission.json",
+        provider_runtime=tmp_path / "provider.json",
+        control_proof=tmp_path / "proof.json",
+        allow_provider_calls=True,
+        allow_target_observation_disclosure=True,
+        stream_jsonl=True,
+    )
+    assert cli._arena_explore_web(semantic_args) == 0
+    semantic_output = [json.loads(line) for line in capfd.readouterr().out.splitlines()]
+    assert semantic_output[0]["artifactType"] == "sova.arena-semantic-browser-live-event"
+    assert semantic_output[-1]["artifactType"] == "sova.arena-semantic-browser-cli-result"
+    assert semantic_output[-1]["mission"].endswith("mission.json")
+
+    denied_disclosure = vars(semantic_args) | {"allow_target_observation_disclosure": False}
+    with pytest.raises(FormatError, match="explicit disclosure authorization"):
+        cli._arena_explore_web(argparse.Namespace(**denied_disclosure))
+
+    mission.max_planner_turns = 6
+    with pytest.raises(FormatError, match="planner-turn budget"):
+        cli._arena_explore_web(semantic_args)
+
+    mission.max_planner_turns = 4
+    with pytest.raises(FormatError, match="provider-backed semantic"):
+        cli._arena_explore_web(
+            argparse.Namespace(**(vars(semantic_args) | {"allow_provider_calls": False}))
+        )
+
+    mission.max_total_tokens = None
+    with pytest.raises(FormatError, match="token budget must be present"):
+        cli._arena_explore_web(semantic_args)
+    mission.max_total_tokens = 101
+    with pytest.raises(FormatError, match="no larger"):
+        cli._arena_explore_web(semantic_args)
+
+    mission.max_total_tokens = 80
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {"artifactType": "unknown"})
+    with pytest.raises(FormatError, match="provider or OCI"):
+        cli._arena_explore_web(semantic_args)
+
+
+def test_semantic_arena_accepts_only_approved_attested_oci_agent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    _tty(monkeypatch)
+    executable = tmp_path / "executable.exe"
+    executable.write_bytes(b"fixture")
+    target = SimpleNamespace(digest="sha256:" + "1" * 64)
+    mission = SimpleNamespace(digest="sha256:" + "2" * 64)
+    oci_runtime = SimpleNamespace(image="image@sha256:" + "3" * 64, runtime="runsc")
+    executor = object()
+
+    class _Adapter:
+        model_id = "oci-agent:fixture"
+
+        @staticmethod
+        def conform() -> dict[str, str]:
+            return {"status": "pass"}
+
+    adapter = _Adapter()
+    semantic = _campaign_artifacts(tmp_path)
+    semantic.mission = tmp_path / "result" / "mission.json"
+    semantic.target = tmp_path / "result" / "target.json"
+    monkeypatch.setattr(cli, "_require_live_campaign_terminal", lambda: None)
+    monkeypatch.setattr(cli, "_campaign_executables", lambda _args: (executable, executable))
+    monkeypatch.setattr(
+        cli,
+        "_load_object",
+        lambda path: (
+            {"artifactType": "sova.oci-agent-runtime"}
+            if path == tmp_path / "oci-agent.json"
+            else {}
+        ),
+    )
+    monkeypatch.setattr(cli, "target_manifest_from_mapping", lambda _value: target)
+    monkeypatch.setattr(cli, "semantic_browser_mission_from_mapping", lambda _value: mission)
+    monkeypatch.setattr(cli, "oci_agent_runtime_from_mapping", lambda _value: oci_runtime)
+    monkeypatch.setattr(cli, "_detected_path", lambda *_args, **_kwargs: executable)
+    monkeypatch.setattr(cli, "GVisorOciExecutor", lambda *_args, **_kwargs: executor)
+
+    def authorize(
+        received_runtime: object,
+        received_executor: object,
+        workspace: Path,
+        *,
+        use_scope: dict[str, object],
+        approval_prompt: Any,
+    ) -> _Adapter:
+        assert received_runtime is oci_runtime
+        assert received_executor is executor
+        assert workspace == (tmp_path / "result")
+        assert use_scope["targetDigest"] == target.digest
+        assert use_scope["browserAuthorityInherited"] is False
+        assert (
+            approval_prompt(SimpleNamespace(summary={"network": "none"}, exact_phrase="APPROVE"))
+            == "APPROVE"
+        )
+        return adapter
+
+    monkeypatch.setattr(cli, "authorize_oci_agent_adapter", authorize)
+
+    def run_semantic(*_args: object, **options: Any) -> Any:
+        assert isinstance(options["router"], ModelRouter)
+        return semantic
+
+    monkeypatch.setattr(cli, "run_live_semantic_browser_workflow", run_semantic)
+    args = argparse.Namespace(
+        destination=tmp_path / "result",
+        package_runner=None,
+        browser_executable=None,
+        manifest=tmp_path / "target.json",
+        mission=tmp_path / "mission.json",
+        provider_runtime=tmp_path / "oci-agent.json",
+        control_proof=None,
+        allow_provider_calls=False,
+        allow_sandboxed_agent_code=True,
+        allow_target_observation_disclosure=True,
+        stream_jsonl=False,
+        docker=None,
+    )
+    assert cli._arena_explore_web(args) == 0
+    assert json.loads(capfd.readouterr().out)["status"] == "pass"
+    with pytest.raises(FormatError, match="allow-sandboxed-agent-code"):
+        cli._arena_explore_web(
+            argparse.Namespace(**(vars(args) | {"allow_sandboxed_agent_code": False}))
+        )
+
+
+def _agent_arena_args(tmp_path: Path, **changes: Any) -> argparse.Namespace:
+    values = {
+        "specification": tmp_path / "agent-arena.json",
+        "destination": tmp_path / "agent-arena-output",
+        "allow_provider_calls": False,
+        "allow_sandboxed_agent_code": False,
+        "docker": None,
+    }
+    values.update(changes)
+    return argparse.Namespace(**values)
+
+
+def test_agent_arena_oci_authority_and_document_guards(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with pytest.raises(FormatError, match="execution authorization"):
+        cli._arena_agent_run(_agent_arena_args(tmp_path))
+
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {"participants": {}})
+    with pytest.raises(FormatError, match="must be arrays"):
+        cli._arena_agent_run(_agent_arena_args(tmp_path, allow_provider_calls=True))
+
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {"participants": [{}]})
+    with pytest.raises(FormatError, match="provider-backed"):
+        cli._arena_agent_run(_agent_arena_args(tmp_path, allow_sandboxed_agent_code=True))
+
+    document = {"participants": [], "ociParticipants": [{"id": "agent", "runtime": {}}]}
+    monkeypatch.setattr(cli, "_load_object", lambda _path: document)
+    with pytest.raises(FormatError, match="require --allow-sandboxed-agent-code"):
+        cli._arena_agent_run(_agent_arena_args(tmp_path, allow_provider_calls=True))
+
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: False))
+    with pytest.raises(FormatError, match="human-operated"):
+        cli._arena_agent_run(_agent_arena_args(tmp_path, allow_sandboxed_agent_code=True))
+
+
+@pytest.mark.parametrize(
+    ("participant", "message"),
+    [
+        ([], "fields are invalid"),
+        ({"id": 1, "runtime": {}}, "values are invalid"),
+    ],
+)
+def test_agent_arena_oci_participant_shape_guards(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    participant: object,
+    message: str,
+) -> None:
+    _tty(monkeypatch)
+    monkeypatch.setattr(
+        cli,
+        "validate_agent_arena_document",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        cli,
+        "_load_object",
+        lambda _path: {"participants": [], "ociParticipants": [participant]},
+    )
+    docker = tmp_path / "docker.exe"
+    docker.write_bytes(b"fixture")
+    monkeypatch.setattr(cli, "_detected_path", lambda *_args, **_kwargs: docker)
+    with pytest.raises(FormatError, match=message):
+        cli._arena_agent_run(_agent_arena_args(tmp_path, allow_sandboxed_agent_code=True))
+
+
+def test_agent_arena_oci_rejects_destination_and_id_drift_then_runs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    _tty(monkeypatch)
+    monkeypatch.setattr(
+        cli,
+        "validate_agent_arena_document",
+        lambda *_args, **_kwargs: None,
+    )
+    runtime_document = {"artifactType": "sova.oci-agent-runtime"}
+    document = {
+        "participants": [],
+        "ociParticipants": [{"id": "agent", "runtime": runtime_document}],
+    }
+    monkeypatch.setattr(cli, "_load_object", lambda _path: document)
+    occupied = tmp_path / "occupied"
+    occupied.mkdir()
+    (occupied / "file").write_text("x", encoding="utf-8")
+    with pytest.raises(FormatError, match="empty real directory"):
+        cli._arena_agent_run(
+            _agent_arena_args(
+                tmp_path,
+                destination=occupied,
+                allow_sandboxed_agent_code=True,
+            )
+        )
+
+    docker = tmp_path / "docker.exe"
+    docker.write_bytes(b"fixture")
+    monkeypatch.setattr(cli, "_detected_path", lambda *_args, **_kwargs: docker)
+    runtime = SimpleNamespace(identifier="different", image="image", runtime="runsc")
+    monkeypatch.setattr(cli, "oci_agent_runtime_from_mapping", lambda _value: runtime)
+    with pytest.raises(FormatError, match="id must match"):
+        cli._arena_agent_run(_agent_arena_args(tmp_path, allow_sandboxed_agent_code=True))
+
+    runtime.identifier = "agent"
+    executor = object()
+    adapter = SimpleNamespace(conform=lambda: {"status": "pass"})
+    monkeypatch.setattr(cli, "GVisorOciExecutor", lambda *_args, **_kwargs: executor)
+
+    def authorize(
+        received_runtime: object,
+        received_executor: object,
+        workspace: Path,
+        *,
+        use_scope: dict[str, object],
+        approval_prompt: Any,
+    ) -> object:
+        assert received_runtime is runtime and received_executor is executor
+        assert workspace == (tmp_path / "agent-arena-output")
+        assert use_scope["participant"] == "agent"
+        assert (
+            approval_prompt(SimpleNamespace(summary={"network": "none"}, exact_phrase="APPROVE"))
+            == "APPROVE"
+        )
+        return adapter
+
+    monkeypatch.setattr(cli, "authorize_oci_agent_adapter", authorize)
+    artifacts = SimpleNamespace(
+        status="pass",
+        report=tmp_path / "report.json",
+        traces=(tmp_path / "trace.sova-trace",),
+        capsules=(tmp_path / "arena.sova",),
+    )
+
+    def run(
+        received_document: object,
+        destination: Path,
+        **options: Any,
+    ) -> object:
+        assert received_document is document
+        assert destination == tmp_path / "agent-arena-output"
+        assert options["external_models"] == {"agent": adapter}
+        assert options["provider_calls_authorized"] is False
+        return artifacts
+
+    monkeypatch.setattr(cli, "run_agent_arena_document", run)
+    assert cli._arena_agent_run(_agent_arena_args(tmp_path, allow_sandboxed_agent_code=True)) == 0
+    assert json.loads(capfd.readouterr().out)["status"] == "pass"
+
+
+def test_agent_arena_validates_complete_document_before_oci_setup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _tty(monkeypatch)
+    document = {
+        "participants": [],
+        "ociParticipants": [{"id": "agent", "runtime": {}}],
+    }
+    monkeypatch.setattr(cli, "_load_object", lambda _path: document)
+    monkeypatch.setattr(
+        cli,
+        "_detected_path",
+        lambda *_args, **_kwargs: pytest.fail("OCI setup ran before document validation"),
+    )
+    destination = tmp_path / "must-not-exist"
+    with pytest.raises(FormatError, match="missing: budget, matches, profile"):
+        cli._arena_agent_run(
+            argparse.Namespace(
+                specification=tmp_path / "arena.json",
+                destination=destination,
+                allow_provider_calls=False,
+                allow_sandboxed_agent_code=True,
+                docker=None,
+            )
+        )
+    assert not destination.exists()
 
 
 def test_arena_chamber_cli_requires_fixture_authority_and_streams_canonical_events(

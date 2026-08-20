@@ -12,6 +12,15 @@ that a local `TraceWriter` is still producing.
 
 ## Interfaces
 
+`sova replay FINDING.sova [--output OUTPUT.html] [--no-open]` is the human
+shortcut. It verifies the capsule, derives `FINDING-replay.html` when no output
+is supplied, writes only a regular local file, and opens that exact `file:///`
+URI unless `--no-open` is selected. The machine-readable receipt names the
+selected trace side, decisive oracle event and sequence, media offset and
+duration, and whether the cue is actually duration-bounded. Symlink output
+paths are rejected. The explicit `sova replay open` spelling has identical
+semantics.
+
 `sova replay timeline SOURCE OUTPUT [--comparison TRACE] [--media VIDEO]`
 writes one self-contained, offline HTML file. `sova replay capsule CAPSULE
 OUTPUT` verifies a `.sova` package and selects its primary trace, optional
@@ -37,11 +46,16 @@ Both interfaces provide:
 When reviewed WebM or MP4 media is supplied, the static page embeds the bytes
 as a local data URL with native playback controls. Media without a cue index is
 identified as session-level rather than event-time synchronized. A valid cue
-index makes the page select the decisive `oracle.completed` event, seek two
-seconds before its bounded video offset, and expose a five-second decisive
-playback window. The page displays the synchronization method and uncertainty;
-it does not call host-clock synchronization a cryptographic frame timestamp.
-Media is never accepted by the live-tail service.
+index makes the page select the decisive `oracle.completed` event from either
+trace side, seek to its bounded pre-roll, and expose its declared decisive
+playback window. `opensAtDecisiveMoment` is true only when SOVA parses a
+finalized WebM/MP4 duration and proves that the cue and chapter offsets fall
+inside it; it does not assert that the requested pre/post-roll window itself
+fits. The player clamps the requested window to the available media duration.
+Container magic or a cue object alone is insufficient. The page
+displays the synchronization method and uncertainty; it does not call
+host-clock synchronization a cryptographic frame timestamp. Media is never
+accepted by the live-tail service.
 
 Capsule replay uses exact verified object descriptors. If more than one
 candidate comparison trace or visual recording exists, it refuses ambiguity

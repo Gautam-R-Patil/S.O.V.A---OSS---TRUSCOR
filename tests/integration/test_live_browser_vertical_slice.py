@@ -659,6 +659,7 @@ def test_tool_isolated_agent_roles_plan_an_approved_real_browser_campaign(
     assert observed["orchestration"] == TraceReader(artifacts.orchestration_trace).events()
     assert any(channel.startswith("attempt-") for channel in observed)
     assert artifacts.browser.replay_cues is not None
+    assert artifacts.browser.discovery_capsule is not None
     descriptors = PackageReader(artifacts.browser.discovery_capsule).verify("sova.capsule")
     assert any(item.role == "visual-replay" for item in descriptors)
     assert any(item.role == "replay-cues" for item in descriptors)

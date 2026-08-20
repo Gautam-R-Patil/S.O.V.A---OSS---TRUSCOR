@@ -191,9 +191,12 @@ def test_transport_and_fake_failure_normalization(monkeypatch: MonkeyPatch) -> N
         with pytest.raises(FormatError, match="origin is invalid"):
             UrllibTransport((origin,))
     transport = UrllibTransport(("https://example.com",))
-    for timeout in (0, 61):
+    for timeout in (0, 61, 301):
         with pytest.raises(ProviderError, match="timeout"):
             transport.send(HttpRequest("GET", "https://example.com", {}, None), timeout=timeout)
+    loopback = UrllibTransport(("http://127.0.0.1:11434",))
+    with pytest.raises(ProviderError, match="300 seconds"):
+        loopback.send(HttpRequest("GET", "http://127.0.0.1:11434", {}, None), timeout=301)
     with pytest.raises(ProviderError, match="not pinned"):
         transport.send(
             HttpRequest("GET", "https://user:pass@example.com/path", {}, None), timeout=1

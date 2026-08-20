@@ -156,6 +156,28 @@ def _selected(
     return build
 
 
+def _playwright_targeted(
+    *names: str,
+) -> Callable[[Mapping[str, Any]], dict[str, Any]]:
+    """Normalize SOVA snapshot refs to Playwright MCP's current target field."""
+
+    def build(arguments: Mapping[str, Any]) -> dict[str, Any]:
+        ref = arguments.get("ref")
+        target = arguments.get("target")
+        if ref is not None and target is not None and ref != target:
+            raise FormatError(
+                "SOVA-MCP-PLAYWRIGHT-TARGET",
+                "browser action supplied conflicting ref and target locators",
+            )
+        normalized = target if target is not None else ref
+        values = {name: arguments[name] for name in names if name in arguments}
+        if normalized is not None:
+            values["target"] = normalized
+        return values
+
+    return build
+
+
 def _renamed(
     names: Mapping[str, str],
     *,
@@ -206,6 +228,17 @@ def _navigate_builder(
                 details={"requestedOrigin": requested, "allowedOrigins": sorted(normalized)},
             )
         return {"url": value}
+
+    return build
+
+
+def _tab_new_builder(
+    allowed_origins: tuple[str, ...],
+) -> Callable[[Mapping[str, Any]], dict[str, Any]]:
+    checked_navigation = _navigate_builder(allowed_origins)
+
+    def build(arguments: Mapping[str, Any]) -> dict[str, Any]:
+        return {"action": "new", **checked_navigation(arguments)}
 
     return build
 
@@ -495,13 +528,24 @@ def playwright_mappings(*, allowed_origins: tuple[str, ...] = ()) -> tuple[ToolM
             result_validator=location_validator,
         ),
         ToolMapping(
+            action="browser.back",
+            tool="browser_navigate_back",
+            version="0.1",
+            side_effect=SideEffect.MUTATE,
+            idempotent=False,
+            evidence=("url", "snapshot"),
+            argument_builder=_selected(),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
+        ToolMapping(
             action="browser.click",
             tool="browser_click",
             version="0.1",
             side_effect=SideEffect.MUTATE,
             idempotent=False,
             evidence=("snapshot",),
-            argument_builder=_selected("element", "target", "doubleClick"),
+            argument_builder=_playwright_targeted("element", "doubleClick"),
             post_observe_tool=snapshot,
             result_validator=location_validator,
         ),
@@ -512,7 +556,67 @@ def playwright_mappings(*, allowed_origins: tuple[str, ...] = ()) -> tuple[ToolM
             side_effect=SideEffect.MUTATE,
             idempotent=False,
             evidence=("snapshot",),
-            argument_builder=_selected("element", "target", "text", "submit", "slowly"),
+            argument_builder=_playwright_targeted("element", "text", "submit", "slowly"),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
+        ToolMapping(
+            action="browser.select",
+            tool="browser_select_option",
+            version="0.1",
+            side_effect=SideEffect.MUTATE,
+            idempotent=False,
+            evidence=("snapshot",),
+            argument_builder=_playwright_targeted("element", "values"),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
+        ToolMapping(
+            action="browser.press",
+            tool="browser_press_key",
+            version="0.1",
+            side_effect=SideEffect.MUTATE,
+            idempotent=False,
+            evidence=("snapshot",),
+            argument_builder=_selected("key"),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
+        ToolMapping(
+            action="browser.hover",
+            tool="browser_hover",
+            version="0.1",
+            side_effect=SideEffect.READ,
+            idempotent=True,
+            evidence=("snapshot",),
+            argument_builder=_playwright_targeted("element"),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
+        ToolMapping(
+            action="browser.drag",
+            tool="browser_drag",
+            version="0.1",
+            side_effect=SideEffect.MUTATE,
+            idempotent=False,
+            evidence=("snapshot",),
+            argument_builder=_selected(
+                "startElement",
+                "startTarget",
+                "endElement",
+                "endTarget",
+            ),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
+        ToolMapping(
+            action="browser.dialog",
+            tool="browser_handle_dialog",
+            version="0.1",
+            side_effect=SideEffect.MUTATE,
+            idempotent=False,
+            evidence=("snapshot",),
+            argument_builder=_selected("accept", "promptText"),
             post_observe_tool=snapshot,
             result_validator=location_validator,
         ),
@@ -536,6 +640,28 @@ def playwright_mappings(*, allowed_origins: tuple[str, ...] = ()) -> tuple[ToolM
             evidence=("tabs",),
             argument_builder=_selected("action", "index", "url"),
             post_observe_tool=snapshot,
+        ),
+        ToolMapping(
+            action="browser.tab-new",
+            tool="browser_tabs",
+            version="0.1",
+            side_effect=SideEffect.MUTATE,
+            idempotent=False,
+            evidence=("tabs", "snapshot"),
+            argument_builder=_tab_new_builder(allowed_origins),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
+        ),
+        ToolMapping(
+            action="browser.tab-close",
+            tool="browser_tabs",
+            version="0.1",
+            side_effect=SideEffect.MUTATE,
+            idempotent=False,
+            evidence=("tabs", "snapshot"),
+            argument_builder=_selected(constants={"action": "close"}),
+            post_observe_tool=snapshot,
+            result_validator=location_validator,
         ),
         ToolMapping(
             action="browser.screenshot",

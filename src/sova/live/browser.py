@@ -65,6 +65,8 @@ BrowserEventObserver = Callable[[str, dict[str, Any]], None]
 ScenarioBatch = tuple[tuple[str, dict[str, Any]], ...]
 
 _LOOPBACK = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
 def _channel_observer(
     observer: BrowserEventObserver | None,
     channel: str,
@@ -384,8 +386,14 @@ def verified_browser_control(
     control_proof: ControlProof | None,
     *,
     now: datetime | None = None,
+    minimum_ttl: timedelta = timedelta(minutes=10),
 ) -> tuple[tuple[str, ...], str, ControlProof, str]:
     """Bind one target to one current proof without starting execution."""
+    if not timedelta(seconds=1) <= minimum_ttl <= timedelta(hours=2):
+        raise FormatError(
+            "SOVA-LIVE-CONTROL-PROOF-TTL",
+            "required target-control proof lifetime must be within two hours",
+        )
     conformance = validate_target_manifest(target)
     if not conformance["accepted"]:
         raise FormatError("SOVA-LIVE-TARGET", "target manifest failed conformance")
@@ -410,7 +418,7 @@ def verified_browser_control(
             "sova-control:" + secrets.token_urlsafe(18),
             {"loopback": True},
             current - timedelta(seconds=1),
-            current + timedelta(minutes=10),
+            current + max(timedelta(minutes=10), minimum_ttl),
             "sova.loopback-control-verifier/0.1",
         )
         return origins, host, proof, "verified-loopback"
@@ -643,9 +651,7 @@ def run_live_browser_assessment(  # noqa: PLR0913, PLR0915 - evidence phases sta
                 signing_key=signing_key,
                 environment=environment,
                 fingerprints=fingerprints,
-                event_observer=recorded_observer(
-                    recording, client, event_observer, "reproduction"
-                ),
+                event_observer=recorded_observer(recording, client, event_observer, "reproduction"),
             )
             if record_video:
                 stop_visual_recording(client)

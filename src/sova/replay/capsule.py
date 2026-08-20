@@ -178,7 +178,7 @@ def render_capsule_timeline(
                 )
             cue_path = root / "replay-cues.json"
             cue_path.write_bytes(reader.read_object(cues))
-        render_timeline_html(
+        timeline = render_timeline_html(
             primary_path,
             destination,
             comparison=comparison_path,
@@ -189,12 +189,16 @@ def render_capsule_timeline(
         "artifactType": "sova.capsule-replay",
         "schemaVersion": "0.1.0",
         "capsule": str(capsule),
-        "destination": str(destination),
+        "destination": str(destination.resolve()),
         "primaryTrace": primary.path,
         "comparisonTrace": None if comparison is None else comparison.path,
         "visualReplay": None if media is None else media.path,
         "replayCues": None if cues is None else cues.path,
-        "opensAtDecisiveMoment": cues is not None,
+        "decisiveCue": timeline["decisiveCue"],
+        "decisiveCueSource": timeline["decisiveCueSource"],
+        "decisiveCueDurationBound": timeline["decisiveCueDurationBound"],
+        "mediaDurationSeconds": timeline["mediaDurationSeconds"],
+        "opensAtDecisiveMoment": timeline["opensAtDecisiveMoment"],
         "executesRecordedActions": False,
     }
 

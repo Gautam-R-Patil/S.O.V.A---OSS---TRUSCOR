@@ -17,6 +17,7 @@ from sova.formats import canonical_json_bytes, sha256_digest
 from sova.formats.errors import FormatError
 from sova.models import ScriptedModel
 from sova.providers import ProviderRoleModel
+from sova.runtime import GVisorOciAgentAdapter
 from sova.trace import Redactor, TraceWriter, generate_ed25519_keypair
 
 if TYPE_CHECKING:
@@ -160,6 +161,66 @@ class _Invocation:
     resolved_model_id: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class _ArenaExecutionProvenance:
+    participant_bindings: dict[str, dict[str, Any]]
+    dependencies: tuple[dict[str, Any], ...]
+    native_code_executed: bool
+
+
+def _execution_provenance(
+    match: AgentArenaMatch,
+    models: Mapping[str, RoleModel],
+) -> _ArenaExecutionProvenance:
+    """Describe the real participant execution boundary recorded in each trace."""
+    bindings: dict[str, dict[str, Any]] = {}
+    dependencies: list[dict[str, Any]] = []
+    for participant in sorted((match.challenger, match.defender, match.judge)):
+        model = models[participant]
+        if type(model) is GVisorOciAgentAdapter:
+            runtime = model.runtime
+            attestation = model.executor.attestation
+            bindings[participant] = {
+                "modelId": model.model_id,
+                "executionMode": "isolated-oci-agent",
+                "nativeCodeExecuted": True,
+                "protocol": "sova.oci-agent/0.1",
+                "runtimeDigest": runtime.digest,
+                "image": runtime.image,
+                "ociRuntime": runtime.runtime,
+                "attestationDigest": attestation.digest,
+                "attestationReadiness": attestation.readiness,
+                "isolation": "gvisor-runsc-user-kernel",
+                "networkAuthority": "none",
+                "targetToolsAvailable": False,
+            }
+            dependencies.append(
+                {
+                    "name": participant,
+                    "kind": "oci-agent-image",
+                    "agentId": runtime.identifier,
+                    "runtimeDigest": runtime.digest,
+                    "image": runtime.image,
+                    "ociRuntime": runtime.runtime,
+                    "attestationDigest": attestation.digest,
+                }
+            )
+        else:
+            provider_backed = type(model) is ProviderRoleModel
+            bindings[participant] = {
+                "modelId": model.model_id,
+                "executionMode": "provider-api" if provider_backed else "scripted-model",
+                "nativeCodeExecuted": False,
+                "networkAuthority": "provider-api-only" if provider_backed else "none",
+                "targetToolsAvailable": False,
+            }
+    return _ArenaExecutionProvenance(
+        bindings,
+        tuple(dependencies),
+        any(binding["nativeCodeExecuted"] for binding in bindings.values()),
+    )
+
+
 def _fingerprint(
     value: str | None,
     *,
@@ -184,6 +245,7 @@ def _writer(  # noqa: PLR0913
     models: Mapping[str, RoleModel],
     budget: AgentArenaBudget,
     signing_key: Ed25519Keypair,
+    execution: _ArenaExecutionProvenance,
 ) -> TraceWriter:
     model_ids = {
         participant: models[participant].model_id
@@ -193,15 +255,32 @@ def _writer(  # noqa: PLR0913
         "profileDigest": profile.digest,
         "caseDigest": match.case.digest,
         "participants": model_ids,
+        "participantExecutionBindings": execution.participant_bindings,
         "budget": budget.to_mapping(),
         "environment": "synthetic-message-only",
+    }
+    model_environment = {
+        "participants": model_ids,
+        "executionBindings": execution.participant_bindings,
     }
     environment = {
         "platform": platform.platform(),
         "python": platform.python_version(),
         "codeDigest": sha256_digest(Path(__file__).read_bytes()),
-        "model": model_ids,
-        "dependencies": [],
+        "model": model_environment,
+        "dependencies": list(execution.dependencies),
+    }
+    capability_contract = {
+        "communication": "message-only",
+        "targetTools": False,
+        "nativeCode": execution.native_code_executed,
+        "externalAgentIsolation": (
+            "gvisor-runsc-user-kernel" if execution.native_code_executed else "not-applicable"
+        ),
+        "network": "provider-calls-only-when-configured; oci-agents-none",
+        "participantExecutionBindingsDigest": sha256_digest(
+            canonical_json_bytes(execution.participant_bindings)
+        ),
     }
     return TraceWriter(
         destination,
@@ -215,19 +294,18 @@ def _writer(  # noqa: PLR0913
         },
         environment=environment,
         executor={
-            "id": "sova:executor:synthetic-agent-arena",
-            "name": "sova-controlled-message-environment",
-            "version": "0.1.0",
-            "capabilityDigest": sha256_digest(
-                canonical_json_bytes(
-                    {
-                        "communication": "message-only",
-                        "targetTools": False,
-                        "nativeCode": False,
-                        "network": "provider-calls-only-when-configured",
-                    }
-                )
+            "id": (
+                "sova:executor:synthetic-agent-arena-with-gvisor"
+                if execution.native_code_executed
+                else "sova:executor:synthetic-agent-arena"
             ),
+            "name": (
+                "sova-controlled-message-environment-with-gvisor-agents"
+                if execution.native_code_executed
+                else "sova-controlled-message-environment"
+            ),
+            "version": "0.1.0",
+            "capabilityDigest": sha256_digest(canonical_json_bytes(capability_contract)),
         },
         fingerprints={
             "environment": _fingerprint(
@@ -249,10 +327,10 @@ def _writer(  # noqa: PLR0913
                 source="sova.community.agent_arena",
             ),
             "dependencies": _fingerprint(
-                sha256_digest(canonical_json_bytes([])),
+                sha256_digest(canonical_json_bytes(execution.dependencies)),
                 status="recorded",
-                method="canonical-dependency-list-digest",
-                source="stdlib Arena core",
+                method="canonical-participant-dependency-list-digest",
+                source="Arena participant execution bindings",
             ),
             "registry": _fingerprint(
                 None,
@@ -261,9 +339,9 @@ def _writer(  # noqa: PLR0913
                 source="local Arena",
             ),
             "model": _fingerprint(
-                sha256_digest(canonical_json_bytes(model_ids)),
+                sha256_digest(canonical_json_bytes(model_environment)),
                 status="recorded",
-                method="participant-model-binding-digest",
+                method="participant-model-and-execution-binding-digest",
                 source="agent Arena bindings",
             ),
         },
@@ -510,6 +588,7 @@ def _run_match(  # noqa: PLR0913, PLR0915, PLR0917
     signing_key: Ed25519Keypair,
 ) -> dict[str, Any]:
     trace_path = destination.with_suffix(".sova-trace")
+    execution = _execution_provenance(match, models)
     writer = _writer(
         trace_path,
         profile=profile,
@@ -517,6 +596,7 @@ def _run_match(  # noqa: PLR0913, PLR0915, PLR0917
         models=models,
         budget=budget,
         signing_key=signing_key,
+        execution=execution,
     )
     started = time.monotonic()
     last_defense = match.case.seed
@@ -532,6 +612,8 @@ def _run_match(  # noqa: PLR0913, PLR0915, PLR0917
             "budgets": budget.to_mapping(),
             "messageEnvironment": "synthetic-only",
             "targetToolsAvailable": False,
+            "nativeCodeExecuted": execution.native_code_executed,
+            "participantExecutionBindings": execution.participant_bindings,
         },
         phase="arena",
     )
@@ -553,6 +635,7 @@ def _run_match(  # noqa: PLR0913, PLR0915, PLR0917
                 challenge_prompt,
                 output_budget=budget.max_output_bytes,
             )
+            _check_deadline(started, budget)
             total_tokens = _account(challenge_call, total=total_tokens, budget=budget)
             challenge_raw = _message(
                 challenge_call.structured,
@@ -613,6 +696,7 @@ def _run_match(  # noqa: PLR0913, PLR0915, PLR0917
                 defense_prompt,
                 output_budget=budget.max_output_bytes,
             )
+            _check_deadline(started, budget)
             total_tokens = _account(defense_call, total=total_tokens, budget=budget)
             defense_raw, signals = _defense(defense_call.structured)
             defense, defense_redacted = _safe_transfer(defense_raw)
@@ -707,6 +791,7 @@ def _run_match(  # noqa: PLR0913, PLR0915, PLR0917
             last_defense = defense
             rounds_completed = round_index
             observed = observed or observed_round
+            _check_deadline(started, budget)
             if observed_round:
                 writer.append(
                     "stop.condition",
@@ -717,6 +802,7 @@ def _run_match(  # noqa: PLR0913, PLR0915, PLR0917
                 )
                 break
 
+        _check_deadline(started, budget)
         judge_prompt = canonical_json_bytes(
             {
                 "contract": "sova.agent-arena-advisory-judge/0.1.0",
@@ -740,6 +826,7 @@ def _run_match(  # noqa: PLR0913, PLR0915, PLR0917
             judge_prompt,
             output_budget=budget.max_output_bytes,
         )
+        _check_deadline(started, budget)
         total_tokens = _account(judge_call, total=total_tokens, budget=budget)
         advisory = _advisory(judge_call.structured)
         judge_event = _record_invocation(
@@ -766,6 +853,7 @@ def _run_match(  # noqa: PLR0913, PLR0915, PLR0917
             phase="arena",
             parents=[judge_event] if judge_event else [],
         )
+        _check_deadline(started, budget)
         writer.append(
             "run.completed",
             {
@@ -909,15 +997,17 @@ def run_agent_arena(  # noqa: PLR0913
             "agent Arena participant is unavailable",
             details={"missing": missing},
         )
+    supported_types = {ProviderRoleModel, ScriptedModel, GVisorOciAgentAdapter}
     unsupported = sorted(
-        participant
-        for participant in required
-        if type(models[participant]) not in {ProviderRoleModel, ScriptedModel}
+        participant for participant in required if type(models[participant]) not in supported_types
     )
     if unsupported:
         raise FormatError(
             "SOVA-AGENT-ARENA-MODEL-TYPE",
-            "agent Arena accepts only built-in provider or scripted model adapters",
+            (
+                "agent Arena accepts only built-in provider or scripted model adapters, "
+                "or attested gVisor OCI agent adapters"
+            ),
             details={"unsupported": unsupported},
         )
     destination = destination.resolve()
@@ -937,6 +1027,23 @@ def run_agent_arena(  # noqa: PLR0913
         for index, match in enumerate(matches)
     ]
     report_path = destination / "agent-arena-report.json"
+    oci_participants = sorted(
+        participant
+        for participant in required
+        if type(models[participant]) is GVisorOciAgentAdapter
+    )
+    claims = {
+        "realModelCapable": True,
+        "builtInModelAdaptersOnly": not oci_participants,
+        "multiRoundAgentCommunication": True,
+        "observableMessageFlowRecorded": True,
+        "deterministicEvidenceControlsScore": True,
+        "judgeCanOverride": False,
+        "privateModelThoughtsCaptured": False,
+        "securitySandbox": False,
+    }
+    if oci_participants:
+        claims["attestedGVisorExternalAgents"] = True
     report = {
         "artifactType": "sova.agent-arena-report",
         "schemaVersion": "0.1.0",
@@ -953,22 +1060,17 @@ def run_agent_arena(  # noqa: PLR0913
         "possibleScore": sum(row["possiblePoints"] for row in rows),
         "execution": "local-synthetic-message-environment",
         "targetToolsAvailable": False,
-        "nativeCodeExecuted": False,
+        "nativeCodeExecuted": bool(oci_participants),
+        "sandboxedExternalParticipants": oci_participants,
         "submission": "none-local-output-only",
         "telemetry": "none-beyond-explicit-model-provider-calls",
         "signingKeyId": signing_key.key_id,
-        "claims": {
-            "realModelCapable": True,
-            "builtInModelAdaptersOnly": True,
-            "multiRoundAgentCommunication": True,
-            "observableMessageFlowRecorded": True,
-            "deterministicEvidenceControlsScore": True,
-            "judgeCanOverride": False,
-            "privateModelThoughtsCaptured": False,
-            "securitySandbox": False,
-        },
+        "claims": claims,
         "limitations": [
-            "The environment is a synthetic message bus, not a native-code security sandbox.",
+            (
+                "The message environment is synthetic; optional external agent code is "
+                "isolated separately through gVisor and receives no target tools."
+            ),
             "Only observable provider responses and declared signals are recorded.",
             "Provider-backed quality and cross-model transfer require optional external runs.",
             "Custom runs are not leaderboard-eligible or comparable to the standard profile.",

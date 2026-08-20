@@ -35,6 +35,13 @@ def test_strict_json_resource_and_syntax_limits() -> None:
     with pytest.raises(FormatError) as depth:
         strict_json_loads(b'{"a":{"b":1}}', max_depth=1)
     assert depth.value.issue.code == "SOVA-FORMAT-DEPTH-LIMIT"
+    with pytest.raises(FormatError) as string:
+        strict_json_loads(b'{"value":"12345"}', max_string_bytes=4)
+    assert string.value.issue.code == "SOVA-FORMAT-STRING-LIMIT"
+    assert strict_json_loads(b'{"value":"12345"}', max_string_bytes=5) == {"value": "12345"}
+    with pytest.raises(FormatError) as canonical_string:
+        canonical_json_bytes({"value": "12345"}, max_string_bytes=4)
+    assert canonical_string.value.issue.code == "SOVA-FORMAT-STRING-LIMIT"
     with pytest.raises(FormatError) as canonical:
         canonical_json_bytes({"unsupported": {1, 2}})
     assert canonical.value.issue.code == "SOVA-FORMAT-NONCANONICAL-VALUE"

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+import sova.mcp.adapter as mcp_adapter_module
 import sova.mcp.specs as mcp_specs
 from sova.cli import main
 from sova.executors import (
@@ -230,6 +231,279 @@ def test_playwright_adapter_discovers_subset_normalizes_and_post_observes(
     assert outcome.verification == "post-action-observation"
     assert outcome.output["postObservationDigest"].startswith("sha256:")
     assert [call[0] for call in client.calls] == ["browser_navigate", "browser_snapshot"]
+
+
+def test_playwright_adapter_maps_semantic_form_and_pointer_actions(tmp_path: Path) -> None:
+    result = MCPToolResult(
+        content=({"type": "text", "text": "- Page URL: https://owned.example/form"},),
+        structured_content=None,
+        is_error=False,
+    )
+    client = FakeMCPClient(
+        (
+            "browser_snapshot",
+            "browser_type",
+            "browser_click",
+            "browser_select_option",
+            "browser_press_key",
+            "browser_hover",
+        ),
+        [result] * 10,
+    )
+    adapter = MCPExecutorAdapter(
+        "playwright",
+        client,
+        playwright_mappings(allowed_origins=("https://owned.example",)),
+    )
+    assert {item.name for item in adapter.capabilities()} == {
+        "browser.snapshot",
+        "browser.type",
+        "browser.click",
+        "browser.select",
+        "browser.press",
+        "browser.hover",
+    }
+
+    for request in (
+        ActionRequest(
+            "type",
+            "browser.type",
+            {
+                "element": "Message",
+                "ref": "f10",
+                "text": "blue owl",
+                "submit": True,
+                "slowly": True,
+            },
+            5,
+        ),
+        ActionRequest(
+            "click",
+            "browser.click",
+            {"element": "Send", "ref": "f11"},
+            5,
+        ),
+        ActionRequest(
+            "select",
+            "browser.select",
+            {"element": "Defense level", "ref": "f12", "values": ["L0"]},
+            5,
+        ),
+        ActionRequest("press", "browser.press", {"key": "Enter"}, 5),
+        ActionRequest(
+            "hover",
+            "browser.hover",
+            {"element": "Knowledge Base", "ref": "f13"},
+            5,
+        ),
+    ):
+        assert (
+            adapter.execute(request, _context(tmp_path), CancellationToken()).status
+            == OutcomeStatus.SUCCEEDED
+        )
+
+    assert client.calls[0] == (
+        "browser_type",
+        {
+            "element": "Message",
+            "target": "f10",
+            "text": "blue owl",
+            "submit": True,
+            "slowly": True,
+        },
+    )
+    assert client.calls[2] == (
+        "browser_click",
+        {"element": "Send", "target": "f11"},
+    )
+    assert client.calls[4] == (
+        "browser_select_option",
+        {"element": "Defense level", "target": "f12", "values": ["L0"]},
+    )
+    assert client.calls[6] == ("browser_press_key", {"key": "Enter"})
+    assert client.calls[8] == (
+        "browser_hover",
+        {"element": "Knowledge Base", "target": "f13"},
+    )
+
+
+def test_playwright_target_normalization_rejects_conflicts_and_accepts_aliases() -> None:
+    click = next(mapping for mapping in playwright_mappings() if mapping.action == "browser.click")
+
+    with pytest.raises(FormatError, match="conflicting ref and target"):
+        click.argument_builder({"element": "Send", "ref": "f1", "target": "#send"})
+
+    assert click.argument_builder(
+        {"element": "Send", "ref": "f1", "target": "f1", "doubleClick": False}
+    ) == {"element": "Send", "target": "f1", "doubleClick": False}
+    assert click.argument_builder({"element": "Send"}) == {"element": "Send"}
+
+
+def test_mcp_browser_builders_and_observers_fail_closed_on_malformed_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(FormatError, match=r"HTTP\(S\) origin"):
+        playwright_mappings(allowed_origins=("ftp://owned.example",))
+
+    navigate = next(
+        mapping for mapping in playwright_mappings() if mapping.action == "browser.navigate"
+    )
+    with pytest.raises(FormatError, match="requires a URL"):
+        navigate.argument_builder({"url": 7})
+
+    snapshot_client = FakeMCPClient(
+        ("browser_snapshot",),
+        [
+            MCPToolResult(
+                content=({"type": "text", "text": 7},),
+                structured_content=None,
+                is_error=False,
+            )
+        ],
+    )
+    snapshot_adapter = MCPExecutorAdapter(
+        "playwright",
+        snapshot_client,
+        playwright_mappings(allowed_origins=("https://owned.example",)),
+    )
+    no_location = snapshot_adapter.execute(
+        ActionRequest("snapshot", "browser.snapshot", {}, 5),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert no_location.status == OutcomeStatus.FAILED
+    assert no_location.error_code == "SOVA-MCP-BROWSER-LOCATION"
+
+    monkeypatch.setattr(mcp_adapter_module, "_MAX_BINARY_BYTES", 1)
+    image_client = FakeMCPClient(
+        ("browser_take_screenshot",),
+        [
+            MCPToolResult(
+                content=({"type": "image", "data": "eHg="},),
+                structured_content=None,
+                is_error=False,
+            )
+        ],
+    )
+    image_adapter = MCPExecutorAdapter("playwright", image_client, playwright_mappings())
+    oversized = image_adapter.execute(
+        ActionRequest("image", "browser.screenshot", {}, 5),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert oversized.status == OutcomeStatus.FAILED
+    assert oversized.error_code == "SOVA-MCP-CONTENT-LIMIT"
+
+
+def test_chrome_devtools_wait_builder_accepts_text_forms_and_rejects_empty() -> None:
+    wait = next(
+        mapping for mapping in chrome_devtools_mappings() if mapping.action == "browser.wait"
+    )
+    assert wait.argument_builder({"text": "ready"}) == {"text": ["ready"]}
+    assert wait.argument_builder({"text": ["ready", "settled"]}) == {"text": ["ready", "settled"]}
+    with pytest.raises(FormatError, match="one or more texts"):
+        wait.argument_builder({"text": []})
+
+
+def test_playwright_adapter_maps_bounded_workflow_navigation_and_interactions(
+    tmp_path: Path,
+) -> None:
+    result = MCPToolResult(
+        content=({"type": "text", "text": "- Page URL: https://owned.example/workflow"},),
+        structured_content=None,
+        is_error=False,
+    )
+    client = FakeMCPClient(
+        (
+            "browser_snapshot",
+            "browser_navigate_back",
+            "browser_drag",
+            "browser_handle_dialog",
+            "browser_tabs",
+        ),
+        [result] * 10,
+    )
+    adapter = MCPExecutorAdapter(
+        "playwright",
+        client,
+        playwright_mappings(allowed_origins=("https://owned.example",)),
+    )
+    expected = {
+        "browser.back",
+        "browser.drag",
+        "browser.dialog",
+        "browser.tab-new",
+        "browser.tab-close",
+    }
+    assert expected <= {item.name for item in adapter.capabilities()}
+
+    requests = (
+        ActionRequest("back", "browser.back", {}, 5),
+        ActionRequest(
+            "drag",
+            "browser.drag",
+            {
+                "startElement": "Source card",
+                "startTarget": "f1",
+                "endElement": "Destination lane",
+                "endTarget": "f2",
+            },
+            5,
+        ),
+        ActionRequest("dialog", "browser.dialog", {"accept": True}, 5),
+        ActionRequest(
+            "tab-new",
+            "browser.tab-new",
+            {"url": "https://owned.example/details"},
+            5,
+        ),
+        ActionRequest("tab-close", "browser.tab-close", {}, 5),
+    )
+    for request in requests:
+        assert (
+            adapter.execute(request, _context(tmp_path), CancellationToken()).status
+            == OutcomeStatus.SUCCEEDED
+        )
+
+    assert client.calls[0] == ("browser_navigate_back", {})
+    assert client.calls[2] == (
+        "browser_drag",
+        {
+            "startElement": "Source card",
+            "startTarget": "f1",
+            "endElement": "Destination lane",
+            "endTarget": "f2",
+        },
+    )
+    assert client.calls[4] == ("browser_handle_dialog", {"accept": True})
+    assert client.calls[6] == (
+        "browser_tabs",
+        {"action": "new", "url": "https://owned.example/details"},
+    )
+    assert client.calls[8] == ("browser_tabs", {"action": "close"})
+
+
+def test_playwright_adapter_rejects_cross_origin_tab_before_execution(tmp_path: Path) -> None:
+    client = FakeMCPClient(("browser_tabs",), [])
+    adapter = MCPExecutorAdapter(
+        "playwright",
+        client,
+        playwright_mappings(allowed_origins=("https://owned.example",)),
+    )
+    outcome = adapter.execute(
+        ActionRequest(
+            "tab-new",
+            "browser.tab-new",
+            {"url": "https://attacker.example/escaped"},
+            5,
+        ),
+        _context(tmp_path),
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.FAILED
+    assert outcome.error_code == "SOVA-MCP-NAVIGATION-SCOPE"
+    assert client.calls == []
 
 
 def test_playwright_adapter_gracefully_closes_browser_before_transport() -> None:
@@ -1049,6 +1323,78 @@ def test_melra_status_and_cancel_mapping_are_explicit() -> None:
         "melra_task_status",
         "melra_task_cancel",
     ]
+
+
+def test_melra_private_normalizers_cover_text_state_and_approval_guards() -> None:
+    task_id = "019fc000-0000-7000-8000-000000000013"
+    assert MelraExecutorAdapter._required_evidence(
+        "browser",
+        "navigate",
+        {"url": "https://owned.example/start"},
+        SideEffect.MUTATE,
+    ) == [{"type": "url_matches", "pattern": "https://owned.example/start*"}]
+
+    parsed = MelraExecutorAdapter._structured(
+        MCPToolResult(
+            (
+                {"type": "text", "text": "not-json"},
+                {"type": "text", "text": '{"status":"ready"}'},
+            ),
+            None,
+            is_error=False,
+        )
+    )
+    assert parsed == {"status": "ready"}
+    assert (
+        MelraExecutorAdapter._structured(
+            MCPToolResult(({"type": "text", "text": "[]"},), None, is_error=False)
+        )
+        is None
+    )
+
+    state = MelraExecutorAdapter._task_state(
+        MCPToolResult((), {"id": task_id, "status": "planned"}, is_error=False),
+        expected_task_id=task_id,
+    )
+    assert state.normalized_status == OutcomeStatus.PARTIAL
+    with pytest.raises(FormatError, match="unknown MELRA task status"):
+        MelraExecutorAdapter._task_state(
+            MCPToolResult((), {"id": task_id, "status": "unknown"}, is_error=False),
+            expected_task_id=task_id,
+        )
+
+    expected = mcp_adapter_module._MelraApprovalExpectation(
+        task_id,
+        "browser.inspect",
+        {"kind": "browser", "action": "inspect"},
+        SideEffect.READ,
+    )
+    authorization = {
+        "decision": "allowed",
+        "scopeDigest": "sha256:" + "1" * 64,
+    }
+    with pytest.raises(FormatError, match="omitted its effect contract"):
+        MelraExecutorAdapter._provider_approval(
+            {},
+            expected=expected,
+            authorization=authorization,
+        )
+
+    plan = _melra_plan(task_id)
+    plan["approval"] = {}
+    with pytest.raises(FormatError, match="fresh SOVA authorization"):
+        MelraExecutorAdapter._provider_approval(
+            plan,
+            expected=expected,
+            authorization={"decision": "denied"},
+        )
+    plan["approval"] = "malformed"
+    with pytest.raises(FormatError, match="challenge was malformed"):
+        MelraExecutorAdapter._provider_approval(
+            plan,
+            expected=expected,
+            authorization=authorization,
+        )
 
 
 @pytest.mark.parametrize(

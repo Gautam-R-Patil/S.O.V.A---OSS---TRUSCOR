@@ -23,15 +23,21 @@ conformance, never “instant trust”.
 
 ## Local Arena
 
-The reference Arena accepts only deterministic `ScriptedModel` participants.
-It records attacker and defender observable responses and the deterministic
-oracle result. Each attempt becomes a signed trace embedded in a portable
-capsule. Standard profile identity/version/digest is separate from custom
-non-comparable runs. The runner has no network, upload, account, or telemetry
-path.
+The standard reference Arena accepts deterministic `ScriptedModel`
+participants. It records attacker and defender observable responses and the
+deterministic oracle result. Each attempt becomes a signed trace embedded in a
+portable capsule. Standard profile identity/version/digest is separate from
+custom non-comparable runs. The standard runner has no network, upload,
+account, or telemetry path.
 
-This implementation proves the evidence path. It is not yet a containment
-backend for arbitrary untrusted agents and does not establish model superiority.
+Custom message experiments may also use credential-late providers or external
+agent images through the strict OCI agent adapter. External code is admitted
+only from an exact digest-pinned image through an attested gVisor `runsc`
+runtime and receives messages, not host or environment tools. The adapter
+enforces no network, credentials, host mounts, writable root, capabilities, or
+container-engine socket and refuses fallback to ordinary OCI. This is a strong
+declared containment boundary under its host assumptions, not proof of escape
+impossibility or model superiority.
 
 The provider-capable extension, `sova arena agent-run`, adds bounded multi-round
 challenger/defender interaction and an isolated advisory judge inside a
@@ -41,6 +47,14 @@ failures in signed traces. It never exposes target tools, and deterministic
 signal membership—not model self-grading—controls the score. These runs are
 custom, non-comparable, and excluded from the standard leaderboard. See the
 [Agent Arena specification](./agent-arena-0.1.md).
+
+`sova arena explore-web` adds adaptive multi-page UI exploration for exactly
+authorized websites. A provider or attested OCI planner sees successive
+secret-redacted accessibility snapshots and proposes only typed same-origin
+semantic browser actions. SOVA retains approval, scope/budget enforcement,
+execution, observation, persisted-oracle judging, clean reproduction, signing,
+recording, and exact-moment replay. See the [semantic browser workflow
+specification](./semantic-browser-workflow-0.1.md).
 
 ## Static leaderboard
 

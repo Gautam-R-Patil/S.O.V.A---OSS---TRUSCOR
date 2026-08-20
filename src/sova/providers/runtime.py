@@ -26,10 +26,12 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 _MAX_STRUCTURED_RESPONSE_BYTES = 1024 * 1024
+_MAX_REMOTE_PROVIDER_TIMEOUT_SECONDS = 60
 _MIN_MODEL_TURNS = 5
 _MAX_MODEL_TURNS = 100
 _MAX_TOTAL_TOKENS = 10_000_000
 _MAX_ROLE_NAME_CHARS = 128
+_MAX_FALLBACK_MODELS = 3
 _ALLOWED_PROVIDERS = frozenset({"openai", "anthropic", "openrouter", "ollama"})
 _REQUIRED_ROLES = frozenset(
     {
@@ -134,12 +136,32 @@ class ProviderRoute:
     temperature: float = 0.0
     max_output_tokens: int = 1024
     timeout_seconds: float = 30.0
+    fallback_models: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.provider not in _ALLOWED_PROVIDERS:
             raise ProviderError("SOVA-PROVIDER-CONFIG", "provider route is unsupported")
         if not self.model:
             raise ProviderError("SOVA-PROVIDER-CONFIG", "provider route model is required")
+        if (
+            not isinstance(self.fallback_models, tuple)
+            or len(self.fallback_models) > _MAX_FALLBACK_MODELS
+            or any(not isinstance(model, str) or not model for model in self.fallback_models)
+            or len(set(self.fallback_models)) != len(self.fallback_models)
+            or self.model in self.fallback_models
+        ):
+            raise ProviderError(
+                "SOVA-PROVIDER-CONFIG",
+                "provider fallback models must be unique, bounded, and exclude the primary",
+            )
+        if (
+            self.provider != "ollama"
+            and self.timeout_seconds > _MAX_REMOTE_PROVIDER_TIMEOUT_SECONDS
+        ):
+            raise ProviderError(
+                "SOVA-PROVIDER-CONFIG",
+                "remote provider route timeout must be within 60 seconds",
+            )
         ModelRequest(
             self.model,
             ({"role": "user", "content": "configuration validation"},),
@@ -147,15 +169,26 @@ class ProviderRoute:
             max_output_tokens=self.max_output_tokens,
             timeout_seconds=self.timeout_seconds,
         )
+        for fallback_model in self.fallback_models:
+            ModelRequest(
+                fallback_model,
+                ({"role": "user", "content": "configuration validation"},),
+                temperature=self.temperature,
+                max_output_tokens=self.max_output_tokens,
+                timeout_seconds=self.timeout_seconds,
+            )
 
     def to_mapping(self) -> dict[str, Any]:
-        return {
+        mapping: dict[str, Any] = {
             "provider": self.provider,
             "model": self.model,
             "temperature": str(self.temperature),
             "maxOutputTokens": self.max_output_tokens,
             "timeoutSeconds": str(self.timeout_seconds),
         }
+        if self.fallback_models:
+            mapping["fallbackModels"] = list(self.fallback_models)
+        return mapping
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,12 +249,16 @@ def provider_runtime_from_mapping(value: dict[str, Any]) -> ProviderRuntimeConfi
             role = RoleKind(str(role_name))
         except ValueError as error:
             raise ProviderError("SOVA-PROVIDER-CONFIG", "provider role is unsupported") from error
-        if not isinstance(route_value, dict) or set(route_value) != {
+        required_route_fields = {
             "provider",
             "model",
             "temperature",
             "maxOutputTokens",
             "timeoutSeconds",
+        }
+        if not isinstance(route_value, dict) or set(route_value) not in {
+            frozenset(required_route_fields),
+            frozenset(required_route_fields | {"fallbackModels"}),
         }:
             raise ProviderError("SOVA-PROVIDER-CONFIG", "provider route fields are invalid")
         try:
@@ -234,12 +271,20 @@ def provider_runtime_from_mapping(value: dict[str, Any]) -> ProviderRuntimeConfi
         max_output_tokens = route_value.get("maxOutputTokens")
         if isinstance(max_output_tokens, bool) or not isinstance(max_output_tokens, int):
             raise ProviderError("SOVA-PROVIDER-CONFIG", "provider token limit must be an integer")
+        fallback_values = route_value.get("fallbackModels", [])
+        if not isinstance(fallback_values, list) or any(
+            not isinstance(model, str) for model in fallback_values
+        ):
+            raise ProviderError(
+                "SOVA-PROVIDER-CONFIG", "provider fallback models must be a string list"
+            )
         routes[role] = ProviderRoute(
             str(route_value.get("provider", "")),
             str(route_value.get("model", "")),
             temperature,
             max_output_tokens,
             timeout_seconds,
+            tuple(fallback_values),
         )
     turns = budgets.get("maxModelTurns")
     tokens = budgets.get("maxTotalTokens")
@@ -282,18 +327,19 @@ def provider_model_router(
     }
     bindings: dict[RoleKind, tuple[RoleModel, ...]] = {}
     for role, route in config.routes.items():
-        bindings[role] = (
+        bindings[role] = tuple(
             cast(
                 "RoleModel",
                 ProviderRoleModel(
                     adapters[route.provider],
-                    route.model,
+                    model,
                     role,
                     route.temperature,
                     route.max_output_tokens,
                     route.timeout_seconds,
                 ),
-            ),
+            )
+            for model in (route.model, *route.fallback_models)
         )
     return ModelRouter(bindings)
 

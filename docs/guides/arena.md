@@ -2,15 +2,16 @@
 
 # Run an Arena experiment
 
-Arena has five deliberately different lanes. Choose the narrowest lane that
+Arena has six deliberately different lanes. Choose the narrowest lane that
 matches the experiment.
 
 | Need | Command | Executes |
 |---|---|---|
 | Standard reproducible benchmark fixture | `arena run` | deterministic scripted case |
-| Provider or scripted agents exchanging observable messages | `arena agent-run` | models, no environment tools |
+| Provider, scripted, or attested OCI agents exchanging observable messages | `arena agent-run` | models, no environment tools |
 | Agents acting in a shared sensed environment | `arena chamber` | exact declared synthetic actions |
 | Provider roles testing an authorized website | `arena web` | human-approved exact-origin browser batches |
+| One adaptive planner autonomously exploring an authorized website | `arena explore-web` | semantic same-origin UI actions with per-batch approval |
 | Multiple roles sharing one authorized browser identity | `arena swarm-web` | sequential human-approved browser subruns with signed channel evidence |
 
 ## Try the real-time chamber offline
@@ -59,6 +60,16 @@ new environment family requires an admitted executor adapter, normalized
 events, explicit sensor-health reporting, conformance tests, and a new format
 version when semantics change.
 
+`arena agent-run` can nevertheless include third-party native agents through a
+separate OCI adapter. Each agent must implement the strict SOVA JSON protocol,
+use an exact digest-pinned image, and pass signed conformance through an attested
+gVisor `runsc` runtime. It receives messages, not environment tools, and runs
+with no network, credentials, host mounts, writable root, capabilities, or
+container-engine socket. Use `ociParticipants` plus
+`--allow-sandboxed-agent-code --docker ...`; provider participants retain the
+separate `--allow-provider-calls` gate. There is no fallback to a weaker
+container runtime.
+
 ## Test an authorized website
 
 Prepare the target, campaign, provider runtime, and control proof using the
@@ -83,13 +94,18 @@ deterministic oracle passes, and packages `replay-cues.json` with the WebM and
 signed traces. Render the proof directly:
 
 ```powershell
-sova replay capsule .\arena-web-output\browser\discovery.sova `
-  .\arena-web-output\decisive-replay.html
+sova replay .\arena-web-output\browser\discovery.sova
 ```
 
-The replay defaults to the decisive cue belonging to the selected primary trace
-(the controlled reproduction trace when that conventional object is present),
-opens two seconds before that oracle, and plays only through its three-second
+The one-step command writes `discovery-replay.html` beside the capsule and opens
+only that local file. Add `--no-open` for automation, or retain the explicit
+`sova replay capsule CAPSULE OUTPUT` form when a fixed output path is required.
+The replay defaults to the decisive cue belonging to the selected primary trace.
+Selection is deterministic: `run.sova-trace`, then `reproduction.sova-trace`,
+then the lexically first remaining trace. Arena campaign and semantic-discovery
+capsules do not package a conventional `run.sova-trace`, so their controlled
+reproduction is primary by default; an exact internal path can override it.
+It opens two seconds before that oracle and plays only through its three-second
 post-roll when **Play decisive moment** is selected. It also selects the exact
 `oracle.completed` trace event and displays the channel, sequence, oracle
 status, video offset, and synchronization uncertainty. The cue uses the
@@ -99,14 +115,72 @@ frames are not independently cryptographically timestamped.
 This path can navigate and evaluate only the operations supported by the
 declared campaign and admitted browser adapter. It does not bypass login,
 CAPTCHA, anti-bot controls, or platform terms; create accounts; collect
-credentials; or silently escalate scope. An authenticated testing adapter may
-in future consume an operator-prepared disposable session, but authentication
-material must never enter a `.sova`, trace, report, or live stream.
+credentials; or silently escalate scope. For an authenticated run, provision
+an operator-prepared disposable session with `sova session browser-create`,
+complete login through `sova session browser-handoff`, and pass the paired
+`--browser-profile-vault` and `--browser-profile-handle` flags. Both `arena web`
+and `arena explore-web` accept this pair. The opaque handle is bound to the
+exact target; authentication material must never enter a `.sova`, trace,
+report, or live stream.
 
 `arena web` is a provider-assisted, bounded candidate campaign: provider roles
-propose candidates and SOVA executes the exact reviewed browser actions. It is
-not an unrestricted agent that can invent arbitrary browser tools or silently
-roam outside the declared origin and action budget.
+select from operator-authored candidates and SOVA executes the exact reviewed
+browser actions. Use it when reproducibility requires a fixed candidate set.
+
+## Autonomously explore a multi-page UI
+
+Use a strict semantic mission when the workflow is not known in advance:
+
+```powershell
+sova arena explore-web website-target.json semantic-browser-mission.json `
+  provider-runtime.json .\arena-explore-output `
+  --control-proof control-proof.json --allow-provider-calls `
+  --allow-target-observation-disclosure --headed --record-video `
+  --playwright-browser-cache .\.cache\playwright-browsers
+```
+
+On every turn, the planner receives only a bounded, secret-redacted
+accessibility snapshot and prior observable outcomes. It can invent a new plan
+from the typed browser vocabulary, navigate successive same-origin pages,
+interact with controls, traverse history, create or close a same-origin tab,
+drag between visible targets, handle a visible modal, and adapt after failures.
+It cannot create a new tool,
+leave the exact authorized origin, read credentials, bypass authentication,
+silently expand scope, or declare its own success. SOVA enforces page, action,
+mutation, failure, stagnation, turn, time, text, and token limits and shows each
+complete generated batch for a fresh digest-bound approval.
+
+Only one observable UI boundary is admitted per generated batch, and it must be
+last. A final modal-trigger click plus its immediate dialog handler is the sole
+atomic exception. SOVA inserts a signed accessibility snapshot after every
+other action and after the modal pair, so the planner receives fresh state after
+navigation, visible UI effects, and bounded failures instead of acting through
+an unobserved sequence.
+
+The mission supplies deterministic setup, reset, and persisted-oracle rules. A
+finding is confirmed only when those rules pass during discovery and then pass
+again from a clean reset. The capsule identifies the decisive discovery and
+reproduction traces, binds the single recording that spans both phases, and
+includes media-bound replay cues. Render it:
+
+```powershell
+sova replay .\arena-explore-output\discovery.sova
+```
+
+The HTML opens on the reproduced oracle event and its bounded pre/post-roll, so
+the proof selects the trace-linked action and event recorded when the
+deterministic oracle passed instead of presenting an unexplained full-session
+video. This trace relationship does not by itself prove that the action caused
+the finding. For a third-party planning agent, replace the
+provider runtime with a conforming OCI runtime and use
+`--allow-sandboxed-agent-code --docker ...`; target-bound batch approval and all
+browser policy remain enforced by SOVA.
+
+The tab contract deliberately excludes arbitrary tab selection, and the
+semantic algebra excludes filesystem paths and JavaScript evaluation. File
+effects, mail, messages, and settings tests use separately declared contained
+Arena/action-lab capabilities rather than giving the browser planner host
+authority.
 
 ## Run several roles over one prepared browser identity
 

@@ -83,6 +83,7 @@ include = [
   "/CITATION.cff",
   "/CODE_OF_CONDUCT.md",
   "/CONTRIBUTING.md",
+  "/deploy",
   "/DUAL_USE_POLICY.md",
   "/GOVERNANCE.md",
   "/LICENSE",

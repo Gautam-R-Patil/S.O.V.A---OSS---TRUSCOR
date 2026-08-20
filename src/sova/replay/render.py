@@ -7,7 +7,9 @@ from __future__ import annotations
 import base64
 import html
 import json
+import math
 import re
+import struct
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any
 
@@ -26,7 +28,231 @@ _MAX_REPLAY_CUES = 64
 _MAX_CUE_UNCERTAINTY_MS = 60_000
 _MAX_CUE_SECONDS = 86_400
 _MIN_MP4_SIGNATURE_BYTES = 12
+_MAX_EBML_VINT_BYTES = 8
+_MAX_EBML_IDENTIFIER_BYTES = 4
+_MAX_EBML_UNSIGNED_BYTES = 8
+_EBML_FLOAT32_BYTES = 4
+_EBML_FLOAT64_BYTES = 8
+_EBML_HEADER_ID = 0x1A45DFA3
+_EBML_SEGMENT_ID = 0x18538067
+_EBML_INFO_ID = 0x1549A966
+_EBML_TRACKS_ID = 0x1654AE6B
+_EBML_CLUSTER_ID = 0x1F43B675
+_EBML_TIMECODE_SCALE_ID = 0x2AD7B1
+_EBML_DURATION_ID = 0x4489
+_EBML_CLUSTER_TIMECODE_ID = 0xE7
+_EBML_SIMPLE_BLOCK_ID = 0xA3
+_EBML_BLOCK_GROUP_ID = 0xA0
+_EBML_BLOCK_ID = 0xA1
+_MP4_BOX_HEADER_BYTES = 8
+_MP4_EXTENDED_BOX_HEADER_BYTES = 16
+_MP4_MVHD_V0_BYTES = 20
+_MP4_MVHD_V1_BYTES = 32
 _CANONICAL_DECIMAL = re.compile(r"(?:0|[1-9][0-9]*)\.[0-9]+\Z")
+
+
+def _ebml_vint(
+    data: bytes,
+    offset: int,
+    *,
+    identifier: bool,
+) -> tuple[int | None, int] | None:
+    """Read one bounded EBML identifier or size variable integer."""
+    if offset >= len(data):
+        return None
+    first = data[offset]
+    marker = 0x80
+    length = 1
+    while length <= _MAX_EBML_VINT_BYTES and not first & marker:
+        marker >>= 1
+        length += 1
+    maximum = _MAX_EBML_IDENTIFIER_BYTES if identifier else _MAX_EBML_VINT_BYTES
+    if marker == 0 or length > maximum or offset + length > len(data):
+        return None
+    value = first if identifier else first & (marker - 1)
+    for byte in data[offset + 1 : offset + length]:
+        value = (value << 8) | byte
+    if not identifier and value == (1 << (7 * length)) - 1:
+        return None, length
+    return value, length
+
+
+def _ebml_elements(
+    data: bytes,
+    start: int,
+    stop: int,
+) -> list[tuple[int, int, int]] | None:
+    """Return the complete direct children of one bounded EBML master."""
+    elements: list[tuple[int, int, int]] = []
+    cursor = start
+    while cursor < stop:
+        identifier = _ebml_vint(data, cursor, identifier=True)
+        if identifier is None:
+            return None
+        element_id, id_length = identifier
+        if element_id is None:
+            return None
+        size = _ebml_vint(data, cursor + id_length, identifier=False)
+        if size is None:
+            return None
+        payload_size, size_length = size
+        payload_start = cursor + id_length + size_length
+        payload_stop = stop if payload_size is None else payload_start + payload_size
+        if payload_start > payload_stop or payload_stop > stop:
+            return None
+        elements.append((element_id, payload_start, payload_stop))
+        if payload_stop <= cursor:
+            return None
+        cursor = payload_stop
+    return elements if cursor == stop else None
+
+
+def _webm_duration_seconds(data: bytes) -> float | None:  # noqa: PLR0911
+    """Read a finalized WebM Segment/Info duration without a media dependency."""
+    top = _ebml_elements(data, 0, len(data))
+    if top is None or not top or top[0][0] != _EBML_HEADER_ID:
+        return None
+    segments = [item for item in top if item[0] == _EBML_SEGMENT_ID]
+    if len(segments) != 1:
+        return None
+    segment_children = _ebml_elements(data, segments[0][1], segments[0][2])
+    if segment_children is None:
+        return None
+    info_items = [item for item in segment_children if item[0] == _EBML_INFO_ID]
+    if len(info_items) != 1:
+        return None
+    # A replay must contain actual track and cluster containers, not merely an
+    # EBML signature and a forged duration scalar.
+    if not any(item[0] == _EBML_TRACKS_ID for item in segment_children) or not any(
+        item[0] == _EBML_CLUSTER_ID and item[2] > item[1] for item in segment_children
+    ):
+        return None
+    info = _ebml_elements(data, info_items[0][1], info_items[0][2])
+    if info is None:
+        return None
+    scale = 1_000_000
+    duration: float | None = None
+    for element_id, payload_start, payload_stop in info:
+        payload = data[payload_start:payload_stop]
+        if element_id == _EBML_TIMECODE_SCALE_ID and 1 <= len(payload) <= (
+            _MAX_EBML_UNSIGNED_BYTES
+        ):
+            scale = int.from_bytes(payload, "big")
+        elif element_id == _EBML_DURATION_ID and len(payload) in {
+            _EBML_FLOAT32_BYTES,
+            _EBML_FLOAT64_BYTES,
+        }:
+            duration = float(
+                struct.unpack(">f" if len(payload) == _EBML_FLOAT32_BYTES else ">d", payload)[0]
+            )
+    if duration is None:
+        final_timecode = _webm_final_timecode(data, segment_children)
+        seconds = None if final_timecode is None else final_timecode * scale / 1_000_000_000
+    else:
+        seconds = duration * scale / 1_000_000_000
+    if scale <= 0 or seconds is None or not math.isfinite(seconds) or seconds <= 0:
+        return None
+    return seconds
+
+
+def _block_relative_timecode(payload: bytes) -> int | None:
+    track = _ebml_vint(payload, 0, identifier=False)
+    if track is None:
+        return None
+    _track_number, track_bytes = track
+    if len(payload) < track_bytes + 2:
+        return None
+    return int.from_bytes(payload[track_bytes : track_bytes + 2], "big", signed=True)
+
+
+def _webm_final_timecode(
+    data: bytes,
+    segment_children: list[tuple[int, int, int]],
+) -> int | None:
+    """Infer finalized duration from the last recorded block when Info omits it."""
+    maximum: int | None = None
+    for element_id, cluster_start, cluster_stop in segment_children:
+        if element_id != _EBML_CLUSTER_ID:
+            continue
+        cluster = _ebml_elements(data, cluster_start, cluster_stop)
+        if cluster is None:
+            return None
+        base = 0
+        for child_id, payload_start, payload_stop in cluster:
+            payload = data[payload_start:payload_stop]
+            if child_id == _EBML_CLUSTER_TIMECODE_ID and 1 <= len(payload) <= (
+                _MAX_EBML_UNSIGNED_BYTES
+            ):
+                base = int.from_bytes(payload, "big")
+            elif child_id == _EBML_SIMPLE_BLOCK_ID:
+                relative = _block_relative_timecode(payload)
+                if relative is not None:
+                    maximum = max(base + relative, maximum or 0)
+            elif child_id == _EBML_BLOCK_GROUP_ID:
+                group = _ebml_elements(data, payload_start, payload_stop)
+                if group is None:
+                    return None
+                for group_id, block_start, block_stop in group:
+                    if group_id != _EBML_BLOCK_ID:
+                        continue
+                    relative = _block_relative_timecode(data[block_start:block_stop])
+                    if relative is not None:
+                        maximum = max(base + relative, maximum or 0)
+    return maximum if maximum is not None and maximum > 0 else None
+
+
+def _mp4_boxes(data: bytes, start: int, stop: int) -> list[tuple[bytes, int, int]] | None:
+    boxes: list[tuple[bytes, int, int]] = []
+    cursor = start
+    while cursor < stop:
+        if stop - cursor < _MP4_BOX_HEADER_BYTES:
+            return None
+        size = int.from_bytes(data[cursor : cursor + 4], "big")
+        box_type = data[cursor + 4 : cursor + 8]
+        header = _MP4_BOX_HEADER_BYTES
+        if size == 1:
+            if stop - cursor < _MP4_EXTENDED_BOX_HEADER_BYTES:
+                return None
+            size = int.from_bytes(data[cursor + 8 : cursor + 16], "big")
+            header = _MP4_EXTENDED_BOX_HEADER_BYTES
+        elif size == 0:
+            size = stop - cursor
+        if size < header or cursor + size > stop:
+            return None
+        boxes.append((box_type, cursor + header, cursor + size))
+        cursor += size
+    return boxes if cursor == stop else None
+
+
+def _mp4_duration_seconds(data: bytes) -> float | None:  # noqa: PLR0911
+    top = _mp4_boxes(data, 0, len(data))
+    if top is None or not any(item[0] == b"ftyp" for item in top):
+        return None
+    moov = [item for item in top if item[0] == b"moov"]
+    if len(moov) != 1:
+        return None
+    children = _mp4_boxes(data, moov[0][1], moov[0][2])
+    if children is None:
+        return None
+    mvhd = [item for item in children if item[0] == b"mvhd"]
+    if len(mvhd) != 1:
+        return None
+    payload = data[mvhd[0][1] : mvhd[0][2]]
+    if len(payload) < _MP4_MVHD_V0_BYTES:
+        return None
+    version = payload[0]
+    if version == 0 and len(payload) >= _MP4_MVHD_V0_BYTES:
+        timescale = int.from_bytes(payload[12:16], "big")
+        duration = int.from_bytes(payload[16:20], "big")
+    elif version == 1 and len(payload) >= _MP4_MVHD_V1_BYTES:
+        timescale = int.from_bytes(payload[20:24], "big")
+        duration = int.from_bytes(payload[24:32], "big")
+    else:
+        return None
+    if timescale <= 0 or duration <= 0:
+        return None
+    seconds = duration / timescale
+    return seconds if math.isfinite(seconds) and seconds > 0 else None
 
 
 def _reviewed_media(path: Path | None) -> dict[str, Any] | None:
@@ -57,11 +283,15 @@ def _reviewed_media(path: Path | None) -> dict[str, Any] | None:
         raise FormatError("SOVA-REPLAY-MEDIA-TYPE", "WebM media has no EBML signature")
     if media_type == "video/mp4" and (len(data) < _MIN_MP4_SIGNATURE_BYTES or data[4:8] != b"ftyp"):
         raise FormatError("SOVA-REPLAY-MEDIA-TYPE", "MP4 media has no ISO base signature")
+    duration = (
+        _webm_duration_seconds(data) if media_type == "video/webm" else _mp4_duration_seconds(data)
+    )
     return {
         "name": resolved.name,
         "mediaType": media_type,
         "digest": sha256_digest(data),
         "dataUrl": f"data:{media_type};base64,{base64.b64encode(data).decode('ascii')}",
+        "durationSeconds": None if duration is None else f"{duration:.6f}",
         "synchronization": "session-level-recording-not-event-time-attested",
     }
 
@@ -76,7 +306,7 @@ def _bounded_number(value: Any, maximum: int) -> bool:
     return decimal.is_finite() and Decimal(0) <= decimal <= Decimal(maximum)
 
 
-def _reviewed_replay_cues(  # noqa: PLR0912 - fail-closed untrusted cue validation
+def _reviewed_replay_cues(  # noqa: PLR0912, PLR0915 - fail-closed validation
     path: Path | None,
     media: dict[str, Any] | None,
     event_index: dict[str, dict[str, Any]],
@@ -108,9 +338,11 @@ def _reviewed_replay_cues(  # noqa: PLR0912 - fail-closed untrusted cue validati
         "synchronization",
         "cues",
     }
-    if set(value) != required or value.get("artifactType") != "sova.replay-cues" or value.get(
-        "schemaVersion"
-    ) != "0.1.0":
+    if (
+        set(value) != required
+        or value.get("artifactType") != "sova.replay-cues"
+        or value.get("schemaVersion") != "0.1.0"
+    ):
         raise FormatError("SOVA-REPLAY-CUES-FORMAT", "unsupported replay cue document")
     if value.get("mediaDigest") != media["digest"]:
         raise FormatError(
@@ -128,8 +360,7 @@ def _reviewed_replay_cues(  # noqa: PLR0912 - fail-closed untrusted cue validati
     uncertainty = synchronization.get("uncertaintyMs")
     if (
         not _bounded_number(uncertainty, _MAX_CUE_UNCERTAINTY_MS)
-        or synchronization.get("method")
-        != "same-host-monotonic-recorder-start-rpc-bound"
+        or synchronization.get("method") != "same-host-monotonic-recorder-start-rpc-bound"
         or synchronization.get("frameTimestampAttested") is not False
         or not isinstance(synchronization.get("statement"), str)
     ):
@@ -168,6 +399,23 @@ def _reviewed_replay_cues(  # noqa: PLR0912 - fail-closed untrusted cue validati
         recorded_payload = (
             recorded_event.get("payload") if isinstance(recorded_event, dict) else None
         )
+        media_duration_raw = media.get("durationSeconds")
+        media_duration = (
+            Decimal(media_duration_raw)
+            if isinstance(media_duration_raw, str)
+            and _bounded_number(media_duration_raw, _MAX_CUE_SECONDS)
+            else None
+        )
+        cue_offset = (
+            Decimal(str(cue.get("offsetSeconds")))
+            if _bounded_number(cue.get("offsetSeconds"), _MAX_CUE_SECONDS)
+            else None
+        )
+        chapter_offset = (
+            Decimal(str(cue.get("chapterOffsetSeconds")))
+            if _bounded_number(cue.get("chapterOffsetSeconds"), _MAX_CUE_SECONDS)
+            else None
+        )
         if (
             not isinstance(cue_id, str)
             or not cue_id
@@ -177,7 +425,9 @@ def _reviewed_replay_cues(  # noqa: PLR0912 - fail-closed untrusted cue validati
             or cue.get("eventKind") != "oracle.completed"
             or cue.get("oracleStatus") != "pass"
             or not all(_bounded_number(item, _MAX_CUE_SECONDS) for item in numeric)
-            or not all(isinstance(cue.get(key), str) and cue.get(key) for key in ("label", "channel"))
+            or not all(
+                isinstance(cue.get(key), str) and cue.get(key) for key in ("label", "channel")
+            )
             or isinstance(event_sequence, bool)
             or not isinstance(event_sequence, int)
             or event_sequence < 0
@@ -187,15 +437,31 @@ def _reviewed_replay_cues(  # noqa: PLR0912 - fail-closed untrusted cue validati
             or recorded_payload.get("status") != "pass"
         ):
             raise FormatError("SOVA-REPLAY-CUES-FORMAT", "invalid decisive replay cue values")
+        if media_duration is not None and (
+            cue_offset is None
+            or chapter_offset is None
+            or cue_offset >= media_duration
+            or chapter_offset >= media_duration
+        ):
+            raise FormatError(
+                "SOVA-REPLAY-CUES-DURATION",
+                "decisive replay cue falls outside the finalized media duration",
+            )
         cue_ids.add(cue_id)
         reviewed.append(dict(cue))
+    default_cue = next(
+        (cue for cue in reviewed if cue["eventId"] in primary_event_ids),
+        reviewed[0],
+    )
+    duration_bound = media_duration is not None
     return {
         "synchronization": dict(synchronization),
         "cues": reviewed,
-        "defaultCueId": next(
-            (cue["id"] for cue in reviewed if cue["eventId"] in primary_event_ids),
-            reviewed[0]["id"],
+        "defaultCueId": default_cue["id"],
+        "defaultCueSource": (
+            "primary" if default_cue["eventId"] in primary_event_ids else "comparison"
         ),
+        "durationBound": duration_bound,
     }
 
 
@@ -265,12 +531,13 @@ function updateSelection(){{document.querySelectorAll('.event-dot.selected').for
 function draw(){{if(selectedIndex>=visible.length)selectedIndex=Math.max(0,visible.length-1);const e=visible[selectedIndex];scrub.max=String(Math.max(0,visible.length-1));scrub.value=String(selectedIndex);text('position',visible.length?`${{selectedIndex+1}} / ${{visible.length}}`:'0 / 0');text('sequence',e?`sequence ${{e.sequence}}`:'');drawDetail(e);updateSelection()}}
 function apply(){{visible=events.filter(matches);selectedIndex=0;drawLanes();draw()}}
 function drawFilters(){{const box=document.getElementById('filters');box.replaceChildren();families().forEach(name=>{{const b=document.createElement('button');b.type='button';b.textContent=name;b.className=name===selectedFamily?'active':'';b.onclick=()=>{{selectedFamily=name;drawFilters();apply()}};box.appendChild(b)}})}}
-function summary(){{events.forEach(e=>byId.set(e.id,e));text('eventCount',events.length);text('actorCount',new Set(events.map(e=>e.actor.id)).size);text('redactionCount',events.reduce((n,e)=>n+(e.redactions||[]).length,0));text('duration',duration());text('sourceMeta',`${{data.source}}${{data.comparison?' ↔ '+data.comparison:''}}`);const sealed=data.completion==='sealed';document.getElementById('statusDot').classList.toggle('sealed',sealed);text('statusText',sealed?'integrity-checked sealed trace':data.liveEndpoint?'live unsealed tail':'integrity-checked playback')}}
+function summary(){{events.forEach(e=>byId.set(e.id,e));comparison.forEach(e=>byId.set(e.id,e));text('eventCount',events.length);text('actorCount',new Set(events.map(e=>e.actor.id)).size);text('redactionCount',events.reduce((n,e)=>n+(e.redactions||[]).length,0));text('duration',duration());text('sourceMeta',`${{data.source}}${{data.comparison?' ↔ '+data.comparison:''}}`);const sealed=data.completion==='sealed';document.getElementById('statusDot').classList.toggle('sealed',sealed);text('statusText',sealed?'integrity-checked sealed trace':data.liveEndpoint?'live unsealed tail':'integrity-checked playback')}}
 function cueById(id){{return (data.replayCues?.cues||[]).find(c=>c.id===id)||null}}
-function showCue(cue){{if(!cue)return;activeCue=cue;document.getElementById('breakpoint').hidden=false;text('cueLabel',cue.label);const sync=data.replayCues.synchronization;text('cueData',`${{cue.channel}} · trace sequence ${{cue.eventSequence}} · oracle ${{cue.oracleStatus}} · video ${{Number(cue.offsetSeconds).toFixed(3)}}s ± ${{Number(sync.uncertaintyMs).toFixed(3)}}ms`);selectedFamily='all';search.value='';drawFilters();apply();const event=byId.get(cue.eventId);if(event)selectEvent(event)}}
-function seekCue(cue,playWindow){{if(!cue||!data.media)return;const video=document.getElementById('sessionVideo');const start=Math.max(0,Number(cue.offsetSeconds)-Number(cue.preRollSeconds));const stopAt=Number(cue.offsetSeconds)+Number(cue.postRollSeconds);const seek=()=>{{video.currentTime=Math.min(start,Number.isFinite(video.duration)?Math.max(0,video.duration-.05):start);if(playWindow){{video.play().catch(()=>{{}});cueStop=()=>{{if(video.currentTime>=stopAt){{video.pause();video.removeEventListener('timeupdate',cueStop);cueStop=null}}}};video.addEventListener('timeupdate',cueStop)}}}};if(video.readyState>=1)seek();else video.addEventListener('loadedmetadata',seek,{{once:true}});showCue(cue)}}
+function showComparisonCue(event){{const box=document.getElementById('detail');box.replaceChildren();box.appendChild(detailBlock(event,'Decisive comparison evidence'));text('sequence',`comparison sequence ${{event.sequence}}`)}}
+function showCue(cue){{if(!cue)return;activeCue=cue;const breakpoint=document.getElementById('breakpoint');breakpoint.hidden=false;breakpoint.dataset.cueId=cue.id;breakpoint.dataset.cueSource=data.replayCues.defaultCueSource;text('cueLabel',cue.label);const sync=data.replayCues.synchronization;text('cueData',`${{cue.channel}} · trace sequence ${{cue.eventSequence}} · oracle ${{cue.oracleStatus}} · video ${{Number(cue.offsetSeconds).toFixed(3)}}s ± ${{Number(sync.uncertaintyMs).toFixed(3)}}ms`);selectedFamily='all';search.value='';drawFilters();apply();const event=byId.get(cue.eventId);if(event){{if(events.some(item=>item.id===event.id))selectEvent(event);else showComparisonCue(event)}}}}
+function seekCue(cue,playWindow){{if(!cue||!data.media)return;const video=document.getElementById('sessionVideo');const start=Math.max(0,Number(cue.offsetSeconds)-Number(cue.preRollSeconds));const declaredDuration=Number(data.media.durationSeconds);const requestedStop=Number(cue.offsetSeconds)+Number(cue.postRollSeconds);const stopAt=Number.isFinite(declaredDuration)&&declaredDuration>0?Math.min(declaredDuration,requestedStop):requestedStop;const finish=()=>{{video.pause();video.dataset.decisiveState='complete';if(cueStop){{video.removeEventListener('timeupdate',cueStop);video.removeEventListener('ended',finish);cueStop=null}}}};const seek=()=>{{video.currentTime=Math.min(start,Number.isFinite(video.duration)?Math.max(0,video.duration-.05):start);video.dataset.decisiveStart=String(start);video.dataset.decisiveStop=String(stopAt);video.dataset.decisiveState='ready';if(playWindow){{cueStop=()=>{{if(video.currentTime>=stopAt)finish()}};video.addEventListener('timeupdate',cueStop);video.addEventListener('ended',finish);video.play().then(()=>{{video.dataset.decisiveState='playing'}}).catch(()=>{{video.dataset.decisiveState='blocked'}})}}}};if(video.readyState>=1)seek();else video.addEventListener('loadedmetadata',seek,{{once:true}});showCue(cue)}}
 function focusDefaultCue(){{const cue=cueById(data.replayCues?.defaultCueId);if(cue)seekCue(cue,false)}}
-function loadMedia(){{if(!data.media)return;const panel=document.getElementById('visual');const video=document.getElementById('sessionVideo');panel.hidden=false;video.src=data.media.dataUrl;text('mediaMeta',`${{data.media.name}} · ${{data.media.digest}}`);if(data.replayCues){{const sync=data.replayCues.synchronization;text('mediaNote',`Oracle-synchronized cue · ${{sync.method}} · ± ${{Number(sync.uncertaintyMs).toFixed(3)}} ms; frame timestamps are not cryptographically attested.`)}}}}
+function loadMedia(){{if(!data.media)return;const panel=document.getElementById('visual');const video=document.getElementById('sessionVideo');panel.hidden=false;video.src=data.media.dataUrl;text('mediaMeta',`${{data.media.name}} · ${{data.media.digest}}${{data.media.durationSeconds?' · '+data.media.durationSeconds+' s':''}}`);if(data.replayCues){{const sync=data.replayCues.synchronization;text('mediaNote',data.replayCues.durationBound?`Oracle-synchronized, duration-bounded cue · ${{sync.method}} · ± ${{Number(sync.uncertaintyMs).toFixed(3)}} ms; frame timestamps are not cryptographically attested.`:'Cue indexed, but finalized media duration is unavailable; exact-open status is withheld.')}}}}
 function stop(){{if(timer)clearInterval(timer);timer=null;play.textContent='▶ Play'}}
 function start(){{stop();play.textContent='❚❚ Pause';const speed=Number(document.getElementById('speed').value);timer=setInterval(()=>{{if(selectedIndex>=visible.length-1){{stop();return}}selectedIndex+=1;draw()}},Math.max(45,650/speed))}}
 play.onclick=()=>timer?stop():start();scrub.oninput=()=>{{stop();selectedIndex=Number(scrub.value);draw()}};search.oninput=apply;document.getElementById('speed').onchange=()=>{{if(timer)start()}};document.getElementById('playDecisive').onclick=()=>{{if(activeCue)seekCue(activeCue,true)}};
@@ -288,7 +555,7 @@ def render_timeline_html(  # noqa: PLR0913 - evidence choices remain explicit
     counterfactual: str | None = None,
     media: Path | None = None,
     replay_cues: Path | None = None,
-) -> None:
+) -> dict[str, Any]:
     """Write a rich offline replay application that never executes trace payloads."""
     source_paths = {source.resolve()}
     if comparison is not None:
@@ -297,6 +564,11 @@ def render_timeline_html(  # noqa: PLR0913 - evidence choices remain explicit
         raise FormatError(
             "SOVA-REPLAY-IMMUTABLE-SOURCE",
             "visual playback requires a destination separate from every source trace",
+        )
+    if destination.is_symlink():
+        raise FormatError(
+            "SOVA-REPLAY-DESTINATION",
+            "visual replay destination must not be a symbolic link",
         )
     primary = TraceReader(source)
     primary.verify()
@@ -326,9 +598,7 @@ def render_timeline_html(  # noqa: PLR0913 - evidence choices remain explicit
             )
         event_index[event_id] = event
     primary_event_ids = {
-        str(event.get("id"))
-        for event in events
-        if isinstance(event.get("id"), str)
+        str(event.get("id")) for event in events if isinstance(event.get("id"), str)
     }
     reviewed_cues = _reviewed_replay_cues(
         replay_cues,
@@ -352,6 +622,26 @@ def render_timeline_html(  # noqa: PLR0913 - evidence choices remain explicit
         "replayCues": reviewed_cues,
     }
     destination.write_text(replay_document(payload), encoding="utf-8", newline="\n")
+    default_cue = None
+    if reviewed_cues is not None:
+        default_cue = next(
+            cue for cue in reviewed_cues["cues"] if cue["id"] == reviewed_cues["defaultCueId"]
+        )
+    duration_bound = bool(reviewed_cues is not None and reviewed_cues["durationBound"])
+    return {
+        "artifactType": "sova.timeline-replay",
+        "schemaVersion": "0.1.0",
+        "destination": str(destination.resolve()),
+        "visualReplay": None if reviewed_media is None else reviewed_media["name"],
+        "mediaDurationSeconds": (
+            None if reviewed_media is None else reviewed_media["durationSeconds"]
+        ),
+        "decisiveCue": default_cue,
+        "decisiveCueSource": (None if reviewed_cues is None else reviewed_cues["defaultCueSource"]),
+        "decisiveCueDurationBound": duration_bound,
+        "opensAtDecisiveMoment": bool(default_cue is not None and duration_bound),
+        "executesRecordedActions": False,
+    }
 
 
 __all__ = ["render_timeline_html", "replay_document"]

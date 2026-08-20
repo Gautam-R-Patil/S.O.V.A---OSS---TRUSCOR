@@ -11,6 +11,7 @@ import os
 import re
 import secrets
 import shutil
+import tempfile
 import threading
 import time
 import zipfile
@@ -20,8 +21,9 @@ from datetime import UTC, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 from urllib.parse import parse_qs, urlsplit
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -53,15 +55,128 @@ _SECRET = re.compile(
     rb"(?i)[\"']?(api[_-]?key|authorization|cookie|credential|password|secret|token)"
     rb"[\"']?\s*[:=]\s*[\"']?[^\s,;\"']{12,}"
 )
+_SECRET_PREFIX = re.compile(
+    rb"(?i)[\"']?(api[_-]?key|authorization|cookie|credential|password|secret|token)"
+    rb"[\"']?\s*[:=]\s*[\"']?[^\s,;\"']{0,11}$"
+)
 _MAX_EVENTS = 10_000
 _RAW_ED25519_KEY_BYTES = 32
-_MAX_UPLOAD_FILES = 32
+_REQUIRED_UPLOAD_FILES = 2
 _MAX_PORT = 65_535
 _MIN_TOKEN_LENGTH = 24
 _MAX_SERVICE_ARCHIVE_ENTRIES = 2_048
 _MAX_SERVICE_UNCOMPRESSED_BYTES = 128 * 1024 * 1024
 _MAX_SERVICE_COMPRESSION_RATIO = 100
 _MIN_COMPRESSION_RATIO_CHECK_BYTES = 1024 * 1024
+_MAX_HEALTH_BYTES = 64 * 1024
+_MAX_METADATA_BYTES = 256 * 1024
+_ARCHIVE_SCAN_CHUNK_BYTES = 64 * 1024
+_ARCHIVE_SCAN_OVERLAP_BYTES = 128
+_ARCHIVE_SPOOL_MEMORY_BYTES = 1024 * 1024
+_MAX_NESTED_ARCHIVE_BYTES = 32 * 1024 * 1024
+_MAX_NESTED_ARCHIVE_DEPTH = 3
+_UPLOAD_JSON_OVERHEAD_BYTES = _MAX_METADATA_BYTES + 64 * 1024
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        _request: Request,
+        _file_pointer: Any,
+        _code: int,
+        _message: str,
+        _headers: Any,
+        _new_url: str,
+    ) -> None:
+        return None
+
+
+def check_community_service_health(url: str) -> dict[str, Any]:
+    """Verify one exact loopback health response without proxies or redirects."""
+    parsed = urlsplit(url)
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname != "127.0.0.1"
+        or parsed.port is None
+        or not 1 <= parsed.port <= _MAX_PORT
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path != "/v1/health"
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise FormatError(
+            "SOVA-SERVICE-HEALTH-URL",
+            "community health check requires exact literal-IPv4 loopback HTTP URL",
+        )
+    request = Request(url, headers={"Accept": "application/json"})  # noqa: S310 - loopback only
+    try:
+        with build_opener(ProxyHandler({}), _NoRedirect()).open(request, timeout=5) as response:
+            status = response.status
+            body = response.read(_MAX_HEALTH_BYTES + 1)
+    except OSError as error:
+        raise FormatError(
+            "SOVA-SERVICE-HEALTH-UNAVAILABLE",
+            "community health endpoint is unavailable",
+        ) from error
+    if status != HTTPStatus.OK.value:
+        raise FormatError(
+            "SOVA-SERVICE-HEALTH-STATUS",
+            "community health endpoint did not return HTTP 200",
+        )
+    if len(body) > _MAX_HEALTH_BYTES:
+        raise FormatError("SOVA-SERVICE-HEALTH-LIMIT", "community health response is too large")
+    value = strict_json_loads(body, max_bytes=_MAX_HEALTH_BYTES)
+    required = {
+        "artifactType",
+        "schemaVersion",
+        "status",
+        "loopbackOnly",
+        "serviceKeyId",
+        "uploadLimits",
+    }
+    advertised_limits = value.get("uploadLimits") if isinstance(value, dict) else None
+    if (
+        not isinstance(value, dict)
+        or set(value) != required
+        or value.get("artifactType") != "sova.community-service-health"
+        or value.get("schemaVersion") != "0.1.0"
+        or value.get("status") != "ready"
+        or value.get("loopbackOnly") is not True
+        or not isinstance(value.get("serviceKeyId"), str)
+        or _DIGEST.fullmatch(value["serviceKeyId"]) is None
+        or not isinstance(advertised_limits, dict)
+    ):
+        raise FormatError(
+            "SOVA-SERVICE-HEALTH-RESPONSE",
+            "community health response failed its exact readiness contract",
+        )
+    try:
+        limits = CommunityServiceLimits(
+            max_body_bytes=_required_integer(advertised_limits, "maxRequestBodyBytes"),
+            max_file_bytes=_required_integer(advertised_limits, "maxRawFileBytes"),
+            max_files=_required_integer(advertised_limits, "maxFiles"),
+        )
+    except FormatError as error:
+        raise FormatError(
+            "SOVA-SERVICE-HEALTH-RESPONSE",
+            "community health upload limits are invalid",
+        ) from error
+    if advertised_limits != limits.to_mapping():
+        raise FormatError(
+            "SOVA-SERVICE-HEALTH-RESPONSE",
+            "community health upload limits are inconsistent",
+        )
+    return {
+        "artifactType": "sova.community-service-health-verification",
+        "schemaVersion": "0.1.0",
+        "status": "ready",
+        "serviceKeyId": value["serviceKeyId"],
+        "loopbackVerified": True,
+        "redirectsAllowed": False,
+        "proxiesUsed": False,
+        "uploadLimits": limits.to_mapping(),
+    }
 
 
 def _atomic_document(path: Path, document: Mapping[str, Any]) -> None:
@@ -115,31 +230,133 @@ def _inside(root: Path, relative: str) -> Path:
     return target
 
 
-def _archive_preflight(path: Path) -> None:
+@dataclass(slots=True)
+class _ArchiveScanState:
+    entries: int = 0
+    declared_uncompressed_bytes: int = 0
+    scanned_uncompressed_bytes: int = 0
+
+
+def _validate_archive_info(info: zipfile.ZipInfo, state: _ArchiveScanState) -> None:
+    state.declared_uncompressed_bytes += info.file_size
+    if state.declared_uncompressed_bytes > _MAX_SERVICE_UNCOMPRESSED_BYTES:
+        raise FormatError(
+            "SOVA-SERVICE-ARCHIVE",
+            "submitted archive expands beyond service limit",
+        )
+    if (
+        info.file_size > _MIN_COMPRESSION_RATIO_CHECK_BYTES
+        and info.compress_size > 0
+        and info.file_size / info.compress_size > _MAX_SERVICE_COMPRESSION_RATIO
+    ):
+        raise FormatError(
+            "SOVA-SERVICE-ARCHIVE",
+            "submitted archive compression ratio is unsafe",
+        )
+
+
+def _spool_archive_member(
+    member: IO[bytes],
+    spooled: IO[bytes],
+    state: _ArchiveScanState,
+) -> int:
+    tail = b""
+    read_bytes = 0
+    while True:
+        chunk = member.read(_ARCHIVE_SCAN_CHUNK_BYTES)
+        if not chunk:
+            return read_bytes
+        read_bytes += len(chunk)
+        state.scanned_uncompressed_bytes += len(chunk)
+        if state.scanned_uncompressed_bytes > _MAX_SERVICE_UNCOMPRESSED_BYTES:
+            raise FormatError(
+                "SOVA-SERVICE-ARCHIVE",
+                "submitted archive expands beyond service scan limit",
+            )
+        window = tail + chunk
+        if _SECRET.search(window):
+            raise FormatError(
+                "SOVA-SERVICE-SECRET",
+                "credential-shaped archive content was detected",
+            )
+        prefix = _SECRET_PREFIX.search(window)
+        tail = (
+            window[prefix.start() :]
+            if prefix is not None
+            else window[-_ARCHIVE_SCAN_OVERLAP_BYTES:]
+        )
+        if len(tail) > _ARCHIVE_SCAN_OVERLAP_BYTES:
+            raise FormatError(
+                "SOVA-SERVICE-SECRET",
+                "credential-shaped archive content exceeded the scan window",
+            )
+        spooled.write(chunk)
+
+
+def _scan_archive_member(
+    archive: zipfile.ZipFile,
+    info: zipfile.ZipInfo,
+    *,
+    state: _ArchiveScanState,
+    depth: int,
+) -> None:
+    if _SECRET.search(info.filename.encode("utf-8", errors="replace")):
+        raise FormatError(
+            "SOVA-SERVICE-SECRET",
+            "credential-shaped archive member name was detected",
+        )
+    with tempfile.SpooledTemporaryFile(
+        max_size=_ARCHIVE_SPOOL_MEMORY_BYTES,
+        mode="w+b",
+    ) as spooled:
+        with archive.open(info) as member:
+            read_bytes = _spool_archive_member(member, spooled, state)
+        if read_bytes != info.file_size:
+            raise FormatError(
+                "SOVA-SERVICE-ARCHIVE",
+                "archive member size changed while scanning",
+            )
+        spooled.seek(0)
+        if not zipfile.is_zipfile(spooled):
+            return
+        if read_bytes > _MAX_NESTED_ARCHIVE_BYTES:
+            raise FormatError(
+                "SOVA-SERVICE-ARCHIVE",
+                "nested archive exceeds the service scan limit",
+            )
+        if depth >= _MAX_NESTED_ARCHIVE_DEPTH:
+            raise FormatError("SOVA-SERVICE-ARCHIVE", "nested archive depth is unsafe")
+        spooled.seek(0)
+        _scan_archive(spooled, state=state, depth=depth + 1)
+
+
+def _scan_archive(
+    source: Path | IO[bytes],
+    *,
+    state: _ArchiveScanState,
+    depth: int,
+) -> None:
     try:
-        with zipfile.ZipFile(path) as archive:
+        with zipfile.ZipFile(source) as archive:
             infos = archive.infolist()
-    except zipfile.BadZipFile as error:
+            if not infos:
+                raise FormatError("SOVA-SERVICE-ARCHIVE", "submitted archive entry count is unsafe")
+            state.entries += len(infos)
+            if state.entries > _MAX_SERVICE_ARCHIVE_ENTRIES:
+                raise FormatError("SOVA-SERVICE-ARCHIVE", "submitted archive entry count is unsafe")
+            for info in infos:
+                _validate_archive_info(info, state)
+                if info.is_dir():
+                    continue
+                _scan_archive_member(archive, info, state=state, depth=depth)
+    except (EOFError, OSError, RuntimeError, zipfile.BadZipFile, zipfile.LargeZipFile) as error:
         raise FormatError(
             "SOVA-SERVICE-ARCHIVE", "submitted artifact is not a valid archive"
         ) from error
-    if not infos or len(infos) > _MAX_SERVICE_ARCHIVE_ENTRIES:
-        raise FormatError("SOVA-SERVICE-ARCHIVE", "submitted archive entry count is unsafe")
-    total = 0
-    for info in infos:
-        total += info.file_size
-        if total > _MAX_SERVICE_UNCOMPRESSED_BYTES:
-            raise FormatError(
-                "SOVA-SERVICE-ARCHIVE", "submitted archive expands beyond service limit"
-            )
-        if (
-            info.file_size > _MIN_COMPRESSION_RATIO_CHECK_BYTES
-            and info.compress_size > 0
-            and info.file_size / info.compress_size > _MAX_SERVICE_COMPRESSION_RATIO
-        ):
-            raise FormatError(
-                "SOVA-SERVICE-ARCHIVE", "submitted archive compression ratio is unsafe"
-            )
+
+
+def _archive_preflight(path: Path) -> None:
+    _scan_archive(path, state=_ArchiveScanState(), depth=0)
 
 
 def _load_or_create_key(root: Path) -> Ed25519Keypair:
@@ -200,12 +417,36 @@ def create_community_service_token(path: Path) -> dict[str, Any]:
     }
 
 
+def _base64_size(raw_size: int) -> int:
+    return 4 * ((raw_size + 2) // 3)
+
+
 @dataclass(frozen=True, slots=True)
 class CommunityServiceLimits:
-    max_body_bytes: int = 20 * 1024 * 1024
+    max_body_bytes: int = 48 * 1024 * 1024
     max_file_bytes: int = 16 * 1024 * 1024
-    max_files: int = 4
+    max_files: int = 2
     requests_per_minute: int = 60
+
+    @property
+    def max_base64_bytes_per_file(self) -> int:
+        """Maximum padded base64 bytes for one admitted raw file."""
+        return _base64_size(self.max_file_bytes)
+
+    @property
+    def max_decoded_bytes(self) -> int:
+        """Maximum decoded bytes admitted across one submission."""
+        return self.max_file_bytes * self.max_files
+
+    def to_mapping(self) -> dict[str, int]:
+        """Return the limits advertised by the HTTP health contract."""
+        return {
+            "maxRequestBodyBytes": self.max_body_bytes,
+            "maxFiles": self.max_files,
+            "maxRawFileBytes": self.max_file_bytes,
+            "maxDecodedBytes": self.max_decoded_bytes,
+            "maxBase64BytesPerFile": self.max_base64_bytes_per_file,
+        }
 
     def __post_init__(self) -> None:
         values = (
@@ -216,7 +457,10 @@ class CommunityServiceLimits:
         )
         if any(not isinstance(item, int) or isinstance(item, bool) or item < 1 for item in values):
             raise FormatError("SOVA-SERVICE-LIMIT", "service limits must be positive integers")
-        if self.max_file_bytes > self.max_body_bytes or self.max_files > _MAX_UPLOAD_FILES:
+        minimum_encoded_body = (
+            self.max_base64_bytes_per_file * self.max_files + _UPLOAD_JSON_OVERHEAD_BYTES
+        )
+        if self.max_files != _REQUIRED_UPLOAD_FILES or minimum_encoded_body > self.max_body_bytes:
             raise FormatError("SOVA-SERVICE-LIMIT", "service limits are internally inconsistent")
 
 
@@ -267,11 +511,20 @@ def prepare_community_submission(
     limits: CommunityServiceLimits | None = None,
 ) -> dict[str, Any]:
     """Build a bounded JSON upload document without sending it anywhere."""
+    selected_limits = CommunityServiceLimits() if limits is None else limits
     rows = []
-    for source in (capsule.resolve(), trace.resolve()):
+    for source in (capsule, trace):
         if not source.is_file() or source.is_symlink():
             raise FormatError("SOVA-SERVICE-UPLOAD", "submission source is missing or unsafe")
-        data = source.read_bytes()
+        try:
+            with source.open("rb") as stream:
+                data = stream.read(selected_limits.max_file_bytes + 1)
+        except OSError as error:
+            raise FormatError(
+                "SOVA-SERVICE-UPLOAD", "submission source could not be read safely"
+            ) from error
+        if len(data) > selected_limits.max_file_bytes:
+            raise FormatError("SOVA-SERVICE-LIMIT", "submission source exceeds raw file limit")
         rows.append(
             {
                 "name": source.name,
@@ -287,8 +540,69 @@ def prepare_community_submission(
         "metadata": dict(metadata),
         "files": rows,
     }
-    _parse_upload(document, CommunityServiceLimits() if limits is None else limits)
+    _parse_upload(document, selected_limits)
+    serialize_community_submission(document, limits=selected_limits)
     return document
+
+
+def _encoded_file_string_limit(limits: CommunityServiceLimits) -> int:
+    return limits.max_base64_bytes_per_file
+
+
+def serialize_community_submission(
+    document: Mapping[str, Any],
+    *,
+    limits: CommunityServiceLimits | None = None,
+) -> bytes:
+    """Serialize one verified upload with limits consistent with HTTP admission."""
+    selected = CommunityServiceLimits() if limits is None else limits
+    _parse_upload(document, selected)
+    body = canonical_json_bytes(
+        dict(document),
+        max_string_bytes=max(_MAX_METADATA_BYTES, _encoded_file_string_limit(selected)),
+    )
+    if len(body) > selected.max_body_bytes:
+        raise FormatError(
+            "SOVA-SERVICE-LIMIT", "encoded submission exceeds HTTP request body limit"
+        )
+    return body
+
+
+def _decode_upload_file(
+    row: Mapping[str, Any],
+    *,
+    limits: CommunityServiceLimits,
+    names: set[str],
+) -> _UploadFile:
+    if set(row) != {"name", "digest", "size", "data"}:
+        raise FormatError("SOVA-SERVICE-UPLOAD", "submission file fields are not exact")
+    name = _required_string(row, "name")
+    digest = _required_string(row, "digest")
+    size = _required_integer(row, "size")
+    encoded = _required_string(row, "data")
+    if (
+        _SAFE_FILE.fullmatch(name) is None
+        or Path(name).suffix not in _ALLOWED_FILES
+        or name in names
+        or _DIGEST.fullmatch(digest) is None
+        or not 0 <= size <= limits.max_file_bytes
+    ):
+        raise FormatError("SOVA-SERVICE-UPLOAD", "submission file declaration is unsafe")
+    if len(encoded) > limits.max_base64_bytes_per_file:
+        raise FormatError("SOVA-SERVICE-LIMIT", "submission base64 data exceeds byte limit")
+    if len(encoded) != _base64_size(size):
+        raise FormatError("SOVA-SERVICE-UPLOAD", "submission base64 length is inconsistent")
+    try:
+        data = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise FormatError(
+            "SOVA-SERVICE-UPLOAD", "submission file data is invalid base64"
+        ) from error
+    if len(data) != size or sha256_digest(data) != digest:
+        raise FormatError("SOVA-SERVICE-DIGEST", "submission file digest or size mismatches")
+    if _SECRET.search(data):
+        raise FormatError("SOVA-SERVICE-SECRET", "credential-shaped plaintext was detected")
+    return _UploadFile(name, digest, data)
 
 
 def _parse_upload(
@@ -303,43 +617,21 @@ def _parse_upload(
     rows = document.get("files")
     if kind not in {"registry", "leaderboard"} or not isinstance(metadata, dict):
         raise FormatError("SOVA-SERVICE-UPLOAD", "submission kind or metadata is invalid")
-    if _SECRET.search(canonical_json_bytes(metadata)):
+    metadata_bytes = canonical_json_bytes(metadata)
+    if len(metadata_bytes) > _MAX_METADATA_BYTES:
+        raise FormatError("SOVA-SERVICE-LIMIT", "submission metadata exceeds byte limit")
+    if _SECRET.search(metadata_bytes):
         raise FormatError("SOVA-SERVICE-SECRET", "credential-shaped metadata was detected")
-    if not isinstance(rows, list) or not 1 <= len(rows) <= limits.max_files:
+    if not isinstance(rows, list) or len(rows) != limits.max_files:
         raise FormatError("SOVA-SERVICE-UPLOAD", "submission file count is invalid")
     files: list[_UploadFile] = []
     names: set[str] = set()
-    total = 0
     for row in rows:
-        if not isinstance(row, Mapping) or set(row) != {"name", "digest", "size", "data"}:
+        if not isinstance(row, Mapping):
             raise FormatError("SOVA-SERVICE-UPLOAD", "submission file fields are not exact")
-        name = _required_string(row, "name")
-        digest = _required_string(row, "digest")
-        size = _required_integer(row, "size")
-        encoded = _required_string(row, "data")
-        if (
-            _SAFE_FILE.fullmatch(name) is None
-            or Path(name).suffix not in _ALLOWED_FILES
-            or name in names
-            or _DIGEST.fullmatch(digest) is None
-            or not 0 <= size <= limits.max_file_bytes
-        ):
-            raise FormatError("SOVA-SERVICE-UPLOAD", "submission file declaration is unsafe")
-        try:
-            data = base64.b64decode(encoded, validate=True)
-        except (binascii.Error, ValueError) as error:
-            raise FormatError(
-                "SOVA-SERVICE-UPLOAD", "submission file data is invalid base64"
-            ) from error
-        if len(data) != size or sha256_digest(data) != digest:
-            raise FormatError("SOVA-SERVICE-DIGEST", "submission file digest or size mismatches")
-        if _SECRET.search(data):
-            raise FormatError("SOVA-SERVICE-SECRET", "credential-shaped plaintext was detected")
-        total += len(data)
-        if total > limits.max_body_bytes:
-            raise FormatError("SOVA-SERVICE-LIMIT", "decoded submission exceeds byte limit")
-        names.add(name)
-        files.append(_UploadFile(name, digest, data))
+        upload = _decode_upload_file(row, limits=limits, names=names)
+        names.add(upload.name)
+        files.append(upload)
     return str(kind), dict(metadata), tuple(files)
 
 
@@ -608,6 +900,16 @@ class CommunityRegistryStore:
         if staging.exists():
             shutil.rmtree(staging)
 
+    def _discard_staging(self, row: Mapping[str, Any]) -> None:
+        submission_id = _required_string(row, "id")
+        if _SAFE_ID.fullmatch(submission_id) is None:
+            raise FormatError("SOVA-SERVICE-STAGING", "submission staging identity is unsafe")
+        staging = _inside(self.root, f"staging/{submission_id}")
+        if staging.is_symlink() or (staging.exists() and not staging.is_dir()):
+            raise FormatError("SOVA-SERVICE-STAGING", "submission staging path is unsafe")
+        if staging.exists():
+            shutil.rmtree(staging)
+
     def process_next(self) -> dict[str, Any] | None:
         with self._lock:
             selected = next(
@@ -635,6 +937,11 @@ class CommunityRegistryStore:
                 self._persist()
         except (FormatError, OSError, ValueError, KeyError, TypeError) as error:
             with self._lock:
+                cleanup_failed = False
+                try:
+                    self._discard_staging(selected)
+                except (FormatError, OSError):
+                    cleanup_failed = True
                 selected["status"] = "rejected"
                 selected["verification"] = None
                 selected["error"] = {
@@ -642,6 +949,7 @@ class CommunityRegistryStore:
                     if isinstance(error, FormatError)
                     else "SOVA-SERVICE-VERIFY",
                     "message": str(error),
+                    "stagingCleanupFailed": cleanup_failed,
                 }
                 self._event("submission.rejected", submission_id, "rejected")
                 self._persist()
@@ -926,7 +1234,16 @@ class CommunityHTTPService:
                     )
                     return
                 try:
-                    document = _object_document(strict_json_loads(self.rfile.read(length)))
+                    document = _object_document(
+                        strict_json_loads(
+                            self.rfile.read(length),
+                            max_bytes=service.config.limits.max_body_bytes,
+                            max_string_bytes=max(
+                                _MAX_METADATA_BYTES,
+                                _encoded_file_string_limit(service.config.limits),
+                            ),
+                        )
+                    )
                     result = service.store.submit(document)
                 except (FormatError, OSError) as error:
                     code = error.issue.code if isinstance(error, FormatError) else "SOVA-SERVICE-IO"
@@ -952,6 +1269,7 @@ class CommunityHTTPService:
                                 "status": "ready",
                                 "loopbackOnly": True,
                                 "serviceKeyId": service.store.key_id,
+                                "uploadLimits": service.config.limits.to_mapping(),
                             },
                         )
                         return
@@ -1050,7 +1368,9 @@ __all__ = [
     "CommunityRegistryStore",
     "CommunityServiceConfig",
     "CommunityServiceLimits",
+    "check_community_service_health",
     "create_community_service_token",
     "prepare_community_submission",
+    "serialize_community_submission",
     "verify_community_service_index",
 ]
