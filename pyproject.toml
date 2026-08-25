@@ -49,7 +49,7 @@ classifiers = [
 dependencies = [
   "cryptography>=50,<51",
   "jsonschema>=4.26,<5",
-  "jsonschema-rs>=0.49.2,<0.50",
+  "jsonschema-rs>=0.49.2,<0.51",
 ]
 
 [project.scripts]
