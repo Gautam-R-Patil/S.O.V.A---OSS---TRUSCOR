@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.invalid/schemas/intake-report-0.1.0.schema.json",
+  "title": "SOVA universal intake report 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactType", "schemaVersion", "id", "profileDigest", "targetManifestDigest",
+    "status", "inputs", "generation", "workflowGraph", "attackSurfaceGraph",
+    "coverage", "limitations", "errors", "claims", "contentDigest"
+  ],
+  "properties": {
+    "artifactType": {"const": "sova.intake-report"},
+    "schemaVersion": {"const": "0.1.0"},
+    "id": {"type": "string", "pattern": "^intake:report:[0-9a-f]{32}$"},
+    "profileDigest": {"$ref": "#/$defs/digest"},
+    "targetManifestDigest": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+    "status": {"enum": ["complete", "partial", "inconclusive"]},
+    "inputs": {
+      "type": "array", "maxItems": 10000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "kind", "sourceClass", "digest", "status", "targetCodeExecuted"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "kind": {"type": "string", "minLength": 1},
+          "sourceClass": {"enum": ["supplied", "static", "passive", "active"]},
+          "digest": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+          "status": {"enum": ["parsed", "missing", "drift", "blocked", "load-error", "parse-error"]},
+          "targetCodeExecuted": {"const": false}
+        }
+      }
+    },
+    "generation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "fingerprints"],
+      "properties": {
+        "state": {"enum": ["match", "drift", "incomplete"]},
+        "fingerprints": {
+          "type": "array", "maxItems": 10000,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["inputId", "expectedDigest", "startDigest", "endDigest", "state", "reason"],
+            "properties": {
+              "inputId": {"type": "string", "minLength": 1},
+              "expectedDigest": {"$ref": "#/$defs/digest"},
+              "startDigest": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+              "endDigest": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+              "state": {"enum": ["match", "drift", "incomplete"]},
+              "reason": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
+    "workflowGraph": {"$ref": "#/$defs/graph"},
+    "attackSurfaceGraph": {"$ref": "#/$defs/graph"},
+    "coverage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["items", "counts", "partial", "allVulnerabilitiesFound", "safeOrClean"],
+      "properties": {
+        "items": {
+          "type": "array", "maxItems": 100000,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["subject", "dimension", "state", "reason", "evidenceRefs"],
+            "properties": {
+              "subject": {"type": "string", "minLength": 1},
+              "dimension": {"type": "string", "minLength": 1},
+              "state": {"$ref": "#/$defs/coverageState"},
+              "reason": {"type": "string", "minLength": 1},
+              "evidenceRefs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+            }
+          }
+        },
+        "counts": {
+          "type": "object", "additionalProperties": false,
+          "required": ["declared", "discovered", "exercised", "reproduced", "blocked", "unsupported", "unknown"],
+          "properties": {
+            "declared": {"type": "integer", "minimum": 0},
+            "discovered": {"type": "integer", "minimum": 0},
+            "exercised": {"type": "integer", "minimum": 0},
+            "reproduced": {"type": "integer", "minimum": 0},
+            "blocked": {"type": "integer", "minimum": 0},
+            "unsupported": {"type": "integer", "minimum": 0},
+            "unknown": {"type": "integer", "minimum": 0}
+          }
+        },
+        "partial": {"type": "boolean"},
+        "allVulnerabilitiesFound": {"const": false},
+        "safeOrClean": {"const": false}
+      }
+    },
+    "limitations": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "errors": {
+      "type": "array", "maxItems": 10000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["inputId", "code", "message"],
+        "properties": {
+          "inputId": {"type": "string", "minLength": 1},
+          "code": {"type": "string", "minLength": 1},
+          "message": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "claims": {
+      "type": "object", "additionalProperties": false,
+      "required": ["targetCodeExecuted", "activeObservationsIndependentlyAttested", "inferenceIsExecutionEvidence", "allWorkflowsUnderstood", "allAttackSurfacesEnumerated", "allVulnerabilitiesFound", "safeOrClean"],
+      "properties": {
+        "targetCodeExecuted": {"const": false},
+        "activeObservationsIndependentlyAttested": {"const": false},
+        "inferenceIsExecutionEvidence": {"const": false},
+        "allWorkflowsUnderstood": {"const": false},
+        "allAttackSurfacesEnumerated": {"const": false},
+        "allVulnerabilitiesFound": {"const": false},
+        "safeOrClean": {"const": false}
+      }
+    },
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "coverageState": {"enum": ["declared", "discovered", "exercised", "reproduced", "blocked", "unsupported", "unknown"]},
+    "provenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceId", "pointer", "sourceClass", "evidenceClass", "projectionDigest"],
+      "properties": {
+        "sourceId": {"type": "string", "minLength": 1},
+        "pointer": {"type": "string", "minLength": 1},
+        "sourceClass": {"enum": ["supplied", "static", "passive", "active"]},
+        "evidenceClass": {"enum": ["declared", "observed", "inferred", "refuted"]},
+        "projectionDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "node": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "name", "attributes", "evidenceClass", "confidence", "provenance"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^intake:[a-z-]+-node:[0-9a-f]{32}$"},
+        "kind": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "attributes": {"type": "object"},
+        "evidenceClass": {"enum": ["declared", "observed", "inferred", "refuted"]},
+        "confidence": {"type": "string", "pattern": "^(?:0(?:\\.[0-9]+)?|1(?:\\.0+)?)$"},
+        "provenance": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/provenance"}}
+      }
+    },
+    "edge": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "source", "target", "kind", "preconditions", "effects", "attributes", "evidenceClass", "confidence", "provenance"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^intake:[a-z-]+-edge:[0-9a-f]{32}$"},
+        "source": {"type": "string", "minLength": 1},
+        "target": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "preconditions": {"type": "array", "items": {"type": "string"}},
+        "effects": {"type": "array", "items": {"type": "string"}},
+        "attributes": {"type": "object"},
+        "evidenceClass": {"enum": ["declared", "observed", "inferred", "refuted"]},
+        "confidence": {"type": "string", "pattern": "^(?:0(?:\\.[0-9]+)?|1(?:\\.0+)?)$"},
+        "provenance": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/provenance"}}
+      }
+    },
+    "graph": {
+      "type": "object", "additionalProperties": false,
+      "required": ["nodes", "edges"],
+      "properties": {
+        "nodes": {"type": "array", "maxItems": 100000, "items": {"$ref": "#/$defs/node"}},
+        "edges": {"type": "array", "maxItems": 100000, "items": {"$ref": "#/$defs/edge"}}
+      }
+    }
+  }
+}

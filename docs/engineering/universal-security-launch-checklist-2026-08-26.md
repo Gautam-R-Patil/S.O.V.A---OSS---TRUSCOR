@@ -30,7 +30,7 @@ infrastructure-failure states instead of translating them into success.
 | Phase | Gate | Status | Exit evidence |
 |---|---|---|---|
 | P0 | Preserve and freeze the foundation | **COMPLETE** | [P0 baseline](./p0-foundation-baseline-2026-08-26.md), [ADR-0028](../decisions/0028-universal-security-extension-boundary.md), preservation commit |
-| P1 | Universal intake and workflow/surface model | NOT STARTED | Target-profile fixtures, measured discovery reports, compatibility tests |
+| P1 | Universal intake and workflow/surface model | **COMPLETE** | [P1 validation](./p1-universal-intake-validation-2026-08-26.md), target-profile fixtures, measured discovery reports, compatibility tests |
 | P2 | Methodology compiler and native playbook library | NOT STARTED | Versioned playbooks, taxonomy coverage, compiler conformance |
 | P3 | Tool adapters and evidence normalization | NOT STARTED | Pinned adapter matrix, receipts, normalized observations, failure tests |
 | P4 | Oracle laboratory, reproduction, and coverage accounting | NOT STARTED | Calibrated oracle records, false-positive study, coverage contract |
@@ -65,56 +65,57 @@ the research adoption ledger exist; the preservation commit succeeds.
 
 ### Target-profile contract
 
-- [ ] **P1-01** Add a versioned `TargetProfile` contract with target identity,
+- [x] **P1-01** Add a versioned `TargetProfile` contract with target identity,
   authorization scope, provenance, target kinds, supplied artifacts, observed
   interfaces, credentials-by-reference, environments, constraints, and explicit
   unknowns.
-- [ ] **P1-02** Support composite profiles spanning web/UI, API, host/network,
+- [x] **P1-02** Support composite profiles spanning web/UI, API, host/network,
   source/package, OCI/image, desktop software, AI model/agent, MCP/A2A, and declared
   third-party-service boundaries.
-- [ ] **P1-03** Never embed a raw credential, browser profile, sensitive target, or
+- [x] **P1-03** Never embed a raw credential, browser profile, sensitive target, or
   unrestricted secret resolver in a portable profile.
-- [ ] **P1-04** Bind every effectful run to existing proof-of-control, authority,
+- [x] **P1-04** Bind every effectful run to existing proof-of-control, authority,
   approval, budget, containment, and evidence requirements.
 
 ### Intake front ends
 
-- [ ] **P1-05** URL/web intake: crawl seed, robots/policy observation, DOM and client
+- [x] **P1-05** URL/web intake: inert crawl seed and content-bound robots/policy,
+  DOM and client
   route inventory, forms, upload/download, service workers, WebSockets, browser
   storage, and authentication transitions.
-- [ ] **P1-06** API intake: OpenAPI/Swagger, GraphQL, gRPC reflection/descriptors,
+- [x] **P1-06** API intake: OpenAPI/Swagger, GraphQL, gRPC reflection/descriptors,
   Postman/HAR, captured traffic, undocumented endpoint observation, and stateful
   operation links.
-- [ ] **P1-07** Source/package intake: repository/archive, build metadata, lockfiles,
+- [x] **P1-07** Source/package intake: repository/archive, build metadata, lockfiles,
   SBOM, dependency graph, secrets/config, static entry points, binaries, and test
   fixtures without executing package-controlled setup by default.
-- [ ] **P1-08** OCI/container intake: manifest/config/layers, entrypoint, SBOM,
+- [x] **P1-08** OCI/container intake: manifest/config/layers, entrypoint, SBOM,
   vulnerabilities, capabilities, mounts, ports, image provenance, and runtime
   requirements.
-- [ ] **P1-09** Network intake: explicitly authorized host/CIDR inventory, services,
+- [x] **P1-09** Network intake: explicitly authorized host/CIDR inventory, services,
   protocol/TLS observations, DNS relationships, and segmentation evidence.
-- [ ] **P1-10** Agent/MCP/A2A intake: model/provider declarations, tools/resources,
+- [x] **P1-10** Agent/MCP/A2A intake: model/provider declarations, tools/resources,
   prompts/policies when supplied, memory, identities, trust boundaries, skills,
   handoffs, protocols, and observed consequential actions.
-- [ ] **P1-11** Desktop intake: process generation, window/control graph,
+- [x] **P1-11** Desktop intake: process generation, window/control graph,
   accessibility/automation surfaces, filesystem/process/network side effects, and
   elevated or cross-process boundaries.
 
 ### Workflow and surface discovery
 
-- [ ] **P1-12** Emit a provenance-separated workflow graph containing states,
+- [x] **P1-12** Emit a provenance-separated workflow graph containing states,
   transitions, actors, preconditions, effects, observations, failures, and confidence.
-- [ ] **P1-13** Emit an attack-surface graph containing inputs, trust boundaries,
+- [x] **P1-13** Emit an attack-surface graph containing inputs, trust boundaries,
   identities, privileges, data stores, dependencies, protocols, tool calls, and
   externally controlled resources.
-- [ ] **P1-14** Combine supplied specification, static discovery, passive runtime
+- [x] **P1-14** Combine supplied specification, static discovery, passive runtime
   observation, and approved active exploration without treating inference as
   execution evidence.
-- [ ] **P1-15** Add a coverage contract listing declared, discovered, exercised,
+- [x] **P1-15** Add a coverage contract listing declared, discovered, exercised,
   reproduced, blocked, unsupported, and unknown nodes/edges.
-- [ ] **P1-16** Add change/fingerprint detection so a target that drifts during
+- [x] **P1-16** Add change/fingerprint detection so a target that drifts during
   discovery becomes inconclusive or starts a new generation.
-- [ ] **P1-17** Package intake outputs as offline-verifiable SOVA artifacts and
+- [x] **P1-17** Package intake outputs as offline-verifiable SOVA artifacts and
   traces using existing schemas and extension rules.
 
 **P1 exit gate:** deterministic owned fixtures exist for every target kind; the

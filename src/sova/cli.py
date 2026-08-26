@@ -133,6 +133,20 @@ from sova.formats import (
     validate_document,
 )
 from sova.formats.errors import FormatError
+from sova.intake import (
+    EntryPoint,
+    EntryPointKind,
+    InputDescriptor,
+    InputKind,
+    ProfileTargetKind,
+    SourceClass,
+    TargetProfile,
+    describe_material,
+    read_target_profile,
+    run_universal_intake,
+    target_profile_template,
+    validate_target_profile,
+)
 from sova.live import (
     adaptive_browser_policy_from_mapping,
     adversarial_tactic_ids,
@@ -254,6 +268,7 @@ if TYPE_CHECKING:
 
 _MIN_REPLAY_SERVICE_DURATION = 0.1
 _MAX_REPLAY_SERVICE_DURATION = 86_400
+_INTAKE_SPEC_PARTS = 4
 
 
 def _path(value: str) -> Path:
@@ -453,6 +468,63 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     target_browser_kit.add_argument("origin")
     target_browser_kit.add_argument("destination", type=_path)
     target_browser_kit.set_defaults(handler=_target_browser_kit)
+    target_profile_create = target_commands.add_parser(
+        "profile-create",
+        help="write a composite content-addressed universal target profile",
+    )
+    target_profile_create.add_argument("identifier")
+    target_profile_create.add_argument("destination", type=_path)
+    target_profile_create.add_argument("--title")
+    target_profile_create.add_argument(
+        "--kind",
+        action="append",
+        required=True,
+        choices=tuple(kind.value for kind in ProfileTargetKind),
+    )
+    target_profile_create.add_argument("--authorization-scope", required=True)
+    target_profile_create.add_argument(
+        "--material",
+        action="append",
+        default=[],
+        metavar="ID=KIND=SOURCE=PATH",
+        help="bind and digest a required supplied material; may be repeated",
+    )
+    target_profile_create.add_argument(
+        "--optional-material",
+        action="append",
+        default=[],
+        metavar="ID=KIND=SOURCE=PATH",
+        help="bind and digest an optional supplied material; may be repeated",
+    )
+    target_profile_create.add_argument(
+        "--entrypoint",
+        action="append",
+        default=[],
+        metavar="ID=KIND=TARGET_KINDS=LOCATOR",
+        help="add an inert seed; TARGET_KINDS is a comma-separated list",
+    )
+    target_profile_create.set_defaults(handler=_target_profile_create)
+    target_profile_validate = target_commands.add_parser(
+        "profile-validate",
+        help="validate a universal target profile without loading its materials",
+    )
+    target_profile_validate.add_argument("profile", type=_path)
+    target_profile_validate.set_defaults(handler=_target_profile_validate)
+    target_intake = target_commands.add_parser(
+        "intake",
+        help="create provenance-separated workflow and attack-surface intake evidence",
+    )
+    target_intake.add_argument("profile", type=_path)
+    target_intake.add_argument("destination", type=_path)
+    target_intake.add_argument(
+        "--material",
+        action="append",
+        default=[],
+        metavar="ID=PATH",
+        help="override a material path; otherwise use the profile-adjacent logical name",
+    )
+    target_intake.add_argument("--authorize-active-observations", action="store_true")
+    target_intake.set_defaults(handler=_target_intake)
 
     detonate_parser = commands.add_parser(
         "detonate",
@@ -2325,6 +2397,110 @@ def _target_browser_kit(args: argparse.Namespace) -> int:
     report = create_browser_test_kit(str(args.origin), args.destination)
     sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
     return 0
+
+
+def _target_profile_create(args: argparse.Namespace) -> int:
+    target_kinds = tuple(ProfileTargetKind(value) for value in dict.fromkeys(args.kind))
+    base = target_profile_template(
+        identifier=str(args.identifier),
+        title=str(args.title or args.identifier),
+        target_kinds=target_kinds,
+        authorization_scope=str(args.authorization_scope),
+    )
+    inputs = tuple(
+        _target_profile_material(value, required=required)
+        for required, values in ((True, args.material), (False, args.optional_material))
+        for value in values
+    )
+    entrypoints = tuple(_target_profile_entrypoint(value) for value in args.entrypoint)
+    profile = TargetProfile(
+        identifier=base.identifier,
+        version=base.version,
+        title=base.title,
+        target_kinds=base.target_kinds,
+        authorization_scope=base.authorization_scope,
+        entrypoints=entrypoints,
+        inputs=inputs,
+        constraints=base.constraints,
+        provenance=base.provenance,
+    )
+    _write_new_document(args.destination, profile.to_mapping())
+    report = validate_target_profile(profile)
+    report["profile"] = str(args.destination)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _target_profile_material(value: str, *, required: bool) -> InputDescriptor:
+    parts = value.split("=", maxsplit=3)
+    if len(parts) != _INTAKE_SPEC_PARTS or not all(parts):
+        raise FormatError(
+            "SOVA-CLI-INTAKE-MATERIAL",
+            "material must use ID=KIND=SOURCE=PATH",
+        )
+    identifier, kind_value, source_value, raw_path = parts
+    try:
+        kind = InputKind(kind_value)
+        source = SourceClass(source_value)
+    except ValueError as error:
+        raise FormatError(
+            "SOVA-CLI-INTAKE-MATERIAL", "material kind or source class is unsupported"
+        ) from error
+    return describe_material(
+        Path(raw_path),
+        identifier=identifier,
+        kind=kind,
+        source_class=source,
+        required=required,
+    )
+
+
+def _target_profile_entrypoint(value: str) -> EntryPoint:
+    parts = value.split("=", maxsplit=3)
+    if len(parts) != _INTAKE_SPEC_PARTS or not all(parts):
+        raise FormatError(
+            "SOVA-CLI-INTAKE-ENTRYPOINT",
+            "entrypoint must use ID=KIND=TARGET_KINDS=LOCATOR",
+        )
+    identifier, kind_value, target_values, locator = parts
+    try:
+        return EntryPoint(
+            id=identifier,
+            kind=EntryPointKind(kind_value),
+            locator=locator,
+            target_kinds=tuple(ProfileTargetKind(item) for item in target_values.split(",")),
+        )
+    except ValueError as error:
+        raise FormatError("SOVA-CLI-INTAKE-ENTRYPOINT", "entrypoint kind is unsupported") from error
+
+
+def _target_profile_validate(args: argparse.Namespace) -> int:
+    profile = read_target_profile(args.profile)
+    report = validate_target_profile(profile)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0 if report["accepted"] else 1
+
+
+def _target_intake(args: argparse.Namespace) -> int:
+    profile = read_target_profile(args.profile)
+    bindings = {
+        descriptor.id: candidate
+        for descriptor in profile.inputs
+        if (candidate := args.profile.parent / descriptor.logical_locator).exists()
+    }
+    for value in args.material:
+        identifier, separator, raw_path = value.partition("=")
+        if not separator or not identifier or not raw_path:
+            raise FormatError("SOVA-CLI-INTAKE-MATERIAL", "material override must use ID=PATH")
+        bindings[identifier] = Path(raw_path)
+    artifacts = run_universal_intake(
+        profile,
+        bindings,
+        args.destination,
+        active_observations_authorized=bool(args.authorize_active_observations),
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(artifacts.to_mapping()) + b"\n")
+    return 2 if artifacts.status == "inconclusive" else 0
 
 
 def _inspect(args: argparse.Namespace) -> int:

@@ -735,6 +735,15 @@ sova target template browser-agent ./website-target.json
 sova target validate ./website-target.json
 sova target plan ./website-target.json ./website-plan.json
 
+# Build a secret-free composite profile and map supplied target materials.
+# Intake never executes package code or silently upgrades inference to evidence.
+sova target profile-create owned-app ./target-profile.json \
+  --kind web --kind api --authorization-scope owned-lab \
+  --material api=openapi=supplied=openapi.yaml \
+  --entrypoint web=url=web=https://owned.example
+sova target profile-validate ./target-profile.json
+sova target intake ./target-profile.json ./intake --material api=./openapi.yaml
+
 # Validate the complete measurement pipeline on self-owned deterministic fixtures
 sova target fixture website ./website-fixture
 sova target fixture software ./software-fixture

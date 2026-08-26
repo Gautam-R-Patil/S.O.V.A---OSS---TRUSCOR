@@ -19,6 +19,8 @@ _SCHEMA_FILES = {
     "sova.trace": "trace-manifest-0.1.0.schema.json",
     "sova.event": "event-0.1.0.schema.json",
     "sova.map": "map-report-0.1.0.schema.json",
+    "sova.target-profile": "target-profile-0.1.0.schema.json",
+    "sova.intake-report": "intake-report-0.1.0.schema.json",
     "sova.forensic-reconstruction": "forensic-reconstruction-0.1.0.schema.json",
     "sova.evidence": "evidence-0.1.0.schema.json",
     "sova.composition-report": "composition-report-0.1.0.schema.json",

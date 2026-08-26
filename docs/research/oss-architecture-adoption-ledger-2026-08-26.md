@@ -143,6 +143,28 @@ protocol, image/provenance policy, network and secret brokers, host hardening,
 attestation, evidence extraction, cleanup, monitoring, updates, and independent
 review described by P5.
 
+## Same-day independent second pass
+
+The sources below were re-opened on 2026-08-26 after P0 rather than accepted from
+the first inventory. The result did not reveal a safe drop-in universal pentest
+engine. It did strengthen a few narrow architectural choices while confirming that
+SOVA must own authority, evidence, coverage, replay, and claim discipline.
+
+| Current upstream reviewed | Useful pattern | Guarded SOVA decision |
+|---|---|---|
+| [AutoPentest](https://github.com/bhavsec/autopentest-ai) | Explicit recon, analysis, exploitation, post-exploitation, and reporting tasks; parser/verification/context-compression seams | Reference task decomposition and prioritization only. Do not inherit universal-coverage or zero-false-positive claims; observations still need SOVA reproduction and evidence. |
+| [PentAGI flow execution](https://github.com/vxcontrol/pentagi/blob/main/backend/docs/flow_execution.md) | Hierarchical flow/task/subtask execution and specialist-tool routing | Reference P2 planning and P3 orchestration. Model plans never grant authority or become trusted contracts. |
+| [PentestGPT](https://github.com/GreyDGL/PentestGPT) | Reasoning/execution separation, state retention, telemetry, and benchmark discipline | Reference evaluation and context interfaces, not a core runtime dependency or evidence oracle. |
+| [CAI](https://github.com/aliasrobotics/cai) | Agent/tool/handoff/turn/tracing/HITL abstractions | Research reference only pending exact licence review; do not copy incompatible code or let a handoff cross SOVA authority. |
+| [ZAP](https://github.com/zaproxy/zaproxy), [Nuclei](https://github.com/projectdiscovery/nuclei), [Schemathesis](https://github.com/schemathesis/schemathesis) | Mature web/API discovery and test execution | External P3 adapters with pinned binaries/templates/schemas and raw receipts. Scanner output is an observation, not a finding. |
+| [PyRIT](https://github.com/Azure/PyRIT), [garak](https://github.com/NVIDIA/garak), [promptfoo](https://github.com/promptfoo/promptfoo), [Inspect AI](https://github.com/UKGovernmentBEIS/inspect_ai) | AI attack orchestration, probes, assertions, and evaluation composition | Separate adapters/benchmark lanes; normalize outcomes through SOVA evidence and preserve provider/budget provenance. |
+| [Trivy](https://github.com/aquasecurity/trivy), [Syft](https://github.com/anchore/syft), [Grype](https://github.com/anchore/grype), [OSV-Scanner](https://github.com/google/osv-scanner) | SBOM and package/image vulnerability evidence | Prefer upstream CLI/data formats and exact versions. Never vendor databases or present matches as independently reproduced vulnerabilities. |
+| [Firecracker production guidance](https://github.com/firecracker-microvm/firecracker/blob/main/docs/prod-host-setup.md), [Kata Containers](https://github.com/kata-containers/kata-containers), [gVisor](https://github.com/google/gvisor) | VM/container isolation primitives and operational hardening boundaries | Keep Firecracker as the P5 Linux/KVM foundation. Build SOVA's broker, attestation, lifecycle, monitoring, and containment tests around it; no current Windows hostile-agent claim. |
+
+No third-party source code was copied into P1. The adopted ideas are contract and
+seam patterns implemented against SOVA's existing canonical JSON, trace, capsule,
+authority, and executor interfaces.
+
 ## Immediate implementation order
 
 1. P1 contracts and workflow/surface graph, with no external runtime dependency.

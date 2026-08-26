@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.invalid/schemas/target-profile-0.1.0.schema.json",
+  "title": "SOVA target profile 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifactType", "schemaVersion", "identifier", "version", "title",
+    "targetKinds", "authorizationScope", "controlEvidenceRequired", "entrypoints",
+    "inputs", "credentialReferences", "environments", "constraints", "provenance",
+    "legacyTargetManifest", "extensions"
+  ],
+  "properties": {
+    "artifactType": {"const": "sova.target-profile"},
+    "schemaVersion": {"const": "0.1.0"},
+    "identifier": {"$ref": "#/$defs/id"},
+    "version": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "title": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "targetKinds": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/targetKind"}
+    },
+    "authorizationScope": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "controlEvidenceRequired": {"const": true},
+    "entrypoints": {
+      "type": "array", "maxItems": 10000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "kind", "locator", "targetKinds"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "kind": {"enum": ["url", "api", "host", "cidr", "package", "process", "agent", "mcp", "a2a"]},
+          "locator": {"type": "string", "minLength": 1, "maxLength": 4096},
+          "targetKinds": {
+            "type": "array", "minItems": 1, "uniqueItems": true,
+            "items": {"$ref": "#/$defs/targetKind"}
+          }
+        }
+      }
+    },
+    "inputs": {
+      "type": "array", "maxItems": 10000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "kind", "sourceClass", "logicalLocator", "mediaType", "expectedDigest", "required"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "kind": {"$ref": "#/$defs/inputKind"},
+          "sourceClass": {"enum": ["supplied", "static", "passive", "active"]},
+          "logicalLocator": {"type": "string", "minLength": 1, "maxLength": 4096},
+          "mediaType": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.+-]{0,126}/[a-z0-9][a-z0-9.+-]{0,126}$"},
+          "expectedDigest": {"$ref": "#/$defs/digest"},
+          "required": {"type": "boolean"}
+        }
+      }
+    },
+    "credentialReferences": {
+      "type": "array", "maxItems": 10000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["reference", "purpose", "scopes", "required"],
+        "properties": {
+          "reference": {"type": "string", "pattern": "^sova-secret:[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$"},
+          "purpose": {"type": "string", "minLength": 1, "maxLength": 4096},
+          "scopes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+          "required": {"type": "boolean"}
+        }
+      }
+    },
+    "environments": {
+      "type": "array", "maxItems": 10000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "platform", "architecture", "requirements"],
+        "properties": {
+          "id": {"$ref": "#/$defs/id"},
+          "platform": {"type": "string", "minLength": 1, "maxLength": 4096},
+          "architecture": {"type": ["string", "null"], "minLength": 1, "maxLength": 4096},
+          "requirements": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 4096}}
+        }
+      }
+    },
+    "constraints": {"type": "object"},
+    "provenance": {"type": "array", "maxItems": 10000, "items": {"type": "object"}},
+    "legacyTargetManifest": {"type": ["object", "null"]},
+    "extensions": {"type": "object"}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:/-]{0,190}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "targetKind": {"enum": ["web", "api", "network", "source", "package", "oci", "desktop", "ai-model", "agent", "mcp", "a2a", "third-party-service"]},
+    "inputKind": {"enum": ["html", "web-inventory", "har", "openapi", "graphql-schema", "grpc-descriptor", "postman", "source-tree", "archive", "sbom", "lockfile", "oci-manifest", "oci-config", "oci-inventory", "network-inventory", "tls-report", "process-inventory", "accessibility-tree", "agent-manifest", "mcp-manifest", "a2a-card", "runtime-observations"]}
+  }
+}
