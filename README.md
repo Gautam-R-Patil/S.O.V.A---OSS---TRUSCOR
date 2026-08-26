@@ -121,6 +121,10 @@ It provides:
 - secret-free authorized target contracts and deterministic website/software
   assessment fixtures that validate the complete evidence pipeline without
   claiming that a live target was exercised.
+- a deterministic six-phase methodology compiler backed by 74 versioned native
+  web, API, network/cloud, source/package, AI/model, and agentic playbooks, with
+  explicit evidence gaps, budgets, non-authorizing effects, and signed local
+  Registry contribution review.
 - an authorization-gated real-browser vertical slice that launches a self-owned
   loopback website, drives Chrome through pinned Playwright MCP, records signed
   primary and reproduction traces, compares observable outcomes, and packages
@@ -743,6 +747,12 @@ sova target profile-create owned-app ./target-profile.json \
   --entrypoint web=url=web=https://owned.example
 sova target profile-validate ./target-profile.json
 sova target intake ./target-profile.json ./intake --material api=./openapi.yaml
+
+# Compile a bounded methodology; the plan does not itself authorize execution.
+sova methodology library-export ./playbook-library.json
+sova methodology policy-create ./target-profile.json ./methodology-policy.json
+sova methodology compile ./target-profile.json ./methodology-policy.json \
+  ./methodology-plan.json --intake-report ./intake/intake-report.json
 
 # Validate the complete measurement pipeline on self-owned deterministic fixtures
 sova target fixture website ./website-fixture

@@ -105,7 +105,12 @@ packages = ["src/sova"]
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-extend-exclude = ["private"]
+extend-exclude = [
+  "private",
+  # Archived build plans contain deliberately aligned illustrative pseudocode.
+  "docs/engineering/last-mile-launch-implementation-plan-2026-08-21.md",
+  "docs/engineering/sova-engine-completion-buildplan-2026-08-21.md",
+]
 
 [tool.ruff.lint]
 select = [

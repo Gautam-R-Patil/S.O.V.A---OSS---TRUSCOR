@@ -13,6 +13,7 @@ human text or HTML artifact is the command's purpose.
 | Trace/replay | `playback`, one-step `replay FINDING.sova`, `replay open`, `replay modes`, `replay timeline`, `replay capsule`, `replay serve`, `replay study`, `replay clip`, `query`, `compare`, `export`, `recover-trace` |
 | First value | `map`, `check`, `demo`, `safety backends`, `safety attest-docker`, `safety attest-gvisor`, `executors receipts` |
 | Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt adaptive-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics browser-counterfactual`, `forensics benchmark`, `forensics blind-fixture`, `forensics blind-run`, `forensics blind-score`, `forensics blind-keygen`, `forensics blind-sign-key`, `evidence`, `case build`, `adjudicate`, `compose` |
+| Methodology | `methodology library-export`, `methodology playbook-validate`, `methodology policy-create`, `methodology compile`, `methodology observations-template`, `methodology replan`, `methodology keygen`, `methodology contribute` |
 | Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse agent-run`, `rehearse export`, `trace command`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `monitor serve`, `monitor status`, `ci`, `self-check` |
 | Registry/community | `registry init-service`, `registry prepare-upload`, `registry serve`, `registry healthcheck`, `registry verify-live-index`, `registry verify`, `registry replay`, `sync`, `contribute`, `probe issue`, `probe verify`, `arena run`, `arena agent-run`, `arena chamber`, `arena web`, `arena explore-web`, `arena swarm-web`, `arena run-software`, `arena swarm-software`, `arena full-web`, `leaderboard build`, `ctf build` |
 | Extensions and agents | `extension discover`, `extension prepare`, `extension run`, `agent conform-oci` |
@@ -29,6 +30,15 @@ graph, attack-surface graph, coverage report, signed trace, and capsule. Intake
 does not execute target code or perform network discovery; approved collectors use
 the existing authority/executor boundary and their active observations require the
 explicit import flag. See the [universal target intake specification](../specifications/universal-target-intake-0.1.md).
+
+`sova methodology compile` turns the target profile, a non-authorizing budget and
+effect policy, the pinned 74-playbook native library, and an optional intake report
+into a deterministic six-phase dependency plan. Missing discovery material is
+blocked rather than treated as success. `replan` accepts digest-bound observations
+but may change only task status and scores. Signed playbook contribution reuses the
+local Registry review path and establishes included-key integrity, not contributor
+identity; it never uploads automatically. See the
+[methodology specification](../specifications/methodology-compiler-and-playbook-library-0.1.md).
 
 `sova target browser-kit ORIGIN DESTINATION` writes an inert, secret-free
 browser assessment starter kit. It accepts HTTPS or loopback HTTP, performs no

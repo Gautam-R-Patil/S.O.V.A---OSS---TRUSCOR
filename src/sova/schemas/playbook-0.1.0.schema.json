@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/playbook-0.1.0.schema.json",
+  "title": "SOVA security playbook 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactType","schemaVersion","id","version","domain","title","objective","targetPredicates","dependsOn","prerequisites","discoveryInputs","technique","allowedEffects","toolRequirements","variants","oracleProposal","requiredEvidence","stopRules","cleanup","mappings","evidenceLimits","risk","tags","provenance"],
+  "properties": {
+    "artifactType": {"const": "sova.playbook"},
+    "schemaVersion": {"const": "0.1.0"},
+    "id": {"type": "string", "pattern": "^sova\\.playbook\\.[a-z0-9][a-z0-9.-]{0,150}$"},
+    "version": {"$ref": "#/$defs/version"},
+    "domain": {"enum": ["web","api","network-host-cloud","source-package-binary","ai-model","agentic"]},
+    "title": {"$ref": "#/$defs/text"},
+    "objective": {"$ref": "#/$defs/text"},
+    "targetPredicates": {"$ref": "#/$defs/targetPredicates"},
+    "dependsOn": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/playbookId"}},
+    "prerequisites": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/prerequisite"}},
+    "discoveryInputs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/inputKind"}},
+    "technique": {"$ref": "#/$defs/technique"},
+    "allowedEffects": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/effect"}},
+    "toolRequirements": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/tool"}},
+    "variants": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/variant"}},
+    "oracleProposal": {"$ref": "#/$defs/oracle"},
+    "requiredEvidence": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/evidence"}},
+    "stopRules": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/stop"}},
+    "cleanup": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/cleanup"}},
+    "mappings": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/mapping"}},
+    "evidenceLimits": {"$ref": "#/$defs/limits"},
+    "risk": {"$ref": "#/$defs/risk"},
+    "tags": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+    "provenance": {"$ref": "#/$defs/provenance"}
+  },
+  "$defs": {
+    "text": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:/-]{0,190}$"},
+    "playbookId": {"type": "string", "pattern": "^sova\\.playbook\\.[a-z0-9][a-z0-9.-]{0,150}$"},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "targetKind": {"enum": ["web","api","network","source","package","oci","desktop","ai-model","agent","mcp","a2a","third-party-service"]},
+    "inputKind": {"enum": ["html","web-inventory","har","openapi","graphql-schema","grpc-descriptor","postman","source-tree","archive","sbom","lockfile","oci-manifest","oci-config","oci-inventory","network-inventory","tls-report","process-inventory","accessibility-tree","agent-manifest","mcp-manifest","a2a-card","runtime-observations"]},
+    "effect": {"enum": ["observe","read-target","authenticate","mutate-reversible","consume-bounded-resource","execute-contained-code","interact-third-party","write-target","destructive"]},
+    "targetPredicates": {
+      "type": "object", "additionalProperties": false,
+      "required": ["anyTargetKinds","requiredSurfaceKinds","requiredInputKinds"],
+      "properties": {
+        "anyTargetKinds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/targetKind"}},
+        "requiredSurfaceKinds": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+        "requiredInputKinds": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/inputKind"}}
+      }
+    },
+    "prerequisite": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id","description","kind","required"],
+      "properties": {"id":{"$ref":"#/$defs/id"},"description":{"$ref":"#/$defs/text"},"kind":{"$ref":"#/$defs/id"},"required":{"type":"boolean"}}
+    },
+    "technique": {
+      "type": "object", "additionalProperties": false,
+      "required": ["summary","procedure","safetyNotes"],
+      "properties": {
+        "summary":{"$ref":"#/$defs/text"},
+        "procedure":{"type":"array","minItems":1,"uniqueItems":true,"items":{"$ref":"#/$defs/text"}},
+        "safetyNotes":{"type":"array","minItems":1,"uniqueItems":true,"items":{"$ref":"#/$defs/text"}}
+      }
+    },
+    "tool": {
+      "type":"object","additionalProperties":false,"required":["capability","optional","candidateAdapters"],
+      "properties":{"capability":{"$ref":"#/$defs/id"},"optional":{"type":"boolean"},"candidateAdapters":{"type":"array","uniqueItems":true,"items":{"$ref":"#/$defs/id"}}}
+    },
+    "variant": {
+      "type":"object","additionalProperties":false,"required":["id","condition","procedureDelta","additionalEffects"],
+      "properties":{"id":{"$ref":"#/$defs/id"},"condition":{"$ref":"#/$defs/text"},"procedureDelta":{"type":"array","minItems":1,"uniqueItems":true,"items":{"$ref":"#/$defs/text"}},"additionalEffects":{"type":"array","uniqueItems":true,"items":{"$ref":"#/$defs/effect"}}}
+    },
+    "oracle": {
+      "type":"object","additionalProperties":false,"required":["kind","statement","positiveSignal","negativeSignal","ambiguousState","calibrationStatus"],
+      "properties":{"kind":{"enum":["specification","invariant","differential","metamorphic","state-effect","log","human-acceptance","no-reliable-oracle"]},"statement":{"$ref":"#/$defs/text"},"positiveSignal":{"$ref":"#/$defs/text"},"negativeSignal":{"$ref":"#/$defs/text"},"ambiguousState":{"$ref":"#/$defs/text"},"calibrationStatus":{"const":"unvalidated-proposal"}}
+    },
+    "evidence": {
+      "type":"object","additionalProperties":false,"required":["kind","minimum","independent","decisive"],
+      "properties":{"kind":{"$ref":"#/$defs/id"},"minimum":{"type":"integer","minimum":1,"maximum":1000},"independent":{"type":"boolean"},"decisive":{"type":"boolean"}}
+    },
+    "stop": {
+      "type":"object","additionalProperties":false,"required":["condition","action"],
+      "properties":{"condition":{"$ref":"#/$defs/text"},"action":{"$ref":"#/$defs/text"}}
+    },
+    "cleanup": {
+      "type":"object","additionalProperties":false,"required":["action","verification","required"],
+      "properties":{"action":{"$ref":"#/$defs/text"},"verification":{"$ref":"#/$defs/text"},"required":{"type":"boolean"}}
+    },
+    "mapping": {
+      "type":"object","additionalProperties":false,"required":["framework","catalogVersion","identifier","title","relationship","url","license"],
+      "properties":{"framework":{"$ref":"#/$defs/text"},"catalogVersion":{"$ref":"#/$defs/text"},"identifier":{"$ref":"#/$defs/text"},"title":{"$ref":"#/$defs/text"},"relationship":{"enum":["equivalent","broader","narrower","related"]},"url":{"type":"string","format":"uri","pattern":"^https://"},"license":{"$ref":"#/$defs/text"}}
+    },
+    "limits": {
+      "type":"object","additionalProperties":false,"required":["limitations","falsePositiveRisks","falseNegativeRisks"],
+      "properties":{"limitations":{"type":"array","minItems":1,"uniqueItems":true,"items":{"$ref":"#/$defs/text"}},"falsePositiveRisks":{"type":"array","minItems":1,"uniqueItems":true,"items":{"$ref":"#/$defs/text"}},"falseNegativeRisks":{"type":"array","minItems":1,"uniqueItems":true,"items":{"$ref":"#/$defs/text"}}}
+    },
+    "risk": {
+      "type":"object","additionalProperties":false,"required":["severity","likelihood","baseCost"],
+      "properties":{"severity":{"type":"integer","minimum":1,"maximum":5},"likelihood":{"type":"integer","minimum":1,"maximum":5},"baseCost":{"type":"integer","minimum":1,"maximum":1000}}
+    },
+    "provenance": {
+      "type":"object","additionalProperties":false,"required":["origin","authors","license","thirdPartyProseCopied","thirdPartyDatasetIncluded"],
+      "properties":{"origin":{"enum":["sova-native","community"]},"authors":{"type":"array","minItems":1,"uniqueItems":true,"items":{"$ref":"#/$defs/text"}},"license":{"$ref":"#/$defs/text"},"thirdPartyProseCopied":{"const":false},"thirdPartyDatasetIncluded":{"const":false}}
+    }
+  }
+}

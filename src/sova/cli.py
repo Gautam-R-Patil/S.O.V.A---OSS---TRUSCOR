@@ -179,6 +179,20 @@ from sova.local_mcp import (
 )
 from sova.mapping import build_capability_map, write_capability_map, write_tool_snapshot
 from sova.mcp import MELRA_AUDIT_RECEIPT, PLAYWRIGHT_MCP_RECEIPT, WINDOWS_MCP_RECEIPT
+from sova.methodology import (
+    EffectClass,
+    MethodologyObservationSet,
+    SchedulerKind,
+    compile_methodology,
+    load_builtin_library,
+    methodology_policy_from_mapping,
+    methodology_policy_template,
+    observation_set_from_mapping,
+    prepare_playbook_contribution,
+    read_playbook,
+    replan_methodology,
+    validate_methodology_plan,
+)
 from sova.monitoring import (
     ContinuousMonitorService,
     WebhookAlertNotifier,
@@ -257,7 +271,7 @@ from sova.safety import (
 )
 from sova.search import run_trigger_search_demo
 from sova.targets import TargetKind, target_manifest_from_mapping, validate_target_manifest
-from sova.trace import Redactor, TraceReader, recover_trace
+from sova.trace import Redactor, TraceReader, generate_ed25519_keypair, recover_trace
 from sova.trace.otel import export_event
 from sova.workflows import build_case_workspace, run_browser_check, run_check, run_complete_demo
 
@@ -1293,6 +1307,83 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     ci_parser.add_argument("--sarif", type=_path)
     ci_parser.set_defaults(handler=_ci)
 
+    methodology_parser = commands.add_parser(
+        "methodology",
+        help="compile bounded security methodology plans from native playbook contracts",
+    )
+    methodology_commands = methodology_parser.add_subparsers(dest="methodology_command")
+    methodology_library = methodology_commands.add_parser(
+        "library-export", help="export the pinned SOVA-native playbook library"
+    )
+    methodology_library.add_argument("destination", type=_path)
+    methodology_library.set_defaults(handler=_methodology_library_export)
+    methodology_validate = methodology_commands.add_parser(
+        "playbook-validate", help="schema- and semantic-validate one playbook"
+    )
+    methodology_validate.add_argument("playbook", type=_path)
+    methodology_validate.set_defaults(handler=_methodology_playbook_validate)
+    methodology_policy = methodology_commands.add_parser(
+        "policy-create", help="create a non-authorizing methodology policy for one profile"
+    )
+    methodology_policy.add_argument("profile", type=_path)
+    methodology_policy.add_argument("destination", type=_path)
+    methodology_policy.add_argument("--budget", type=int, default=100_000)
+    methodology_policy.add_argument(
+        "--scheduler",
+        choices=tuple(item.value for item in SchedulerKind),
+        default=SchedulerKind.EVIDENCE_GAP_BALANCED.value,
+    )
+    methodology_policy.add_argument(
+        "--allow-effect",
+        action="append",
+        choices=tuple(item.value for item in EffectClass),
+    )
+    methodology_policy.set_defaults(handler=_methodology_policy_create)
+    methodology_compile = methodology_commands.add_parser(
+        "compile", help="compile a deterministic dependency- and budget-aware plan"
+    )
+    methodology_compile.add_argument("profile", type=_path)
+    methodology_compile.add_argument("policy", type=_path)
+    methodology_compile.add_argument("destination", type=_path)
+    methodology_compile.add_argument("--intake-report", type=_path)
+    methodology_compile.set_defaults(handler=_methodology_compile)
+    methodology_observations = methodology_commands.add_parser(
+        "observations-template",
+        help="create an empty evidence-bound observation set for one compiled plan",
+    )
+    methodology_observations.add_argument("plan", type=_path)
+    methodology_observations.add_argument("destination", type=_path)
+    methodology_observations.add_argument(
+        "--source-artifact-digest", action="append", required=True
+    )
+    methodology_observations.set_defaults(handler=_methodology_observations_template)
+    methodology_replan = methodology_commands.add_parser(
+        "replan", help="re-score plan status from observations without widening authority"
+    )
+    methodology_replan.add_argument("profile", type=_path)
+    methodology_replan.add_argument("policy", type=_path)
+    methodology_replan.add_argument("previous_plan", type=_path)
+    methodology_replan.add_argument("observations", type=_path)
+    methodology_replan.add_argument("destination", type=_path)
+    methodology_replan.add_argument("--intake-report", type=_path)
+    methodology_replan.set_defaults(handler=_methodology_replan)
+    methodology_keygen = methodology_commands.add_parser(
+        "keygen", help="create separate raw Ed25519 playbook contributor keys"
+    )
+    methodology_keygen.add_argument("private_key", type=_path)
+    methodology_keygen.add_argument("public_key", type=_path)
+    methodology_keygen.set_defaults(handler=_methodology_keygen)
+    methodology_contribute = methodology_commands.add_parser(
+        "contribute", help="sign and locally stage one playbook through Registry review gates"
+    )
+    methodology_contribute.add_argument("playbook", type=_path)
+    methodology_contribute.add_argument("specification", type=_path)
+    methodology_contribute.add_argument("private_key", type=_path)
+    methodology_contribute.add_argument("public_key", type=_path)
+    methodology_contribute.add_argument("destination", type=_path)
+    methodology_contribute.add_argument("--confirm", action="store_true")
+    methodology_contribute.set_defaults(handler=_methodology_contribute)
+
     registry_parser = commands.add_parser(
         "registry", help="verify a repository-of-files registry entirely offline"
     )
@@ -2235,6 +2326,152 @@ def _load_object(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise FormatError("SOVA-CLI-ROOT-TYPE", "JSON root must be an object")
     return value
+
+
+def _methodology_library_export(args: argparse.Namespace) -> int:
+    library = load_builtin_library()
+    document = library.to_mapping()
+    validate_document(document, "sova.playbook-library")
+    _write_new_document(args.destination, document)
+    sys.stdout.buffer.write(
+        canonical_json_bytes(
+            {
+                "artifactType": "sova.playbook-library-export",
+                "libraryDigest": library.digest,
+                "playbookCount": len(library.playbooks),
+                "destination": str(args.destination),
+            }
+        )
+        + b"\n"
+    )
+    return 0
+
+
+def _methodology_playbook_validate(args: argparse.Namespace) -> int:
+    playbook = read_playbook(args.playbook)
+    result = {
+        "artifactType": "sova.playbook-validation",
+        "schemaVersion": "0.1.0",
+        "playbookId": playbook.identifier,
+        "playbookVersion": playbook.version,
+        "playbookDigest": playbook.digest,
+        "accepted": True,
+        "oracleCalibrationStatus": playbook.oracle_proposal.calibration_status,
+        "externalProseEmbedded": False,
+        "thirdPartyDatasetEmbedded": False,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(result) + b"\n")
+    return 0
+
+
+def _methodology_policy_create(args: argparse.Namespace) -> int:
+    profile = read_target_profile(args.profile)
+    effects = (
+        tuple(EffectClass(item) for item in args.allow_effect)
+        if args.allow_effect
+        else (
+            EffectClass.OBSERVE,
+            EffectClass.READ_TARGET,
+            EffectClass.AUTHENTICATE,
+            EffectClass.MUTATE_REVERSIBLE,
+            EffectClass.CONSUME_BOUNDED_RESOURCE,
+            EffectClass.EXECUTE_CONTAINED_CODE,
+        )
+    )
+    policy = methodology_policy_template(
+        profile.digest,
+        max_budget_units=args.budget,
+        scheduler=SchedulerKind(args.scheduler),
+        allowed_effects=effects,
+    )
+    document = policy.to_mapping()
+    validate_document(document, "sova.methodology-policy")
+    _write_new_document(args.destination, document)
+    sys.stdout.buffer.write(canonical_json_bytes(document) + b"\n")
+    return 0
+
+
+def _methodology_compile(args: argparse.Namespace) -> int:
+    profile = read_target_profile(args.profile)
+    policy_document = _load_object(args.policy)
+    validate_document(policy_document, "sova.methodology-policy")
+    policy = methodology_policy_from_mapping(policy_document)
+    intake_report = None if args.intake_report is None else _load_object(args.intake_report)
+    plan = compile_methodology(profile, policy, intake_report=intake_report)
+    _write_new_document(args.destination, plan)
+    sys.stdout.buffer.write(canonical_json_bytes(plan) + b"\n")
+    return 0
+
+
+def _methodology_observations_template(args: argparse.Namespace) -> int:
+    plan = _load_object(args.plan)
+    validate_methodology_plan(plan)
+    observations = MethodologyObservationSet(
+        target_profile_digest=plan["targetProfileDigest"],
+        previous_plan_digest=plan["contentDigest"],
+        source_artifact_digests=tuple(args.source_artifact_digest),
+        observations=(),
+    )
+    document = observations.to_mapping()
+    validate_document(document, "sova.methodology-observations")
+    _write_new_document(args.destination, document)
+    sys.stdout.buffer.write(canonical_json_bytes(document) + b"\n")
+    return 0
+
+
+def _methodology_replan(args: argparse.Namespace) -> int:
+    profile = read_target_profile(args.profile)
+    policy_document = _load_object(args.policy)
+    validate_document(policy_document, "sova.methodology-policy")
+    policy = methodology_policy_from_mapping(policy_document)
+    previous_plan = _load_object(args.previous_plan)
+    observation_document = _load_object(args.observations)
+    validate_document(observation_document, "sova.methodology-observations")
+    observations = observation_set_from_mapping(observation_document)
+    intake_report = None if args.intake_report is None else _load_object(args.intake_report)
+    plan = replan_methodology(
+        profile,
+        policy,
+        previous_plan,
+        observations,
+        intake_report=intake_report,
+    )
+    _write_new_document(args.destination, plan)
+    sys.stdout.buffer.write(canonical_json_bytes(plan) + b"\n")
+    return 0
+
+
+def _methodology_keygen(args: argparse.Namespace) -> int:
+    keypair = generate_ed25519_keypair()
+    _write_new_bytes(args.private_key, keypair.private_key, mode=0o600)
+    try:
+        _write_new_bytes(args.public_key, keypair.public_key, mode=0o644)
+    except BaseException:
+        args.private_key.unlink(missing_ok=True)
+        raise
+    result = {
+        "artifactType": "sova.playbook-contributor-keypair",
+        "schemaVersion": "0.1.0",
+        "keyid": keypair.key_id,
+        "privateKeyPrinted": False,
+        "publisherIdentityEstablished": False,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(result) + b"\n")
+    return 0
+
+
+def _methodology_contribute(args: argparse.Namespace) -> int:
+    playbook = read_playbook(args.playbook)
+    receipt = prepare_playbook_contribution(
+        playbook,
+        _load_object(args.specification),
+        args.private_key.read_bytes(),
+        args.public_key.read_bytes(),
+        args.destination,
+        confirmed=args.confirm,
+    )
+    sys.stdout.buffer.write(canonical_json_bytes(receipt) + b"\n")
+    return 0
 
 
 def _init(args: argparse.Namespace) -> int:
@@ -5303,6 +5540,29 @@ def _write_all_descriptor(descriptor: int, content: bytes) -> None:
             raise OSError
         offset += written
     os.fsync(descriptor)
+
+
+def _write_new_bytes(path: Path, content: bytes, *, mode: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor: int | None = None
+    created = False
+    try:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+        descriptor = os.open(path, flags, mode)
+        created = True
+        _write_all_descriptor(descriptor, content)
+    except FileExistsError as error:
+        raise FormatError("SOVA-CLI-DESTINATION", "destination already exists") from error
+    except BaseException:
+        if descriptor is not None:
+            os.close(descriptor)
+            descriptor = None
+        if created:
+            path.unlink(missing_ok=True)
+        raise
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 def _write_new_document(path: Path, value: dict[str, Any]) -> None:

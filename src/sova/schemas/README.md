@@ -13,6 +13,12 @@ evidence-aware capability-map report contract.
 - `forensic-reconstruction-0.1.0.schema.json` — uncertainty-preserving forensic timeline
 - `evidence-0.1.0.schema.json` — bounded self-assessment evidence bundle
 - `composition-report-0.1.0.schema.json` — composition-search evidence and attribution
+- `playbook-0.1.0.schema.json` — complete native or community security playbook contract
+- `playbook-library-0.1.0.schema.json` — versioned, provenance-separated playbook catalog
+- `methodology-policy-0.1.0.schema.json` — budget, scheduler, and allowed-effect policy
+- `methodology-observations-0.1.0.schema.json` — evidence-bound replanning observations
+- `methodology-plan-0.1.0.schema.json` — deterministic six-phase methodology plan
+- `playbook-submission-0.1.0.schema.json` — DSSE-signed local contribution envelope
 
 - `blinded-causal-study-0.1.0.schema.json` — label-free randomized intervention task
 - `blinded-causal-answer-key-0.1.0.schema.json` — committed, optionally DSSE-signed labels

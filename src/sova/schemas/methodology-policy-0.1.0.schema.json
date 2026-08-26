@@ -1,0 +1,12 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://sova-oss.org/schemas/methodology-policy-0.1.0.schema.json","title":"SOVA methodology policy 0.1.0",
+  "type":"object","additionalProperties":false,"required":["artifactType","schemaVersion","targetProfileDigest","maxBudgetUnits","phaseBudgets","scheduler","allowedEffects","deniedPlaybooks","requiredPlaybooks","humanApprovalRequired","claims"],
+  "properties":{
+    "artifactType":{"const":"sova.methodology-policy"},"schemaVersion":{"const":"0.1.0"},"targetProfileDigest":{"$ref":"#/$defs/digest"},"maxBudgetUnits":{"type":"integer","minimum":6,"maximum":10000000},
+    "phaseBudgets":{"type":"object","additionalProperties":false,"required":["discovery","hypothesis","confirmation","reproduction","remediation-validation","reporting"],"properties":{"discovery":{"$ref":"#/$defs/budget"},"hypothesis":{"$ref":"#/$defs/budget"},"confirmation":{"$ref":"#/$defs/budget"},"reproduction":{"$ref":"#/$defs/budget"},"remediation-validation":{"$ref":"#/$defs/budget"},"reporting":{"$ref":"#/$defs/budget"}}},
+    "scheduler":{"enum":["identifier-baseline","risk-first-baseline","evidence-gap-balanced"]},"allowedEffects":{"type":"array","minItems":1,"uniqueItems":true,"items":{"enum":["observe","read-target","authenticate","mutate-reversible","consume-bounded-resource","execute-contained-code","interact-third-party","write-target","destructive"]}},
+    "deniedPlaybooks":{"type":"array","uniqueItems":true,"items":{"$ref":"#/$defs/playbook"}},"requiredPlaybooks":{"type":"array","uniqueItems":true,"items":{"$ref":"#/$defs/playbook"}},"humanApprovalRequired":{"const":true},
+    "claims":{"type":"object","additionalProperties":false,"required":["executionAuthorized","modelMayExpandAuthority","policyMayExpandTargetScope"],"properties":{"executionAuthorized":{"const":false},"modelMayExpandAuthority":{"const":false},"policyMayExpandTargetScope":{"const":false}}}
+  },
+  "$defs":{"digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},"budget":{"type":"integer","minimum":0,"maximum":10000000},"playbook":{"type":"string","pattern":"^sova\\.playbook\\."}}
+}

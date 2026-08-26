@@ -17,6 +17,12 @@ ARTIFACT_TYPES = (
     "sova.map",
     "sova.target-profile",
     "sova.intake-report",
+    "sova.playbook",
+    "sova.playbook-library",
+    "sova.methodology-policy",
+    "sova.methodology-observations",
+    "sova.methodology-plan",
+    "sova.playbook-submission",
 )
 JSON_VALUES = st.recursive(
     st.none()

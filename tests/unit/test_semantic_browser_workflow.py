@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 import sova.live.semantic_workflow as semantic_module
+from sova.formats import sha256_digest
 from sova.formats.errors import FormatError
 from sova.live import (
     SemanticBrowserAction,
@@ -291,7 +292,7 @@ def test_planner_prompt_exposes_oracle_state_and_seed_usage_guardrails() -> None
     assert prompt["observation"]["oraclePassed"] is False
     assert prompt["mission"]["entryUrl"] == mission.entry_url
     assert prompt["mission"]["seedInputs"] == ["research mode", "blue owl"]
-    assert prompt["mission"]["oracleDigest"] == semantic_module.sha256_digest(
+    assert prompt["mission"]["oracleDigest"] == sha256_digest(
         mission.oracle_contains.encode("utf-8")
     )
     assert "oracleContains" not in prompt["mission"]

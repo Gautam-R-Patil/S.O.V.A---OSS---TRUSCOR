@@ -31,7 +31,7 @@ infrastructure-failure states instead of translating them into success.
 |---|---|---|---|
 | P0 | Preserve and freeze the foundation | **COMPLETE** | [P0 baseline](./p0-foundation-baseline-2026-08-26.md), [ADR-0028](../decisions/0028-universal-security-extension-boundary.md), preservation commit |
 | P1 | Universal intake and workflow/surface model | **COMPLETE** | [P1 validation](./p1-universal-intake-validation-2026-08-26.md), target-profile fixtures, measured discovery reports, compatibility tests |
-| P2 | Methodology compiler and native playbook library | NOT STARTED | Versioned playbooks, taxonomy coverage, compiler conformance |
+| P2 | Methodology compiler and native playbook library | **COMPLETE** | [P2 validation](./p2-methodology-compiler-validation-2026-08-26.md), 74 versioned playbooks, deterministic compiler and replanning conformance, signed contribution tests |
 | P3 | Tool adapters and evidence normalization | NOT STARTED | Pinned adapter matrix, receipts, normalized observations, failure tests |
 | P4 | Oracle laboratory, reproduction, and coverage accounting | NOT STARTED | Calibrated oracle records, false-positive study, coverage contract |
 | P5 | Production isolation and untrusted-agent worker | NOT STARTED | Linux/KVM worker, containment tests, attestation, independent review |
@@ -127,44 +127,44 @@ needed by the target; blind fixture review finds no silent coverage inflation.
 
 ### Compiler
 
-- [ ] **P2-01** Define a versioned playbook contract: objective, target predicates,
+- [x] **P2-01** Define a versioned playbook contract: objective, target predicates,
   prerequisites, discovery inputs, technique, allowed effects, tool requirements,
   variants, oracle proposal, required evidence, stop rules, cleanup, and mappings.
-- [ ] **P2-02** Compile a `TargetProfile` plus policy into a dependency-aware,
+- [x] **P2-02** Compile a `TargetProfile` plus policy into a dependency-aware,
   budgeted test plan with preconditions and explicit exclusions.
-- [ ] **P2-03** Use risk, reachability, novelty, state coverage, dependency exposure,
+- [x] **P2-03** Use risk, reachability, novelty, state coverage, dependency exposure,
   and evidence gaps for scheduling; retain deterministic baseline schedulers.
-- [ ] **P2-04** Re-plan from new observations without granting new authority or
+- [x] **P2-04** Re-plan from new observations without granting new authority or
   allowing model output to mutate trusted contracts.
-- [ ] **P2-05** Separate discovery, hypothesis, confirmation, reproduction,
+- [x] **P2-05** Separate discovery, hypothesis, confirmation, reproduction,
   remediation validation, and reporting phases.
 
 ### Reference methodology and library
 
-- [ ] **P2-06** Map the library to NIST SP 800-115, OWASP WSTG/ASVS/API Security,
+- [x] **P2-06** Map the library to NIST SP 800-115, OWASP WSTG/ASVS/API Security,
   OWASP AISVS/AI Testing Guide/Agentic guidance, MITRE ATLAS, CWE, CAPEC, and PTES
   where licences and citation terms permit.
-- [ ] **P2-07** Web playbooks: authentication/session, authorization, input handling,
+- [x] **P2-07** Web playbooks: authentication/session, authorization, input handling,
   business logic, browser/client, file handling, SSRF, deserialization, race/state,
   cache/proxy, cryptography/TLS, privacy, and resilience.
-- [ ] **P2-08** API playbooks: object/function/property authorization, authentication,
+- [x] **P2-08** API playbooks: object/function/property authorization, authentication,
   resource consumption, workflow/business logic, inventory, unsafe consumption,
   GraphQL, gRPC, WebSocket, webhook, OAuth/OIDC/SAML, and mTLS.
-- [ ] **P2-09** Network/host/cloud playbooks: service/configuration, credentials,
+- [x] **P2-09** Network/host/cloud playbooks: service/configuration, credentials,
   trust/segmentation, privilege paths, cloud/IAM, Kubernetes, containers, secrets,
   exposed management surfaces, and supply chain.
-- [ ] **P2-10** Source/package/binary playbooks: dependency, SBOM, secret, SAST,
+- [x] **P2-10** Source/package/binary playbooks: dependency, SBOM, secret, SAST,
   build/release, unsafe configuration, fuzzing, binary hardening, and malicious
   package behavior under isolation.
-- [ ] **P2-11** AI/model playbooks: prompt injection, data leakage, unsafe output,
+- [x] **P2-11** AI/model playbooks: prompt injection, data leakage, unsafe output,
   excessive agency, model/tool abuse, poisoning, denial of service, evasion,
   hallucination/grounding, privacy, and model supply chain.
-- [ ] **P2-12** Agentic playbooks: tool authorization, MCP/A2A identity and consent,
+- [x] **P2-12** Agentic playbooks: tool authorization, MCP/A2A identity and consent,
   memory poisoning, skill/plugin supply chain, cross-agent trust, delegation,
   confused deputy, goal manipulation, hidden-state transitions, and audit bypass.
-- [ ] **P2-13** Every playbook names its evidence limits and false-positive risks;
+- [x] **P2-13** Every playbook names its evidence limits and false-positive risks;
   copied prose or third-party datasets remain separated by licence/provenance.
-- [ ] **P2-14** Provide signed, versioned community playbook contribution and
+- [x] **P2-14** Provide signed, versioned community playbook contribution and
   review flow through the existing Registry contracts.
 
 **P2 exit gate:** compiler produces deterministic plans from owned profiles;

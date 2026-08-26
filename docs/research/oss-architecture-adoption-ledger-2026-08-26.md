@@ -165,6 +165,23 @@ No third-party source code was copied into P1. The adopted ideas are contract an
 seam patterns implemented against SOVA's existing canonical JSON, trace, capsule,
 authority, and executor interfaces.
 
+## P2 implementation decision
+
+P2 retained the research conclusion: no reviewed autonomous-pentest repository was
+copied or made a core dependency. SOVA implemented its own strict playbook and
+compiler contracts, using the recurring task-graph, specialist-capability, phase,
+and structured-result patterns only as architectural references. ZAP, Nuclei,
+Schemathesis, PyRIT, garak, promptfoo, Trivy, Syft, Grype, OSV-Scanner, Gitleaks,
+and Semgrep remain external P3 adapters rather than embedded methodology engines.
+
+The native library's reference manifest pins NIST SP 800-115 Final (2008), PTES
+web edition retrieved 2026-08-26, WSTG 4.2, ASVS 5.0.0, OWASP API Security 2023,
+AISVS 1.0 at `78775233666a2022dcfb82037e5e029116955c00`, AI Testing Guide 1.0 at
+`006e4e9ee060f2ca2176037499b824e47af5360e`, Agentic Top 10 2026, ATLAS
+2026.07, CWE 4.20, and CAPEC 3.9. SOVA stores relationship mappings and source links, not copied
+source prose or datasets. ATLAS 2026.07 is the P2 mapping pin; older SOVA taxonomy
+artifacts remain separately versioned and are not silently rewritten.
+
 ## Immediate implementation order
 
 1. P1 contracts and workflow/surface graph, with no external runtime dependency.
