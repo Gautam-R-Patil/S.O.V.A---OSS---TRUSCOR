@@ -70,3 +70,10 @@ version = "0.1.0"
 status = "experimental"
 source = "docs/specifications/registry-and-contributions-0.1.md"
 change = "Initial signed repository-of-files registry, mirror cache, and contribution firewall."
+
+[[methodology]]
+id = "SOVA-SECURITY-ADAPTER-NORMALIZATION"
+version = "0.1.0"
+status = "experimental"
+source = "docs/specifications/security-tool-adapters-and-normalization-0.1.md"
+change = "Initial descriptor, disclosure, authorization, normalization, failure-separation, trace-binding, and cleanup method for external security tools."

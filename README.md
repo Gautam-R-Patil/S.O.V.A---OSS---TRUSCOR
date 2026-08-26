@@ -125,6 +125,10 @@ It provides:
   web, API, network/cloud, source/package, AI/model, and agentic playbooks, with
   explicit evidence gaps, budgets, non-authorizing effects, and signed local
   Registry contribution review.
+- a version-pinned external security-tool catalog with 12 promoted normalizers,
+  constrained high-risk/protocol descriptors, an enforced Nmap legal hold,
+  authority-routed execution, digest-bound raw observations, and failure states
+  that cannot silently become findings.
 - an authorization-gated real-browser vertical slice that launches a self-owned
   loopback website, drives Chrome through pinned Playwright MCP, records signed
   primary and reproduction traces, compares observable outcomes, and packages
@@ -754,6 +758,14 @@ sova methodology policy-create ./target-profile.json ./methodology-policy.json
 sova methodology compile ./target-profile.json ./methodology-policy.json \
   ./methodology-plan.json --intake-report ./intake/intake-report.json
 
+# Inspect adapter contracts and normalize captured output offline.
+# These commands never install or execute the upstream tool.
+sova adapter catalog ./adapter-catalog.json
+sova adapter describe adapter.nuclei ./nuclei-adapter.json
+sova adapter plan adapter.nuclei ./nuclei-plan-template.json
+sova adapter normalize adapter.nuclei ./invocation.json ./nuclei.jsonl \
+  ./normalized.json --executable-digest sha256:EXACT_RUNTIME_DIGEST
+
 # Validate the complete measurement pipeline on self-owned deterministic fixtures
 sova target fixture website ./website-fixture
 sova target fixture software ./software-fixture
@@ -996,6 +1008,7 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | Synthetic detonation and sensors | Event-sourced fake world, inert canaries, sink-only collector, deterministic oracles, nine ground-truth target families, and a claim-conditioned sensor ledger covering direct/provider/derived/unavailable modes, drops, clock domains, ordering, and blind spots; total observability is explicitly denied |
 | `sova map` | Air-gapped typed inventory, provenance-separated reach closures, map schema, and tool-definition drift implemented in [ADR-0013](./docs/decisions/0013-provenance-separated-capability-map.md) |
 | SOVA Runtime | Provider-neutral isolated roles, standard/custom profiles, evidence firewall, local minimized experience, opaque sessions, and verified executor fallback implemented in [ADR-0014](./docs/decisions/0014-evidence-firewalled-runtime.md) |
+| External security-tool adapters | Twelve promoted version-pinned normalizers (ZAP, Nuclei, Schemathesis, PyRIT, garak, promptfoo, Trivy, Syft, Grype, OSV-Scanner, Gitleaks, Semgrep), constrained ffuf/httpx/testssl/sqlmap/mitmproxy/zgrab2 and generic MCP/HTTP descriptors, and an enforced Nmap legal hold. Runtime execution requires operator-supplied SHA-256-bound bytes, exact version evidence, target authority, containment, config/rules pins, and disclosure approval for external transfer. Owned fixtures validate routing, normalization, trace binding, failure separation, reproduction comparison, and cleanup; live compatibility with every upstream binary and production isolation remain deployment evidence, not repository claims |
 | `sova check` | Bundled synthetic and authorized live-browser checks with finite candidate sets, exact human approval, signed traces, controlled reproduction, and honest confirmed/not-observed/inconclusive states |
 | `sova detonate` | Real Playwright/Chrome website execution plus bounded trusted local-process execution on two credential-stripped copies; both require exact human approval and produce signed primary/reproduction traces plus evidence capsules. Browser detonation supports explicit opt-in headed WebM recording packaged as typed visual replay and rendered directly from the capsule. A four-class static/SPA/authenticated/popup owned-site matrix passed real Chrome. The contained action lab adds real disposable file, loopback SMTP email, loopback message, and settings effects with independent ground-truth receipts and a registry-ready module; this proves the controlled vertical, not arbitrary third-party agents. Windows/macOS Appium and Linux AT-SPI application-bound adapters exist at the executor API, but general native-desktop detonation still requires platform drivers, owned fixtures, and CLI integration |
 | `sova hunt` | Bounded operator-authored or provider-assisted candidate search executes in real Playwright/Chrome, records snapshot/console/network observations, detects near misses, reproduces the winning recipe under fresh approval, and emits signed traces plus an offline-verifiable discovery capsule. Deterministic tests verify isolated roles; one founder-authorized OpenRouter free-model run against loopback AI Goat Challenge 1 passed with controlled reproduction and digest-bound exact-moment video evidence on 2026-08-20. The expanded nine-mission semantic AI Goat lane—including Knowledge Base workflows—is implemented and statically preflighted, but the final OpenRouter availability probe returned `SOVA-PROVIDER-RATE-LIMIT`, so the all-nine campaign was not launched and is not claimed as passed. This is not general target coverage or provider-quality evidence; see the [bounded acceptance record](./docs/engineering/aigoat-loopback-acceptance-2026-08-20.md) |

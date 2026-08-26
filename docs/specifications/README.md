@@ -51,6 +51,7 @@ claiming that the field set is ready for `1.0`.
 - [authorized target assessment](./authorized-target-assessment-0.1.md)
 - [universal target intake](./universal-target-intake-0.1.md)
 - [methodology compiler and native playbook library](./methodology-compiler-and-playbook-library-0.1.md)
+- [security-tool adapters and evidence normalization](./security-tool-adapters-and-normalization-0.1.md)
 - [neutral conformance kit](./conformance-kit-0.1.md)
 - [supply-chain release artifacts](./supply-chain-release-0.1.md)
 - [final-mile acceptance and stable-release gates](./final-mile-acceptance-0.1.md)

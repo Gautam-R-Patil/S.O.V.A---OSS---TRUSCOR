@@ -32,6 +32,21 @@ fresh reproduction, portable signed evidence, replay, explicit incomplete covera
 and production hostile-agent isolation. SOVA therefore keeps its current core and
 imports capabilities through adapters.
 
+## P3 implementation refresh — 2026-08-27
+
+The release, licence, output, privacy, update, and failure seams for the selected
+P3 tools were rechecked against primary upstream sources. Exact pins, rejected
+shortcuts, the Trivy 2026 supply-chain control, the Nmap/Npcap legal hold, and
+the implemented validation boundary are recorded in
+[the P3 security-adapter research refresh](./p3-security-adapter-research-2026-08-27.md).
+
+The resulting implementation does not vendor upstream tool code or content. It
+adds 12 promoted descriptors and parsers; constrained ffuf, httpx, testssl.sh,
+sqlmap, mitmproxy, zgrab2, generic MCP stdio, and generic HTTP descriptors; and
+an enforced Nmap legal hold. Every runtime executable remains operator-supplied
+and SHA-256 bound. The SOVA authority kernel, executor contract, trace, parser,
+and later oracle/reproduction stages remain the controlling architecture.
+
 ## Autonomous pentest and cyber-agent frameworks
 
 | Project | Decision | What is useful | Why not wholesale copy |

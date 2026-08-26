@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/adapter-descriptor-0.1.0.schema.json",
+  "title": "SOVA external security adapter descriptor 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactType", "schemaVersion", "id", "tool", "platforms", "targetPredicates", "capabilities", "requirements", "output", "execution", "admission", "provenance", "limitations", "privacyDefaults", "pins", "legalNote"],
+  "properties": {
+    "artifactType": {"const": "sova.adapter-descriptor"},
+    "schemaVersion": {"const": "0.1.0"},
+    "id": {"type": "string", "pattern": "^adapter\\.[a-z0-9][a-z0-9._/-]{0,119}$"},
+    "tool": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "version", "executableNames", "executableDigestPolicy", "license", "source", "release"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "version": {"type": "string", "minLength": 1, "maxLength": 64},
+        "executableNames": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
+        "executableDigestPolicy": {"const": "runtime-sha256-required"},
+        "license": {"type": "string", "minLength": 1, "maxLength": 256},
+        "source": {"type": "string", "format": "uri", "pattern": "^https://"},
+        "release": {"type": "string", "format": "uri", "pattern": "^https://"}
+      }
+    },
+    "platforms": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["linux", "macos", "windows"]}},
+    "targetPredicates": {"$ref": "#/$defs/nonEmptyStrings"},
+    "capabilities": {"$ref": "#/$defs/nonEmptyStrings"},
+    "requirements": {
+      "type": "object", "additionalProperties": false, "required": ["effect", "network", "transport"],
+      "properties": {
+        "effect": {"enum": ["read", "mutate", "external", "destructive"]},
+        "network": {"enum": ["none", "target-only", "provider", "internet"]},
+        "transport": {"enum": ["process", "mcp-stdio", "http"]}
+      }
+    },
+    "output": {
+      "type": "object", "additionalProperties": false, "required": ["parserId", "parserVersion", "mediaTypes", "source"],
+      "properties": {
+        "parserId": {"type": "string", "minLength": 1},
+        "parserVersion": {"type": "string", "minLength": 1},
+        "mediaTypes": {"$ref": "#/$defs/nonEmptyStrings"},
+        "source": {"enum": ["stdout", "workspace-file"]}
+      }
+    },
+    "execution": {
+      "type": "object", "additionalProperties": false, "required": ["argvTemplate", "environment", "acceptedResultExitCodes", "bounds"],
+      "properties": {
+        "argvTemplate": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "environment": {"type": "object", "additionalProperties": {"type": "string"}},
+        "acceptedResultExitCodes": {"type": "array", "minItems": 1, "uniqueItems": true, "contains": {"const": 0}, "items": {"type": "integer", "minimum": 0, "maximum": 255}},
+        "bounds": {
+          "type": "object", "additionalProperties": false,
+          "required": ["timeoutSeconds", "maxOutputBytes", "maxFindings", "maxProcesses", "maxNetworkRequests"],
+          "properties": {
+            "timeoutSeconds": {"type": "integer", "minimum": 1, "maximum": 3600},
+            "maxOutputBytes": {"type": "integer", "minimum": 1024, "maximum": 67108864},
+            "maxFindings": {"type": "integer", "minimum": 1, "maximum": 100000},
+            "maxProcesses": {"type": "integer", "minimum": 1, "maximum": 1024},
+            "maxNetworkRequests": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "admission": {"enum": ["promoted", "constrained", "legal-hold"]},
+    "provenance": {"$ref": "#/$defs/nonEmptyStrings"},
+    "limitations": {"$ref": "#/$defs/nonEmptyStrings"},
+    "privacyDefaults": {
+      "type": "object", "additionalProperties": false,
+      "required": ["telemetry", "remoteGeneration", "uploads", "implicitPulls", "autoUpdate", "unreviewedTemplates", "externalTransferRequiresDisclosureGate"],
+      "properties": {
+        "telemetry": {"const": false},
+        "remoteGeneration": {"const": false},
+        "uploads": {"const": false},
+        "implicitPulls": {"const": false},
+        "autoUpdate": {"const": false},
+        "unreviewedTemplates": {"const": false},
+        "externalTransferRequiresDisclosureGate": {"const": true}
+      }
+    },
+    "pins": {
+      "type": "object", "additionalProperties": false, "required": ["ruleset", "config"],
+      "properties": {
+        "ruleset": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]},
+        "config": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]}
+      }
+    },
+    "legalNote": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]}
+  },
+  "allOf": [
+    {"if": {"properties": {"admission": {"const": "legal-hold"}}}, "then": {"properties": {"legalNote": {"type": "string", "minLength": 1}}}}
+  ],
+  "$defs": {
+    "nonEmptyStrings": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  }
+}

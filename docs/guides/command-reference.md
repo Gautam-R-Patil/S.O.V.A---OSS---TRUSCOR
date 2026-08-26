@@ -14,6 +14,7 @@ human text or HTML artifact is the command's purpose.
 | First value | `map`, `check`, `demo`, `safety backends`, `safety attest-docker`, `safety attest-gvisor`, `executors receipts` |
 | Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt adaptive-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics browser-counterfactual`, `forensics benchmark`, `forensics blind-fixture`, `forensics blind-run`, `forensics blind-score`, `forensics blind-keygen`, `forensics blind-sign-key`, `evidence`, `case build`, `adjudicate`, `compose` |
 | Methodology | `methodology library-export`, `methodology playbook-validate`, `methodology policy-create`, `methodology compile`, `methodology observations-template`, `methodology replan`, `methodology keygen`, `methodology contribute` |
+| Security adapters | `adapter catalog`, `adapter describe`, `adapter plan`, `adapter normalize` |
 | Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse agent-run`, `rehearse export`, `trace command`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `monitor serve`, `monitor status`, `ci`, `self-check` |
 | Registry/community | `registry init-service`, `registry prepare-upload`, `registry serve`, `registry healthcheck`, `registry verify-live-index`, `registry verify`, `registry replay`, `sync`, `contribute`, `probe issue`, `probe verify`, `arena run`, `arena agent-run`, `arena chamber`, `arena web`, `arena explore-web`, `arena swarm-web`, `arena run-software`, `arena swarm-software`, `arena full-web`, `leaderboard build`, `ctf build` |
 | Extensions and agents | `extension discover`, `extension prepare`, `extension run`, `agent conform-oci` |
@@ -39,6 +40,15 @@ but may change only task status and scores. Signed playbook contribution reuses 
 local Registry review path and establishes included-key integrity, not contributor
 identity; it never uploads automatically. See the
 [methodology specification](../specifications/methodology-compiler-and-playbook-library-0.1.md).
+
+`sova adapter catalog` and `describe` export the deterministic, version-pinned
+external-tool contracts. `adapter plan` creates only an operator-input checklist:
+it does not materialize a command, authorize a target, install software, or run a
+tool. `adapter normalize` parses already captured bytes entirely offline and fixes
+every emitted observation to `findingConfirmed: false`. Effectful execution is a
+Python API because it requires a live executor, exact containment, a fresh
+authority decision, and, for external transfer, a disclosure gate. See the
+[security-tool adapter specification](../specifications/security-tool-adapters-and-normalization-0.1.md).
 
 `sova target browser-kit ORIGIN DESTINATION` writes an inert, secret-free
 browser assessment starter kit. It accepts HTTPS or loopback HTTP, performs no

@@ -126,18 +126,28 @@ _SURFACE_KINDS = {
     MethodologyDomain.AGENTIC: ("agent", "tool", "identity", "trust-boundary"),
 }
 _TOOLS = {
-    MethodologyDomain.WEB: ("browser.observe", ("adapter.zap", "adapter.playwright")),
+    MethodologyDomain.WEB: (
+        "browser.observe",
+        ("adapter.zap", "adapter.nuclei", "adapter.httpx", "adapter.ffuf"),
+    ),
     MethodologyDomain.API: (
         "protocol.http",
-        ("adapter.schemathesis", "adapter.zap", "adapter.postman"),
+        ("adapter.schemathesis", "adapter.zap", "adapter.nuclei"),
     ),
     MethodologyDomain.NETWORK_HOST_CLOUD: (
         "network.observe",
-        ("adapter.protocol", "adapter.testssl", "adapter.cloud-posture"),
+        ("adapter.httpx", "adapter.testssl", "adapter.zgrab2"),
     ),
     MethodologyDomain.SOURCE_PACKAGE_BINARY: (
         "source.inspect",
-        ("adapter.semgrep", "adapter.syft", "adapter.trivy", "adapter.fuzzer"),
+        (
+            "adapter.semgrep",
+            "adapter.syft",
+            "adapter.trivy",
+            "adapter.grype",
+            "adapter.osv-scanner",
+            "adapter.gitleaks",
+        ),
     ),
     MethodologyDomain.AI_MODEL: (
         "model.query",
@@ -145,7 +155,7 @@ _TOOLS = {
     ),
     MethodologyDomain.AGENTIC: (
         "agent.interact",
-        ("adapter.mcp", "adapter.a2a", "adapter.promptfoo"),
+        ("adapter.generic-mcp-stdio", "adapter.promptfoo", "adapter.pyrit"),
     ),
 }
 _STATE_TAGS = frozenset(

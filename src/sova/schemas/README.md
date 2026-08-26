@@ -19,6 +19,9 @@ evidence-aware capability-map report contract.
 - `methodology-observations-0.1.0.schema.json` — evidence-bound replanning observations
 - `methodology-plan-0.1.0.schema.json` — deterministic six-phase methodology plan
 - `playbook-submission-0.1.0.schema.json` — DSSE-signed local contribution envelope
+- `adapter-descriptor-0.1.0.schema.json` — pinned external-tool admission contract
+- `normalized-observation-0.1.0.schema.json` — unverified, evidence-bound tool assertion
+- `adapter-run-report-0.1.0.schema.json` — authorization, execution, cleanup, and trace result
 
 - `blinded-causal-study-0.1.0.schema.json` — label-free randomized intervention task
 - `blinded-causal-answer-key-0.1.0.schema.json` — committed, optionally DSSE-signed labels

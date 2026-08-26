@@ -16,7 +16,7 @@ from sova.command_audit import AuditError, audit, command_handlers, function_bod
 
 def test_every_cli_leaf_has_a_unique_registered_handler() -> None:
     handlers = command_handlers()
-    assert len(handlers) == 140
+    assert len(handlers) == 144
     assert len(set(handlers)) == len(handlers)
     assert all(name.startswith("_") for name in handlers.values())
     assert {
@@ -76,6 +76,10 @@ def test_every_cli_leaf_has_a_unique_registered_handler() -> None:
         "methodology replan",
         "methodology keygen",
         "methodology contribute",
+        "adapter catalog",
+        "adapter describe",
+        "adapter plan",
+        "adapter normalize",
     } <= set(handlers)
 
 

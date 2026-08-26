@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/adapter-run-report-0.1.0.schema.json",
+  "title": "SOVA external security adapter run report 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactType", "schemaVersion", "invocationId", "descriptor", "executableDigest", "outcomeStatus", "infrastructureFailure", "cleanupVerified", "trace", "rawArtifact", "observations", "limitations"],
+  "properties": {
+    "artifactType": {"const": "sova.adapter-run-report"},
+    "schemaVersion": {"const": "0.1.0"},
+    "invocationId": {"type": "string", "minLength": 1},
+    "descriptor": {"type": "object", "additionalProperties": false, "required": ["id", "digest"], "properties": {"id": {"type": "string", "pattern": "^adapter\\."}, "digest": {"$ref": "#/$defs/digest"}}},
+    "executableDigest": {"$ref": "#/$defs/digest"},
+    "outcomeStatus": {"enum": ["completed", "denied", "infrastructure-failure", "cleanup-failed"]},
+    "infrastructureFailure": {"type": "boolean"},
+    "cleanupVerified": {"type": "boolean"},
+    "trace": {"type": "object", "additionalProperties": false, "required": ["path", "digest"], "properties": {"path": {"type": "string", "minLength": 1}, "digest": {"$ref": "#/$defs/digest"}}},
+    "rawArtifact": {"anyOf": [{"$ref": "#/$defs/raw"}, {"type": "null"}]},
+    "observations": {"type": "array", "items": {"$ref": "#/$defs/observation"}},
+    "limitations": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+  },
+  "allOf": [
+    {"if": {"properties": {"outcomeStatus": {"const": "completed"}}}, "then": {"properties": {"infrastructureFailure": {"const": false}, "cleanupVerified": {"const": true}}}},
+    {"if": {"properties": {"cleanupVerified": {"const": false}}}, "then": {"properties": {"outcomeStatus": {"const": "cleanup-failed"}, "infrastructureFailure": {"const": true}}}},
+    {"if": {"properties": {"outcomeStatus": {"const": "denied"}}}, "then": {"properties": {"rawArtifact": {"type": "null"}, "observations": {"maxItems": 0}}}}
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "nullableDigest": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+    "raw": {"type": "object", "additionalProperties": false, "required": ["digest", "mediaType", "size", "complete", "source"], "properties": {"digest": {"$ref": "#/$defs/digest"}, "mediaType": {"type": "string", "minLength": 1}, "size": {"type": "integer", "minimum": 0}, "complete": {"type": "boolean"}, "source": {"enum": ["stdout", "workspace-file"]}}},
+    "observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifactType", "schemaVersion", "id", "adapter", "parser", "target", "raw", "assertion", "pins", "trust", "stableFingerprint", "findingConfirmed", "independentlyReproduced"],
+      "properties": {
+        "artifactType": {"const": "sova.normalized-observation"},
+        "schemaVersion": {"const": "0.1.0"},
+        "id": {"type": "string", "pattern": "^sova:observation:[0-9a-f]{24}$"},
+        "adapter": {"type": "object", "additionalProperties": false, "required": ["id", "digest", "toolVersion", "executableDigest"], "properties": {"id": {"type": "string", "pattern": "^adapter\\."}, "digest": {"$ref": "#/$defs/digest"}, "toolVersion": {"type": "string", "minLength": 1}, "executableDigest": {"$ref": "#/$defs/digest"}}},
+        "parser": {"type": "object", "additionalProperties": false, "required": ["id", "version"], "properties": {"id": {"type": "string", "minLength": 1}, "version": {"type": "string", "minLength": 1}}},
+        "target": {"type": "object", "additionalProperties": false, "required": ["id", "profileDigest", "generation"], "properties": {"id": {"type": "string", "minLength": 1}, "profileDigest": {"$ref": "#/$defs/digest"}, "generation": {"$ref": "#/$defs/digest"}}},
+        "raw": {"$ref": "#/$defs/raw"},
+        "assertion": {"type": "object", "additionalProperties": false, "required": ["state", "ruleId", "title", "severity", "confidence", "location", "metadata"], "properties": {"state": {"enum": ["tool-asserted-failure", "tool-asserted-pass", "informational", "inconclusive", "infrastructure-failure"]}, "ruleId": {"type": "string", "minLength": 1}, "title": {"type": "string", "minLength": 1}, "severity": {"enum": ["unknown", "info", "low", "medium", "high", "critical"]}, "confidence": {"enum": ["unknown", "low", "medium", "high"]}, "location": {"anyOf": [{"type": "string", "minLength": 1}, {"type": "null"}]}, "metadata": {"type": "object", "additionalProperties": {"type": ["boolean", "integer", "string"]}}}},
+        "pins": {"type": "object", "additionalProperties": false, "required": ["configDigest", "rulesetDigest"], "properties": {"configDigest": {"$ref": "#/$defs/nullableDigest"}, "rulesetDigest": {"$ref": "#/$defs/nullableDigest"}}},
+        "trust": {"type": "object", "additionalProperties": false, "required": ["schema", "summary", "evidence"], "properties": {"schema": {"enum": ["untrusted", "sova-validated"]}, "summary": {"enum": ["untrusted", "sova-validated"]}, "evidence": {"enum": ["untrusted", "sova-validated"]}}},
+        "stableFingerprint": {"$ref": "#/$defs/digest"},
+        "findingConfirmed": {"const": false},
+        "independentlyReproduced": {"const": false}
+      }
+    }
+  }
+}

@@ -32,7 +32,7 @@ infrastructure-failure states instead of translating them into success.
 | P0 | Preserve and freeze the foundation | **COMPLETE** | [P0 baseline](./p0-foundation-baseline-2026-08-26.md), [ADR-0028](../decisions/0028-universal-security-extension-boundary.md), preservation commit |
 | P1 | Universal intake and workflow/surface model | **COMPLETE** | [P1 validation](./p1-universal-intake-validation-2026-08-26.md), target-profile fixtures, measured discovery reports, compatibility tests |
 | P2 | Methodology compiler and native playbook library | **COMPLETE** | [P2 validation](./p2-methodology-compiler-validation-2026-08-26.md), 74 versioned playbooks, deterministic compiler and replanning conformance, signed contribution tests |
-| P3 | Tool adapters and evidence normalization | NOT STARTED | Pinned adapter matrix, receipts, normalized observations, failure tests |
+| P3 | Tool adapters and evidence normalization | **COMPLETE** | [P3 validation](./p3-security-adapter-validation-2026-08-27.md), 21-entry admission catalog, 12 promoted normalizers, authority-routed runner and failure matrix |
 | P4 | Oracle laboratory, reproduction, and coverage accounting | NOT STARTED | Calibrated oracle records, false-positive study, coverage contract |
 | P5 | Production isolation and untrusted-agent worker | NOT STARTED | Linux/KVM worker, containment tests, attestation, independent review |
 | P6 | Blinded validation, Registry beta, and public launch | NOT STARTED | Multi-provider/target benchmark, release receipts, claim review |
@@ -173,32 +173,39 @@ each initial target class has positive, negative, and inconclusive fixtures.
 
 ## 6. P3 — tool adapters and evidence normalization
 
-- [ ] **P3-01** Define an adapter descriptor for executable/version/digest, licence,
+- [x] **P3-01** Define an adapter descriptor for executable/version/digest, licence,
   supported platforms, target predicates, capabilities, network/effect requirements,
   output schemas, time/resource bounds, and provenance.
-- [ ] **P3-02** Run adapters through the existing executor and authority kernel; a
+- [x] **P3-02** Run adapters through the existing executor and authority kernel; a
   scanner exit code or model assertion is never itself a SOVA finding.
-- [ ] **P3-03** Normalize raw results into observations with raw-artifact digests,
+- [x] **P3-03** Normalize raw results into observations with raw-artifact digests,
   parser version, confidence, target binding, and infrastructure-failure separation.
-- [ ] **P3-04** Pin versions/templates/rules and record configuration hashes in traces.
-- [ ] **P3-05** Implement first-class adapters for ZAP, Nuclei, Schemathesis,
+- [x] **P3-04** Pin versions/templates/rules and record configuration hashes in traces.
+- [x] **P3-05** Implement first-class adapters for ZAP, Nuclei, Schemathesis,
   PyRIT, garak, promptfoo, Trivy, Syft, Grype, OSV-Scanner, Gitleaks, and Semgrep.
-- [ ] **P3-06** Implement constrained external-tool descriptors for ffuf, httpx,
+- [x] **P3-06** Implement constrained external-tool descriptors for ffuf, httpx,
   testssl.sh, sqlmap, mitmproxy, and selected protocol tools after per-tool licence
   and safety review.
-- [ ] **P3-07** Keep Nmap user-installed and legally isolated until its NPSL
+- [x] **P3-07** Keep Nmap user-installed and legally isolated until its NPSL
   designed-wrapper/redistribution implications receive qualified review.
-- [ ] **P3-08** Add generic MCP/stdio/HTTP adapter compatibility without trusting
+- [x] **P3-08** Add generic MCP/stdio/HTTP adapter compatibility without trusting
   tool-provided schemas, summaries, or evidence.
-- [ ] **P3-09** Disable remote test generation, telemetry, uploads, implicit pulls,
+- [x] **P3-09** Disable remote test generation, telemetry, uploads, implicit pulls,
   auto-update, and unreviewed templates by default; require a disclosure gate to
   enable any external data transfer.
-- [ ] **P3-10** Add parser corruption, timeout, partial-output, nondeterminism,
+- [x] **P3-10** Add parser corruption, timeout, partial-output, nondeterminism,
   version drift, false-positive, and cleanup tests for every promoted adapter.
 
 **P3 exit gate:** every promoted adapter is reproducibly installed or operator-
 supplied, policy-routed, trace-recorded, failure-tested, and independently
 reproduced on at least one owned fixture.
+
+**P3 exit evidence:** the [P3 validation record](./p3-security-adapter-validation-2026-08-27.md)
+records exact operator-supplied version and runtime-digest requirements, policy and
+trace routing, positive/adverse owned-fixture runs for all 12 promoted adapters,
+semantic reproduction, package-resource inspection, and repository-wide release
+gates. Live upstream binaries and real targets remain deployment evidence and are
+not inferred from synthetic fixtures.
 
 ## 7. P4 — oracle laboratory, reproduction, and coverage accounting
 

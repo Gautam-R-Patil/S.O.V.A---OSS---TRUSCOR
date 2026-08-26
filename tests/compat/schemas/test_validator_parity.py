@@ -23,6 +23,9 @@ ARTIFACT_TYPES = (
     "sova.methodology-observations",
     "sova.methodology-plan",
     "sova.playbook-submission",
+    "sova.adapter-descriptor",
+    "sova.normalized-observation",
+    "sova.adapter-run-report",
 )
 JSON_VALUES = st.recursive(
     st.none()

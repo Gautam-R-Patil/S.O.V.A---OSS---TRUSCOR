@@ -26,6 +26,9 @@ from sova.acceptance import (
     load_receipts,
     run_offline_acceptance_lab,
 )
+from sova.adapters.security_catalog import get_security_adapter, security_adapter_catalog
+from sova.adapters.security_contracts import AdapterInvocation
+from sova.adapters.security_parsers import normalize_security_output
 from sova.assessment import (
     build_assessment_plan,
     create_browser_test_kit,
@@ -1384,6 +1387,39 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     methodology_contribute.add_argument("--confirm", action="store_true")
     methodology_contribute.set_defaults(handler=_methodology_contribute)
 
+    adapter_parser = commands.add_parser(
+        "adapter",
+        help="inspect and offline-normalize curated external security-tool contracts",
+    )
+    adapter_commands = adapter_parser.add_subparsers(dest="adapter_command")
+    adapter_catalog = adapter_commands.add_parser(
+        "catalog", help="export the deterministic version-pinned adapter catalog"
+    )
+    adapter_catalog.add_argument("destination", type=_path)
+    adapter_catalog.set_defaults(handler=_adapter_catalog_export)
+    adapter_describe = adapter_commands.add_parser(
+        "describe", help="export one exact adapter descriptor"
+    )
+    adapter_describe.add_argument("identifier")
+    adapter_describe.add_argument("destination", type=_path)
+    adapter_describe.set_defaults(handler=_adapter_describe)
+    adapter_plan = adapter_commands.add_parser(
+        "plan", help="create an inert operator-input template; never execute a tool"
+    )
+    adapter_plan.add_argument("identifier")
+    adapter_plan.add_argument("destination", type=_path)
+    adapter_plan.set_defaults(handler=_adapter_plan)
+    adapter_normalize = adapter_commands.add_parser(
+        "normalize", help="offline-normalize captured raw output; never create a finding"
+    )
+    adapter_normalize.add_argument("identifier")
+    adapter_normalize.add_argument("invocation", type=_path)
+    adapter_normalize.add_argument("raw", type=_path)
+    adapter_normalize.add_argument("destination", type=_path)
+    adapter_normalize.add_argument("--media-type")
+    adapter_normalize.add_argument("--executable-digest", required=True)
+    adapter_normalize.set_defaults(handler=_adapter_normalize)
+
     registry_parser = commands.add_parser(
         "registry", help="verify a repository-of-files registry entirely offline"
     )
@@ -2471,6 +2507,158 @@ def _methodology_contribute(args: argparse.Namespace) -> int:
         confirmed=args.confirm,
     )
     sys.stdout.buffer.write(canonical_json_bytes(receipt) + b"\n")
+    return 0
+
+
+def _adapter_catalog_export(args: argparse.Namespace) -> int:
+    descriptors = [item.to_mapping() for item in security_adapter_catalog()]
+    for descriptor in descriptors:
+        validate_document(descriptor, "sova.adapter-descriptor")
+    document = {
+        "artifactType": "sova.adapter-catalog",
+        "schemaVersion": "0.1.0",
+        "descriptorCount": len(descriptors),
+        "descriptors": descriptors,
+        "catalogDigest": sha256_digest(canonical_json_bytes(descriptors)),
+        "installationPerformed": False,
+        "executionAuthorized": False,
+    }
+    _write_new_document(args.destination, document)
+    sys.stdout.buffer.write(canonical_json_bytes(document) + b"\n")
+    return 0
+
+
+def _adapter_describe(args: argparse.Namespace) -> int:
+    document = get_security_adapter(str(args.identifier)).to_mapping()
+    validate_document(document, "sova.adapter-descriptor")
+    _write_new_document(args.destination, document)
+    sys.stdout.buffer.write(canonical_json_bytes(document) + b"\n")
+    return 0
+
+
+def _adapter_plan(args: argparse.Namespace) -> int:
+    descriptor = get_security_adapter(str(args.identifier))
+    document = {
+        "artifactType": "sova.adapter-execution-plan-template",
+        "schemaVersion": "0.1.0",
+        "adapterId": descriptor.identifier,
+        "descriptorDigest": descriptor.digest,
+        "admission": descriptor.admission.value,
+        "tool": {
+            "name": descriptor.tool_name,
+            "version": descriptor.tool_version,
+            "executableNames": list(descriptor.executable_names),
+            "executableDigestPolicy": descriptor.executable_digest_policy,
+        },
+        "requiredBindings": [
+            "targetId",
+            "targetProfileDigest",
+            "targetGeneration",
+            "exactExecutablePathAndDigest",
+            "capturedVersionEvidenceDigest",
+            "configurationDigestWhenRequired",
+            "rulesetDigestWhenRequired",
+            "disclosureGateForExternalTransfer",
+            "freshAuthorizationDecision",
+            "requiredContainmentAttestation",
+        ],
+        "requirements": descriptor.to_mapping()["requirements"],
+        "bounds": descriptor.to_mapping()["execution"]["bounds"],
+        "privacyDefaults": descriptor.to_mapping()["privacyDefaults"],
+        "commandMaterialized": False,
+        "executionPerformed": False,
+        "executionAuthorized": False,
+        "findingConfirmed": False,
+    }
+    _write_new_document(args.destination, document)
+    sys.stdout.buffer.write(canonical_json_bytes(document) + b"\n")
+    return 0
+
+
+def _adapter_invocation_from_mapping(document: dict[str, Any]) -> AdapterInvocation:
+    required = {
+        "id",
+        "descriptorId",
+        "targetId",
+        "target",
+        "targetPredicate",
+        "targetProfileDigest",
+        "targetGeneration",
+        "executablePath",
+        "observedToolVersion",
+        "versionEvidenceDigest",
+    }
+    missing = sorted(required - set(document))
+    if missing:
+        raise FormatError(
+            "SOVA-CLI-ADAPTER-INVOCATION",
+            "adapter invocation is missing required fields",
+            details={"missing": missing},
+        )
+    return AdapterInvocation(
+        identifier=str(document["id"]),
+        descriptor_id=str(document["descriptorId"]),
+        target_id=str(document["targetId"]),
+        target=str(document["target"]),
+        target_predicate=str(document["targetPredicate"]),
+        target_profile_digest=str(document["targetProfileDigest"]),
+        target_generation=str(document["targetGeneration"]),
+        executable_path=str(document["executablePath"]),
+        observed_tool_version=str(document["observedToolVersion"]),
+        version_evidence_digest=str(document["versionEvidenceDigest"]),
+        output_path=(
+            str(document["outputPath"]) if document.get("outputPath") is not None else None
+        ),
+        config_path=(
+            str(document["configPath"]) if document.get("configPath") is not None else None
+        ),
+        config_digest=(
+            str(document["configDigest"]) if document.get("configDigest") is not None else None
+        ),
+        ruleset_path=(
+            str(document["rulesetPath"]) if document.get("rulesetPath") is not None else None
+        ),
+        ruleset_digest=(
+            str(document["rulesetDigest"]) if document.get("rulesetDigest") is not None else None
+        ),
+        disclosure_gate_id=(
+            str(document["disclosureGateId"])
+            if document.get("disclosureGateId") is not None
+            else None
+        ),
+        disclosure_gate_digest=(
+            str(document["disclosureGateDigest"])
+            if document.get("disclosureGateDigest") is not None
+            else None
+        ),
+    )
+
+
+def _adapter_normalize(args: argparse.Namespace) -> int:
+    descriptor = get_security_adapter(str(args.identifier))
+    invocation = _adapter_invocation_from_mapping(_load_object(args.invocation))
+    media_type = str(args.media_type or descriptor.output_media_types[0])
+    observations = normalize_security_output(
+        descriptor,
+        invocation,
+        executable_digest=str(args.executable_digest),
+        raw=args.raw.read_bytes(),
+        media_type=media_type,
+    )
+    for observation in observations:
+        validate_document(observation.to_mapping(), "sova.normalized-observation")
+    document = {
+        "artifactType": "sova.normalized-observation-set",
+        "schemaVersion": "0.1.0",
+        "adapterId": descriptor.identifier,
+        "descriptorDigest": descriptor.digest,
+        "observationCount": len(observations),
+        "observations": [item.to_mapping() for item in observations],
+        "executionPerformed": False,
+        "findingConfirmed": False,
+    }
+    _write_new_document(args.destination, document)
+    sys.stdout.buffer.write(canonical_json_bytes(document) + b"\n")
     return 0
 
 
