@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 import threading
 import time
@@ -23,6 +25,7 @@ from sova.executors import (
     ScriptedAction,
     ScriptedExecutor,
     SideEffect,
+    local,
     negotiate,
 )
 from sova.executors.local import _cleanup_temporary
@@ -340,6 +343,27 @@ def test_local_process_normalizes_success_and_failure(
     assert outcome.verification == "process-exit-and-bounded-output-observed"
     assert len(outcome.evidence) == 2
     assert "not a security sandbox" in outcome.limitations[0]
+
+
+def test_local_process_does_not_export_sova_session_metadata_to_child(
+    context: ExecutionContext,
+) -> None:
+    bound_context = ExecutionContext(
+        workspace=context.workspace,
+        authorization=context.authorization,
+        environment={
+            "targetInstanceDigest": "sha256:" + "1" * 64,
+            "sessionDigest": "sha256:" + "2" * 64,
+            "bindingDigest": "sha256:" + "3" * 64,
+        },
+    )
+    outcome = _local().execute(
+        _request("process.exec", {"argv": [sys.executable, "-c", "print('bound-ok')"]}),
+        bound_context,
+        CancellationToken(),
+    )
+    assert outcome.status == OutcomeStatus.SUCCEEDED
+    assert outcome.output["stdout"].splitlines() == ["bound-ok"]
 
 
 def test_local_process_timeout_cancellation_and_output_limit(
@@ -817,6 +841,98 @@ def test_supervisor_enforces_background_cancellation(
             CancellationToken(),
         )
         assert collected.output["childStatus"] == "cancelled"
+
+
+def test_local_process_creation_and_spawn_failures_are_normalized_without_children(
+    context: ExecutionContext,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(os, "name", "posix")
+    assert local._process_creation_flags() == 0
+    monkeypatch.undo()
+
+    def fail_start(*_args: object, **_kwargs: object) -> Any:
+        raise OSError
+
+    monkeypatch.setattr(subprocess, "Popen", fail_start)
+    executor = _local()
+    executed = executor.execute(
+        _request("process.exec", {"argv": [sys.executable, "-c", "pass"]}),
+        context,
+        CancellationToken(),
+    )
+    assert executed.error_code == "SOVA-LOCAL-PROCESS-START"
+    spawned = executor.execute(
+        _request("process.spawn", {"argv": [sys.executable, "-c", "pass"]}),
+        context,
+        CancellationToken(),
+    )
+    assert spawned.error_code == "SOVA-LOCAL-PROCESS-START"
+    assert executor._background == {}
+
+
+def test_background_spawn_preserves_preparation_denial_and_observes_normal_exit(
+    context: ExecutionContext,
+) -> None:
+    executor = _local()
+    unsupported = executor.execute(
+        _request(
+            "process.spawn",
+            {
+                "argv": [sys.executable, "-c", "pass"],
+                "resources": {"maxCpuSeconds": 1},
+            },
+        ),
+        context,
+        CancellationToken(),
+    )
+    assert unsupported.status is OutcomeStatus.UNSUPPORTED
+
+    spawned = executor.execute(
+        _request("process.spawn", {"argv": [sys.executable, "-c", "print('done')"]}),
+        context,
+        CancellationToken(),
+    )
+    handle = spawned.output["handle"]
+    deadline = time.monotonic() + 5
+    child_status = None
+    while time.monotonic() < deadline:
+        status = executor.execute(
+            _request("process.status", {"handle": handle}),
+            context,
+            CancellationToken(),
+        )
+        child_status = status.output.get("childStatus")
+        if child_status is not None:
+            break
+        time.sleep(0.01)
+    assert child_status == "succeeded"
+    stopped = executor.execute(
+        _request("process.stop", {"handle": handle}),
+        context,
+        CancellationToken(),
+    )
+    assert stopped.output["childStatus"] == "succeeded"
+    executor.close()
+
+
+def test_executor_close_terminates_and_collects_every_live_supervised_child(
+    context: ExecutionContext,
+) -> None:
+    executor = _local()
+    spawned = executor.execute(
+        _request(
+            "process.spawn",
+            {"argv": [sys.executable, "-c", "import time; time.sleep(30)"]},
+            timeout=10,
+        ),
+        context,
+        CancellationToken(),
+    )
+    assert spawned.status is OutcomeStatus.SUCCEEDED
+    executor.close()
+    assert executor._background == {}
+    assert executor._closed is True
 
 
 def test_reusable_sequence_expansion_and_fail_closed_cycles() -> None:

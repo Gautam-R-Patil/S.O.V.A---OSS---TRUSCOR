@@ -6,7 +6,8 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 
 from sova import __version__
 from sova.contracts.identifiers import IdentifierKind, new_stable_identifier
@@ -20,11 +21,9 @@ from sova.formats import (
     validation_issues,
 )
 from sova.formats.errors import FormatError
+from sova.runtime.window_recording import review_window_frame_recording
 from sova.trace import TraceReader
 from sova.trace.redaction import Redactor
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 class DomainProfile(StrEnum):
@@ -43,6 +42,7 @@ _ATTACHMENT_MEDIA_TYPES = {
     ".json": "application/json",
     ".mp4": "video/mp4",
     ".png": "image/png",
+    ".sovaframes": "application/vnd.sova.window-frames+zip",
     ".txt": "text/plain",
     ".webm": "video/webm",
 }
@@ -53,17 +53,23 @@ def _attachment_role_and_media_type(logical_name: str) -> tuple[str, str]:
     lower = logical_name.casefold()
     suffix = next((item for item in _ATTACHMENT_MEDIA_TYPES if lower.endswith(item)), "")
     media_type = _ATTACHMENT_MEDIA_TYPES.get(suffix, "application/octet-stream")
+    primary_replay_cues = lower == "replay-cues.json" or (
+        lower.endswith("-replay-cues.json") and not lower.startswith("reproduction-")
+    )
     role = (
         "replay-cues"
-        if lower == "replay-cues.json"
+        if primary_replay_cues
         else "visual-replay"
-        if media_type.startswith("video/")
+        if media_type.startswith("video/") or media_type == "application/vnd.sova.window-frames+zip"
         else "attachment"
     )
     return role, media_type
 
 
 def _validate_visual_attachment(media_type: str, data: bytes) -> None:
+    if media_type == "application/vnd.sova.window-frames+zip":
+        review_window_frame_recording(data)
+        return
     if media_type == "video/webm" and not data.startswith(b"\x1a\x45\xdf\xa3"):
         raise FormatError(
             "SOVA-CAPSULE-VISUAL-MEDIA",
@@ -221,13 +227,15 @@ def scenario_template(*, title: str, purpose: str) -> dict[str, Any]:
     }
 
 
-def build_capsule(
+def build_capsule(  # noqa: PLR0913 - package roles remain explicit independent inputs
     destination: Path,
     manifest: dict[str, Any],
     *,
     scenario: dict[str, Any] | None = None,
     attachments: dict[str, bytes] | None = None,
     traces: list[Path] | None = None,
+    named_traces: dict[str, Path] | None = None,
+    named_capsules: dict[str, Path] | None = None,
 ) -> str:
     """Build one deterministic `.sova` package and return its SHA-256 digest."""
     writer = PackageWriter(manifest)
@@ -264,13 +272,46 @@ def build_capsule(
             media_type=media_type,
             data=data,
         )
-    for trace_path in sorted(traces or [], key=lambda item: item.name):
+    supplied_traces = traces or []
+    trace_entries = {trace_path.name: trace_path for trace_path in supplied_traces}
+    if len(trace_entries) != len(supplied_traces):
+        raise FormatError(
+            "SOVA-CAPSULE-TRACE-NAME",
+            "capsule trace filenames are duplicated; provide explicit named_traces",
+        )
+    for logical_name, trace_path in (named_traces or {}).items():
+        if logical_name in trace_entries:
+            raise FormatError(
+                "SOVA-CAPSULE-TRACE-NAME",
+                "capsule trace logical name is duplicated",
+                details={"name": logical_name},
+            )
+        trace_entries[logical_name] = trace_path
+    for logical_name, trace_path in sorted(trace_entries.items()):
         TraceReader(trace_path).verify()
         writer.add_bytes(
             role="trace",
-            path=f"traces/{trace_path.name}",
+            path=f"traces/{logical_name}",
             media_type="application/vnd.sova.trace+zip",
             data=trace_path.read_bytes(),
+        )
+    for logical_name, capsule_path in sorted((named_capsules or {}).items()):
+        if (
+            not logical_name.endswith(".sova")
+            or Path(logical_name).name != logical_name
+            or "\x00" in logical_name
+        ):
+            raise FormatError(
+                "SOVA-CAPSULE-NESTED-NAME",
+                "nested capsule logical name must be one portable .sova filename",
+                details={"name": logical_name},
+            )
+        PackageReader(capsule_path).verify("sova.capsule")
+        writer.add_bytes(
+            role="capsule",
+            path=f"capsules/{logical_name}",
+            media_type="application/vnd.sova.capsule+zip",
+            data=capsule_path.read_bytes(),
         )
     return writer.write(destination)
 

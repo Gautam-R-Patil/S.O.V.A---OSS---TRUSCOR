@@ -5,11 +5,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from sova.executors.contract import ActionRequest
+from sova.executors.runner import canonical_action_request_digest
 from sova.formats.errors import FormatError
 from sova.safety import (
     ActionIntent,
@@ -244,6 +247,94 @@ def test_mutation_requires_fresh_single_use_human_approval() -> None:
     assert first.allowed
     assert not second.allowed
     assert "approval-already-used" in second.reasons
+
+
+def test_approval_binds_request_inputs_and_execution_generation_against_substitution() -> None:
+    approval_authority = OutOfBandApprovalAuthority(b"r" * 32)
+    kernel = AuthorizationKernel(approval_authority)
+    original_request = ActionRequest(
+        "request",
+        "tool.invoke",
+        {"nested": {"text": "approved"}, "coordinates": [10, 20]},
+        5,
+    )
+    altered_request = ActionRequest(
+        "request",
+        "tool.invoke",
+        {"nested": {"text": "substituted"}, "coordinates": [10, 20]},
+        5,
+    )
+    intent = replace(
+        _intent(effect=EffectClass.MUTATE),
+        request_digest=canonical_action_request_digest(original_request),
+        participant_id="sova:principal:agent",
+        session_id="sova:session:reviewed",
+        observation_digest="sha256:" + "1" * 64,
+        capability_generation="sha256:" + "2" * 64,
+    )
+    challenge = approval_authority.challenge(
+        _authority(), intent, level=ApprovalLevel.NORMAL, now=NOW
+    )
+    token = approval_authority.approve(
+        challenge,
+        approver=_principal(PrincipalKind.HUMAN, "reviewer"),
+        exact_phrase=challenge.exact_phrase,
+        reviewed_effects=True,
+    )
+    substitutions = (
+        replace(intent, request_digest=canonical_action_request_digest(altered_request)),
+        replace(intent, participant_id="sova:participant:other"),
+        replace(intent, session_id="sova:session:other"),
+        replace(intent, observation_digest="sha256:" + "3" * 64),
+        replace(intent, capability_generation="sha256:" + "4" * 64),
+    )
+    for substituted in substitutions:
+        decision = AuthorizationSession(
+            authority=_authority(),
+            proof=_proof(),
+            containment_allowed=True,
+            containment_digest=CONTAINMENT,
+            kernel=kernel,
+        ).authorize(substituted, approval=token, now=NOW)
+        assert not decision.allowed
+        assert "approval-scope-mismatch" in decision.reasons
+
+    allowed = AuthorizationSession(
+        authority=_authority(),
+        proof=_proof(),
+        containment_allowed=True,
+        containment_digest=CONTAINMENT,
+        kernel=kernel,
+    ).authorize(intent, approval=token, now=NOW)
+    assert allowed.allowed
+    assert allowed.to_mapping()["executionBinding"] == {
+        "contractVersion": "0.1",
+        "requestDigest": canonical_action_request_digest(original_request),
+        "participantId": "sova:principal:agent",
+        "sessionId": "sova:session:reviewed",
+        "observationDigest": "sha256:" + "1" * 64,
+        "capabilityGeneration": "sha256:" + "2" * 64,
+    }
+
+
+@pytest.mark.parametrize(
+    "changes",
+    (
+        {"request_digest": "not-a-digest"},
+        {"request_digest": "sha256:" + "1" * 64},
+        {"participant_id": "sova:participant:unbound"},
+        {
+            "request_digest": "sha256:" + "1" * 64,
+            "capability_generation": "sha256:" + "2" * 64,
+            "participant_id": "sova:participant:partial",
+        },
+    ),
+)
+def test_incomplete_or_malformed_execution_bindings_fail_closed(
+    changes: dict[str, Any],
+) -> None:
+    with pytest.raises(FormatError, match=r"execution|digest|supplied together"):
+        replace(_intent(), **changes)
 
 
 def test_interactive_batch_approval_binds_every_exact_intent_once() -> None:

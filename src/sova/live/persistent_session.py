@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import secrets
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -20,7 +21,8 @@ from sova.formats.errors import FormatError
 from sova.live.browser import verified_browser_control
 from sova.live.fixture_web import OwnedWebFixture
 from sova.live.startup import start_stdio_client
-from sova.mcp import MCPExecutorAdapter, StdioMCPClient, playwright_mappings, playwright_stdio_spec
+from sova.mcp import StdioMCPClient, playwright_mappings, playwright_stdio_spec
+from sova.mcp.profile_state import profiled_playwright_adapter
 from sova.runtime import BrowserProfileLease, BrowserProfileVault
 from sova.trace import TraceReader, TraceWriter, generate_ed25519_keypair
 
@@ -63,18 +65,23 @@ def _text(output: Mapping[str, Any]) -> str:
     return "\n".join(str(item) for item in items) if isinstance(items, list) else ""
 
 
-def _execute_navigation(
+def _execute_navigation(  # noqa: PLR0913 - lifecycle trust inputs remain explicit
     client: StdioMCPClient,
     *,
     origin: str,
     url: str,
     workspace: Path,
     request_id: str,
+    profile_lease: BrowserProfileLease | None = None,
+    profile_state_events: list[str] | None = None,
 ) -> tuple[int, str, tuple[str, ...]]:
-    with MCPExecutorAdapter(
+    with profiled_playwright_adapter(
         "microsoft-playwright-mcp",
         client,
         playwright_mappings(allowed_origins=(origin,)),
+        profile_lease=profile_lease,
+        workspace=workspace,
+        lifecycle_observer=(None if profile_state_events is None else profile_state_events.append),
     ) as executor:
         context = ExecutionContext(
             workspace,
@@ -106,6 +113,62 @@ def _execute_navigation(
             )
         evidence = tuple(item.digest for item in (*outcome.evidence, *snapshot.evidence))
         return client.process_id, _text(snapshot.output), evidence
+
+
+def _execute_session_prime(
+    client: StdioMCPClient,
+    *,
+    origin: str,
+    workspace: Path,
+    profile_lease: BrowserProfileLease | None = None,
+    profile_state_events: list[str] | None = None,
+) -> tuple[int, str, str, tuple[str, ...]]:
+    """Set and immediately observe the harmless fixture session in one process."""
+    with profiled_playwright_adapter(
+        "microsoft-playwright-mcp",
+        client,
+        playwright_mappings(allowed_origins=(origin,)),
+        profile_lease=profile_lease,
+        workspace=workspace,
+        lifecycle_observer=(None if profile_state_events is None else profile_state_events.append),
+    ) as executor:
+        context = ExecutionContext(
+            workspace,
+            {
+                "decision": "authorized",
+                "basis": "self-owned-loopback-persistence-fixture",
+                "offensive": False,
+            },
+        )
+        evidence: list[str] = []
+        snapshots: list[str] = []
+        for request_id, url in (
+            ("profile-prime", f"{origin}/session/set"),
+            ("profile-prime-check", f"{origin}/session/check"),
+        ):
+            outcome = executor.execute(
+                ActionRequest(request_id, "browser.navigate", {"url": url}, 20),
+                context,
+                CancellationToken(),
+            )
+            if outcome.status != OutcomeStatus.SUCCEEDED:
+                raise FormatError(
+                    "SOVA-PERSISTENT-SESSION-NAVIGATION",
+                    "persistent-session fixture navigation did not succeed",
+                )
+            snapshot = executor.execute(
+                ActionRequest(f"{request_id}-snapshot", "browser.snapshot", {}, 20),
+                context,
+                CancellationToken(),
+            )
+            if snapshot.status != OutcomeStatus.SUCCEEDED:
+                raise FormatError(
+                    "SOVA-PERSISTENT-SESSION-SNAPSHOT",
+                    "persistent-session fixture snapshot did not succeed",
+                )
+            evidence.extend(item.digest for item in (*outcome.evidence, *snapshot.evidence))
+            snapshots.append(_text(snapshot.output))
+        return client.process_id, snapshots[0], snapshots[1], tuple(evidence)
 
 
 def run_browser_profile_handoff(  # noqa: PLR0913
@@ -187,10 +250,12 @@ def run_browser_profile_handoff(  # noqa: PLR0913
         headless=False,
     )
     client = start_stdio_client(spec, StdioMCPClient)
-    with MCPExecutorAdapter(
+    with profiled_playwright_adapter(
         "microsoft-playwright-mcp",
         client,
         playwright_mappings(allowed_origins=origins),
+        profile_lease=profile_lease,
+        workspace=destination,
     ) as executor:
         context = ExecutionContext(
             destination,
@@ -358,40 +423,54 @@ def run_owned_persistent_session_restart_probe(
                 profile_directory=profile,
             )
             first_client = start_stdio_client(spec, StdioMCPClient)
-            first_pid, first_text, first_evidence = _execute_navigation(
+            first_state_events: list[str] = []
+            first_pid, first_text, first_check_text, first_evidence = _execute_session_prime(
                 first_client,
                 origin=fixture.origin,
-                url=f"{fixture.origin}/session/set",
                 workspace=destination,
-                request_id="profile-prime",
+                profile_lease=lease,
+                profile_state_events=first_state_events,
             )
             if "SOVA_SESSION_MARKER_SET" not in first_text:
                 raise FormatError(
                     "SOVA-PERSISTENT-SESSION-PRIME",
                     "fixture did not visibly confirm session priming",
                 )
+            present_before_restart = "SOVA_SESSION_PRESENT" in first_check_text
+            checkpoint_created = first_state_events == ["empty", "saved"]
             writer.append(
                 "browser.session.primed",
                 {
                     "processId": first_pid,
                     "observableMarkerPresent": True,
+                    "observableSessionPresentBeforeRestart": present_before_restart,
+                    "privateCheckpointCreated": checkpoint_created,
                     "evidenceDigests": list(first_evidence),
                     "cookieValueCaptured": False,
                 },
                 phase="prime",
             )
+            # Chrome closes the persistent context before the MCP server exits,
+            # but Windows may finish its profile database flush asynchronously.
+            # Give that owned local profile one bounded settling interval before
+            # another process acquires it.
+            time.sleep(1)
             # MCPExecutorAdapter owns and closes the first client. A second
             # launch therefore proves persistence across a server/browser
             # process boundary rather than within one in-memory context.
             second_client = start_stdio_client(spec, StdioMCPClient)
+            second_state_events: list[str] = []
             second_pid, second_text, second_evidence = _execute_navigation(
                 second_client,
                 origin=fixture.origin,
                 url=f"{fixture.origin}/session/check",
                 workspace=destination,
                 request_id="profile-check",
+                profile_lease=lease,
+                profile_state_events=second_state_events,
             )
             persisted = "SOVA_SESSION_PRESENT" in second_text
+            checkpoint_restored = second_state_events == ["restored", "saved"]
             distinct_processes = first_pid != second_pid
             writer.append(
                 "browser.session.recovered",
@@ -399,12 +478,23 @@ def run_owned_persistent_session_restart_probe(
                     "processId": second_pid,
                     "distinctMcpProcess": distinct_processes,
                     "observableSessionPresent": persisted,
+                    "privateCheckpointRestored": checkpoint_restored,
                     "evidenceDigests": list(second_evidence),
                     "cookieValueCaptured": False,
                 },
                 phase="restart",
             )
-            status = "pass" if persisted and distinct_processes else "fail"
+            status = (
+                "pass"
+                if (
+                    present_before_restart
+                    and persisted
+                    and distinct_processes
+                    and checkpoint_created
+                    and checkpoint_restored
+                )
+                else "fail"
+            )
             writer.append(
                 "run.completed",
                 {
@@ -426,13 +516,17 @@ def run_owned_persistent_session_restart_probe(
                     "firstProcessId": first_pid,
                     "secondProcessId": second_pid,
                     "distinctMcpProcesses": distinct_processes,
+                    "observableSessionPresentBeforeRestart": present_before_restart,
                     "observableSessionPresentAfterRestart": persisted,
+                    "privateCheckpointCreated": checkpoint_created,
+                    "privateCheckpointRestored": checkpoint_restored,
                 },
                 "integrity": {"signedTraceValid": verification.signature_valid},
                 "privacy": {
                     "profileHandleIncluded": False,
                     "profilePathIncluded": False,
                     "cookieValueIncluded": False,
+                    "checkpointContentIncluded": False,
                     "credentialAutomationUsed": False,
                     "captchaBypassUsed": False,
                 },

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from sova.formats import sha256_digest, strict_json_loads
 from sova.formats.errors import FormatError
 from sova.replay.model import ReplayMode
+from sova.runtime.window_recording import review_window_frame_recording
 from sova.trace import TraceReader
 
 if TYPE_CHECKING:
@@ -263,9 +264,16 @@ def _reviewed_media(path: Path | None) -> dict[str, Any] | None:
     resolved = path.resolve()
     if not resolved.is_file():
         raise FormatError("SOVA-REPLAY-MEDIA-PATH", "replay media must be a regular file")
-    media_type = {".webm": "video/webm", ".mp4": "video/mp4"}.get(resolved.suffix.casefold())
+    media_type = {
+        ".webm": "video/webm",
+        ".mp4": "video/mp4",
+        ".sovaframes": "application/vnd.sova.window-frames+zip",
+    }.get(resolved.suffix.casefold())
     if media_type is None:
-        raise FormatError("SOVA-REPLAY-MEDIA-TYPE", "replay media must be WebM or MP4")
+        raise FormatError(
+            "SOVA-REPLAY-MEDIA-TYPE",
+            "replay media must be WebM or MP4, or a SOVA window-frame archive",
+        )
     size = resolved.stat().st_size
     if size <= 0 or size > _MAX_MEDIA_BYTES:
         raise FormatError(
@@ -279,6 +287,30 @@ def _reviewed_media(path: Path | None) -> dict[str, Any] | None:
             "SOVA-REPLAY-MEDIA-LIMIT",
             "replay media changed during bounded rendering",
         )
+    if media_type == "application/vnd.sova.window-frames+zip":
+        reviewed = review_window_frame_recording(data)
+        return {
+            "kind": "frames",
+            "name": resolved.name,
+            "mediaType": media_type,
+            "digest": reviewed.digest,
+            "dataUrl": None,
+            "durationSeconds": reviewed.duration_seconds,
+            "width": reviewed.width,
+            "height": reviewed.height,
+            "frames": [
+                {
+                    "offsetSeconds": frame["offsetSeconds"],
+                    "digest": frame["digest"],
+                    "reason": frame["reason"],
+                    "dataUrl": (
+                        "data:image/bmp;base64," + base64.b64encode(frame["data"]).decode("ascii")
+                    ),
+                }
+                for frame in reviewed.frames
+            ],
+            "synchronization": "session-level-recording-not-event-time-attested",
+        }
     if media_type == "video/webm" and not data.startswith(b"\x1a\x45\xdf\xa3"):
         raise FormatError("SOVA-REPLAY-MEDIA-TYPE", "WebM media has no EBML signature")
     if media_type == "video/mp4" and (len(data) < _MIN_MP4_SIGNATURE_BYTES or data[4:8] != b"ftyp"):
@@ -287,6 +319,7 @@ def _reviewed_media(path: Path | None) -> dict[str, Any] | None:
         _webm_duration_seconds(data) if media_type == "video/webm" else _mp4_duration_seconds(data)
     )
     return {
+        "kind": "video",
         "name": resolved.name,
         "mediaType": media_type,
         "digest": sha256_digest(data),
@@ -338,12 +371,17 @@ def _reviewed_replay_cues(  # noqa: PLR0912, PLR0915 - fail-closed validation
         "synchronization",
         "cues",
     }
+    optional = {"surface"}
     if (
-        set(value) != required
+        not required <= set(value)
+        or set(value) - required - optional
         or value.get("artifactType") != "sova.replay-cues"
         or value.get("schemaVersion") != "0.1.0"
     ):
         raise FormatError("SOVA-REPLAY-CUES-FORMAT", "unsupported replay cue document")
+    surface = value.get("surface")
+    if surface is not None and surface not in {"browser", "computer"}:
+        raise FormatError("SOVA-REPLAY-CUES-FORMAT", "unsupported replay cue surface")
     if value.get("mediaDigest") != media["digest"]:
         raise FormatError(
             "SOVA-REPLAY-CUES-MEDIA",
@@ -360,7 +398,11 @@ def _reviewed_replay_cues(  # noqa: PLR0912, PLR0915 - fail-closed validation
     uncertainty = synchronization.get("uncertaintyMs")
     if (
         not _bounded_number(uncertainty, _MAX_CUE_UNCERTAINTY_MS)
-        or synchronization.get("method") != "same-host-monotonic-recorder-start-rpc-bound"
+        or synchronization.get("method")
+        not in {
+            "same-host-monotonic-recorder-start-rpc-bound",
+            "same-host-monotonic-window-frame-capture-bound",
+        }
         or synchronization.get("frameTimestampAttested") is not False
         or not isinstance(synchronization.get("statement"), str)
     ):
@@ -457,6 +499,7 @@ def _reviewed_replay_cues(  # noqa: PLR0912, PLR0915 - fail-closed validation
     return {
         "synchronization": dict(synchronization),
         "cues": reviewed,
+        "surface": surface,
         "defaultCueId": default_cue["id"],
         "defaultCueSource": (
             "primary" if default_cue["eventId"] in primary_event_ids else "comparison"
@@ -492,7 +535,7 @@ def replay_document(payload: dict[str, Any]) -> str:
 *{{box-sizing:border-box}}body{{margin:0;background:radial-gradient(circle at 20% -10%,#12314a 0,transparent 36rem),var(--bg)}}button,input,select{{font:inherit}}button,select,input[type=search]{{color:var(--ink);background:#0d2030;border:1px solid #29485f;border-radius:8px}}button{{padding:.55rem .8rem;cursor:pointer}}button:hover,button:focus-visible{{border-color:var(--cyan);outline:none}}button.active{{background:#155167;border-color:var(--cyan)}}
 header{{position:sticky;top:0;z-index:9;display:flex;justify-content:space-between;gap:1rem;align-items:center;padding:1rem 1.4rem;background:rgba(5,11,18,.92);border-bottom:1px solid var(--line);backdrop-filter:blur(14px)}}.brand{{display:flex;gap:.75rem;align-items:center}}.mark{{display:grid;place-items:center;width:38px;height:38px;border:1px solid var(--cyan);border-radius:50%;color:var(--cyan);font-weight:800}}h1{{font-size:1rem;letter-spacing:.16em;margin:0}}.sub{{color:var(--muted);font-size:.78rem}}.status{{display:flex;gap:.55rem;align-items:center}}.dot{{width:8px;height:8px;border-radius:50%;background:var(--amber);box-shadow:0 0 12px currentColor}}.dot.sealed{{background:var(--green)}}
 main{{max-width:1500px;margin:auto;padding:1.2rem}}.warning{{padding:.7rem 1rem;border:1px solid #5c4927;background:#211a0e;color:var(--amber);border-radius:10px}}.metrics{{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem;margin:1rem 0}}.metric{{background:linear-gradient(145deg,#0d1b29,#09131e);border:1px solid var(--line);border-radius:12px;padding:.8rem 1rem}}.metric b{{display:block;font-size:1.15rem}}.metric span{{color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.09em}}
-.visual{{margin:1rem 0;padding:1rem;background:var(--panel);border:1px solid var(--line);border-radius:12px}}.visual-head{{display:flex;justify-content:space-between;gap:1rem;align-items:center;margin-bottom:.7rem}}.visual video{{display:block;width:100%;max-height:66vh;background:#000;border-radius:9px}}.visual-note{{color:var(--amber);font-size:.78rem}}
+.visual{{margin:1rem 0;padding:1rem;background:var(--panel);border:1px solid var(--line);border-radius:12px}}.visual-head{{display:flex;justify-content:space-between;gap:1rem;align-items:center;margin-bottom:.7rem}}.visual video,.visual img{{display:block;width:100%;max-height:66vh;object-fit:contain;background:#000;border-radius:9px}}.visual-note{{color:var(--amber);font-size:.78rem}}.frame-controls{{display:grid;grid-template-columns:auto minmax(180px,1fr) auto;gap:.65rem;align-items:center;margin-top:.65rem}}.frame-controls input{{width:100%;accent-color:var(--cyan)}}
 .controls{{display:grid;grid-template-columns:auto auto minmax(180px,1fr) auto minmax(180px,320px);gap:.65rem;align-items:center;padding:1rem;background:var(--panel);border:1px solid var(--line);border-radius:12px}}#scrub{{width:100%;accent-color:var(--cyan)}}select{{padding:.5rem}}input[type=search]{{padding:.55rem .7rem;width:100%}}.filters{{display:flex;gap:.45rem;flex-wrap:wrap;margin:.8rem 0}}.filters button{{padding:.35rem .65rem;font-size:.78rem}}
 .workspace{{display:grid;grid-template-columns:minmax(0,2.1fr) minmax(300px,.9fr);gap:1rem}}.tracks,.detail{{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}}.tracks-head,.detail-head{{display:flex;justify-content:space-between;align-items:center;padding:.75rem 1rem;border-bottom:1px solid var(--line)}}.tracks-body{{max-height:62vh;overflow:auto}}.lane{{display:grid;grid-template-columns:150px minmax(600px,1fr);min-height:50px;border-bottom:1px solid #122638}}.lane-label{{position:sticky;left:0;z-index:2;display:flex;align-items:center;padding:.6rem .8rem;color:var(--muted);background:#091522;border-right:1px solid var(--line);overflow-wrap:anywhere}}.rail{{position:relative;margin:.55rem .8rem;background:linear-gradient(90deg,#102236,#173149);height:30px;border-radius:7px;min-width:560px}}.event-dot{{position:absolute;top:7px;translate:-50% 0;width:15px;height:15px;padding:0;border:2px solid #07111b;border-radius:50%;background:var(--cyan);box-shadow:0 0 0 1px #4a899b}}.event-dot.selected{{background:white;box-shadow:0 0 0 3px var(--cyan)}}.event-dot.redacted{{background:var(--amber)}}.event-dot.error{{background:var(--red)}}.event-dot.decisive{{background:var(--green);box-shadow:0 0 0 3px rgba(102,221,165,.32)}}
 .breakpoint{{display:grid;grid-template-columns:1fr auto;gap:1rem;align-items:center;margin:1rem 0;padding:1rem 1.1rem;border:1px solid #2b8665;border-radius:12px;background:linear-gradient(100deg,rgba(31,105,77,.32),rgba(11,23,36,.92))}}.breakpoint h2{{margin:.15rem 0;color:var(--green)}}.breakpoint .cue-data{{color:var(--muted);overflow-wrap:anywhere}}.breakpoint button{{border-color:#3db884;background:#123c31}}
@@ -504,14 +547,14 @@ main{{max-width:1500px;margin:auto;padding:1.2rem}}.warning{{padding:.7rem 1rem;
 <main><p class="warning">Inert playback only. Recorded actions, payloads, links, and tools are never executed by this page.</p>
 <section class="metrics" aria-label="Trace summary"><div class="metric"><b id="eventCount">0</b><span>events</span></div><div class="metric"><b id="laneCount">0</b><span>sensor lanes</span></div><div class="metric"><b id="actorCount">0</b><span>actors</span></div><div class="metric"><b id="redactionCount">0</b><span>redactions</span></div><div class="metric"><b id="duration">0</b><span>observed span</span></div></section>
 <section class="breakpoint" id="breakpoint" hidden><div><div class="kicker">Decisive evidence</div><h2 id="cueLabel">Exploit confirmed</h2><div class="cue-data" id="cueData"></div></div><button id="playDecisive" type="button">▶ Play decisive moment</button></section>
-<section class="visual" id="visual" hidden><div class="visual-head"><div><b>Recorded browser session</b><div class="sub" id="mediaMeta"></div></div><span class="visual-note" id="mediaNote">Session-level visual evidence; event-time synchronization is not attested.</span></div><video id="sessionVideo" controls preload="metadata"></video></section>
+<section class="visual" id="visual" hidden><div class="visual-head"><div><b id="mediaTitle">Recorded visual session</b><div class="sub" id="mediaMeta"></div></div><span class="visual-note" id="mediaNote">Session-level visual evidence; event-time synchronization is not attested.</span></div><video id="sessionVideo" controls preload="metadata" hidden></video><div id="framePlayer" hidden><img id="sessionFrame" alt="Recorded target application window"><div class="frame-controls"><button id="framePlay" type="button">▶ Play frames</button><input id="frameScrub" type="range" min="0" value="0" aria-label="Recorded frame"><output id="framePosition">0 / 0</output></div></div></section>
 <section class="controls" aria-label="Playback controls"><button id="play" type="button">▶ Play</button><select id="speed" aria-label="Playback speed"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option><option value="8">8x</option></select><input id="scrub" type="range" min="0" value="0" aria-label="Event position"><output id="position">0 / 0</output><input id="search" type="search" maxlength="128" placeholder="Filter kind, actor, phase, target…" aria-label="Search events"></section>
 <div class="filters" id="filters" aria-label="Sensor family filters"></div>
 <section class="workspace"><div class="tracks"><div class="tracks-head"><b>Sensor lanes</b><span class="sub" id="sourceMeta"></span></div><div class="tracks-body" id="lanes"></div></div>
 <aside class="detail"><div class="detail-head"><b>Evidence detail</b><span class="sub" id="sequence"></span></div><div class="detail-body" id="detail"><p class="empty">Select an event.</p></div></aside></section>
 </main><script type="application/json" id="sova-data">{_safe_json(payload)}</script><script>
 'use strict';
-const data=JSON.parse(document.getElementById('sova-data').textContent);let events=[...data.events],comparison=[...data.comparisonEvents],visible=[],selectedFamily='all',selectedIndex=0,timer=null,activeCue=null,cueStop=null;
+const data=JSON.parse(document.getElementById('sova-data').textContent);let events=[...data.events],comparison=[...data.comparisonEvents],visible=[],selectedFamily='all',selectedIndex=0,timer=null,activeCue=null,cueStop=null,frameTimer=null,frameIndex=0;
 const byId=new Map();const scrub=document.getElementById('scrub');const play=document.getElementById('play');const search=document.getElementById('search');
 function text(node,value){{document.getElementById(node).textContent=String(value)}}
 function family(e){{return e.kind.split('.')[0]}}
@@ -534,13 +577,18 @@ function drawFilters(){{const box=document.getElementById('filters');box.replace
 function summary(){{events.forEach(e=>byId.set(e.id,e));comparison.forEach(e=>byId.set(e.id,e));text('eventCount',events.length);text('actorCount',new Set(events.map(e=>e.actor.id)).size);text('redactionCount',events.reduce((n,e)=>n+(e.redactions||[]).length,0));text('duration',duration());text('sourceMeta',`${{data.source}}${{data.comparison?' ↔ '+data.comparison:''}}`);const sealed=data.completion==='sealed';document.getElementById('statusDot').classList.toggle('sealed',sealed);text('statusText',sealed?'integrity-checked sealed trace':data.liveEndpoint?'live unsealed tail':'integrity-checked playback')}}
 function cueById(id){{return (data.replayCues?.cues||[]).find(c=>c.id===id)||null}}
 function showComparisonCue(event){{const box=document.getElementById('detail');box.replaceChildren();box.appendChild(detailBlock(event,'Decisive comparison evidence'));text('sequence',`comparison sequence ${{event.sequence}}`)}}
-function showCue(cue){{if(!cue)return;activeCue=cue;const breakpoint=document.getElementById('breakpoint');breakpoint.hidden=false;breakpoint.dataset.cueId=cue.id;breakpoint.dataset.cueSource=data.replayCues.defaultCueSource;text('cueLabel',cue.label);const sync=data.replayCues.synchronization;text('cueData',`${{cue.channel}} · trace sequence ${{cue.eventSequence}} · oracle ${{cue.oracleStatus}} · video ${{Number(cue.offsetSeconds).toFixed(3)}}s ± ${{Number(sync.uncertaintyMs).toFixed(3)}}ms`);selectedFamily='all';search.value='';drawFilters();apply();const event=byId.get(cue.eventId);if(event){{if(events.some(item=>item.id===event.id))selectEvent(event);else showComparisonCue(event)}}}}
-function seekCue(cue,playWindow){{if(!cue||!data.media)return;const video=document.getElementById('sessionVideo');const start=Math.max(0,Number(cue.offsetSeconds)-Number(cue.preRollSeconds));const declaredDuration=Number(data.media.durationSeconds);const requestedStop=Number(cue.offsetSeconds)+Number(cue.postRollSeconds);const stopAt=Number.isFinite(declaredDuration)&&declaredDuration>0?Math.min(declaredDuration,requestedStop):requestedStop;const finish=()=>{{video.pause();video.dataset.decisiveState='complete';if(cueStop){{video.removeEventListener('timeupdate',cueStop);video.removeEventListener('ended',finish);cueStop=null}}}};const seek=()=>{{video.currentTime=Math.min(start,Number.isFinite(video.duration)?Math.max(0,video.duration-.05):start);video.dataset.decisiveStart=String(start);video.dataset.decisiveStop=String(stopAt);video.dataset.decisiveState='ready';if(playWindow){{cueStop=()=>{{if(video.currentTime>=stopAt)finish()}};video.addEventListener('timeupdate',cueStop);video.addEventListener('ended',finish);video.play().then(()=>{{video.dataset.decisiveState='playing'}}).catch(()=>{{video.dataset.decisiveState='blocked'}})}}}};if(video.readyState>=1)seek();else video.addEventListener('loadedmetadata',seek,{{once:true}});showCue(cue)}}
+function showCue(cue){{if(!cue)return;activeCue=cue;const breakpoint=document.getElementById('breakpoint');breakpoint.hidden=false;breakpoint.dataset.cueId=cue.id;breakpoint.dataset.cueSource=data.replayCues.defaultCueSource;text('cueLabel',cue.label);const sync=data.replayCues.synchronization;text('cueData',`${{cue.channel}} · trace sequence ${{cue.eventSequence}} · oracle ${{cue.oracleStatus}} · visual offset ${{Number(cue.offsetSeconds).toFixed(3)}}s ± ${{Number(sync.uncertaintyMs).toFixed(3)}}ms`);selectedFamily='all';search.value='';drawFilters();apply();const event=byId.get(cue.eventId);if(event){{if(events.some(item=>item.id===event.id))selectEvent(event);else showComparisonCue(event)}}}}
+function stopFramePlayback(){{if(frameTimer)clearTimeout(frameTimer);frameTimer=null;document.getElementById('framePlay').textContent='▶ Play frames'}}
+function showFrame(index){{const frames=data.media?.frames||[];if(!frames.length)return;frameIndex=Math.max(0,Math.min(frames.length-1,index));const frame=frames[frameIndex];document.getElementById('sessionFrame').src=frame.dataUrl;const scrubber=document.getElementById('frameScrub');scrubber.max=String(frames.length-1);scrubber.value=String(frameIndex);text('framePosition',`${{frameIndex+1}} / ${{frames.length}} · ${{Number(frame.offsetSeconds).toFixed(3)}} s · ${{frame.reason}}`)}}
+function nearestFrame(seconds){{const frames=data.media?.frames||[];if(!frames.length)return 0;return frames.reduce((best,frame,index)=>Math.abs(Number(frame.offsetSeconds)-seconds)<Math.abs(Number(frames[best].offsetSeconds)-seconds)?index:best,0)}}
+function playFrames(start,stopAt){{stopFramePlayback();const frames=data.media?.frames||[];if(!frames.length)return;frameIndex=nearestFrame(start);document.getElementById('framePlay').textContent='❚❚ Pause frames';const step=()=>{{showFrame(frameIndex);if(frameIndex>=frames.length-1||Number(frames[frameIndex].offsetSeconds)>=stopAt){{stopFramePlayback();return}}const current=Number(frames[frameIndex].offsetSeconds);const next=Number(frames[frameIndex+1].offsetSeconds);frameIndex+=1;frameTimer=setTimeout(step,Math.max(80,Math.min(1500,(next-current)*1000)))}};step()}}
+function seekCue(cue,playWindow){{if(!cue||!data.media)return;const start=Math.max(0,Number(cue.offsetSeconds)-Number(cue.preRollSeconds));const declaredDuration=Number(data.media.durationSeconds);const requestedStop=Number(cue.offsetSeconds)+Number(cue.postRollSeconds);const stopAt=Number.isFinite(declaredDuration)&&declaredDuration>0?Math.min(declaredDuration,requestedStop):requestedStop;if(data.media.kind==='frames'){{showFrame(nearestFrame(Number(cue.chapterOffsetSeconds)));if(playWindow)playFrames(start,stopAt);showCue(cue);return}}const video=document.getElementById('sessionVideo');const finish=()=>{{video.pause();video.dataset.decisiveState='complete';if(cueStop){{video.removeEventListener('timeupdate',cueStop);video.removeEventListener('ended',finish);cueStop=null}}}};const seek=()=>{{video.currentTime=Math.min(start,Number.isFinite(video.duration)?Math.max(0,video.duration-.05):start);video.dataset.decisiveStart=String(start);video.dataset.decisiveStop=String(stopAt);video.dataset.decisiveState='ready';if(playWindow){{cueStop=()=>{{if(video.currentTime>=stopAt)finish()}};video.addEventListener('timeupdate',cueStop);video.addEventListener('ended',finish);video.play().then(()=>{{video.dataset.decisiveState='playing'}}).catch(()=>{{video.dataset.decisiveState='blocked'}})}}}};if(video.readyState>=1)seek();else video.addEventListener('loadedmetadata',seek,{{once:true}});showCue(cue)}}
 function focusDefaultCue(){{const cue=cueById(data.replayCues?.defaultCueId);if(cue)seekCue(cue,false)}}
-function loadMedia(){{if(!data.media)return;const panel=document.getElementById('visual');const video=document.getElementById('sessionVideo');panel.hidden=false;video.src=data.media.dataUrl;text('mediaMeta',`${{data.media.name}} · ${{data.media.digest}}${{data.media.durationSeconds?' · '+data.media.durationSeconds+' s':''}}`);if(data.replayCues){{const sync=data.replayCues.synchronization;text('mediaNote',data.replayCues.durationBound?`Oracle-synchronized, duration-bounded cue · ${{sync.method}} · ± ${{Number(sync.uncertaintyMs).toFixed(3)}} ms; frame timestamps are not cryptographically attested.`:'Cue indexed, but finalized media duration is unavailable; exact-open status is withheld.')}}}}
+function loadMedia(){{if(!data.media)return;const panel=document.getElementById('visual');const video=document.getElementById('sessionVideo');panel.hidden=false;if(data.media.kind==='frames'){{text('mediaTitle','Recorded target application window');document.getElementById('framePlayer').hidden=false;showFrame(0)}}else{{text('mediaTitle','Recorded browser session');video.hidden=false;video.src=data.media.dataUrl}}text('mediaMeta',`${{data.media.name}} · ${{data.media.digest}}${{data.media.durationSeconds?' · '+data.media.durationSeconds+' s':''}}`);if(data.replayCues){{const sync=data.replayCues.synchronization;text('mediaNote',data.replayCues.durationBound?`Oracle-synchronized, duration-bounded cue · ${{sync.method}} · ± ${{Number(sync.uncertaintyMs).toFixed(3)}} ms; frame timestamps are not cryptographically attested.`:'Cue indexed, but finalized media duration is unavailable; exact-open status is withheld.')}}}}
 function stop(){{if(timer)clearInterval(timer);timer=null;play.textContent='▶ Play'}}
 function start(){{stop();play.textContent='❚❚ Pause';const speed=Number(document.getElementById('speed').value);timer=setInterval(()=>{{if(selectedIndex>=visible.length-1){{stop();return}}selectedIndex+=1;draw()}},Math.max(45,650/speed))}}
 play.onclick=()=>timer?stop():start();scrub.oninput=()=>{{stop();selectedIndex=Number(scrub.value);draw()}};search.oninput=apply;document.getElementById('speed').onchange=()=>{{if(timer)start()}};document.getElementById('playDecisive').onclick=()=>{{if(activeCue)seekCue(activeCue,true)}};
+document.getElementById('frameScrub').oninput=event=>{{stopFramePlayback();showFrame(Number(event.target.value))}};document.getElementById('framePlay').onclick=()=>{{if(frameTimer)stopFramePlayback();else playFrames(Number((data.media?.frames||[])[frameIndex]?.offsetSeconds||0),Number(data.media?.durationSeconds||0))}};
 function addLive(raw){{if(!raw||byId.has(raw.id))return;events.push(raw);events.sort((a,b)=>a.sequence-b.sequence);summary();drawFilters();apply()}}
 if(data.liveEndpoint){{const stream=new EventSource(data.liveEndpoint);stream.addEventListener('trace-event',e=>{{try{{addLive(JSON.parse(e.data))}}catch(_error){{text('statusText','invalid live event refused')}}}});stream.addEventListener('sealed',()=>{{data.completion='sealed';summary();stream.close()}});stream.onerror=()=>{{if(data.completion!=='sealed')text('statusText','live tail reconnecting')}}}}
 summary();loadMedia();drawFilters();apply();focusDefaultCue();

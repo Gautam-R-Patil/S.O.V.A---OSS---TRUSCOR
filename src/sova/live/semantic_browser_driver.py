@@ -47,9 +47,11 @@ from sova.live.semantic_workflow import (
     SemanticExecutionBatch,
     SemanticWorkflowResult,
     run_semantic_browser_workflow,
+    semantic_browser_action_from_mapping,
 )
 from sova.live.startup import start_stdio_client
 from sova.mcp import MCPExecutorAdapter, StdioMCPClient, playwright_mappings, playwright_stdio_spec
+from sova.mcp.profile_state import profiled_playwright_adapter
 from sova.reproduction import compare_observable_outcomes
 from sova.trace import Redactor, TraceReader, generate_ed25519_keypair
 
@@ -68,6 +70,157 @@ _MAX_DISCLOSED_SNAPSHOT_CHARS = 64_000
 # reset/setup.  Keep the per-step window bounded, but large enough for that
 # deterministic initialization to finish on CPU-only release-test hosts.
 _MAX_STEP_SECONDS = 120
+_POST_SUBMIT_SETTLE_TEXT = (
+    "Generating...",
+    "Loading...",
+    "Processing...",
+    "Thinking...",
+)
+_SUBMIT_ACTION_LABEL = re.compile(r"\b(?:send|submit)\b", re.IGNORECASE)
+_MAX_POST_SUBMIT_SETTLEMENT_SECONDS = 180
+_MAX_SETTLEMENT_WAIT_SECONDS = 30
+# A timed-out Playwright wait can continue server-side for one 30-second
+# settlement chunk.  Preserve that drain window plus 15 seconds for the
+# mandatory signed accessibility snapshot.
+_FINAL_SNAPSHOT_RESERVE_SECONDS = 45.0
+_ACCESSIBLE_CONTROL = re.compile(
+    r'\b(?P<role>button|checkbox|combobox|link|listbox|menuitem|radio|searchbox|slider|spinbutton|tab|textbox)\s+"(?P<label>[^"]{1,256})"[^\n]*?\[ref=(?P<ref>[A-Za-z][A-Za-z0-9_-]{0,127})\]',
+    re.IGNORECASE,
+)
+_RECORDED_CONTROL_DESCRIPTION = re.compile(
+    r'^(?P<role>button|checkbox|combobox|link|listbox|menuitem|radio|searchbox|slider|spinbutton|tab|textbox)\s+"(?P<label>[^"]{1,256})"$',
+    re.IGNORECASE,
+)
+_TEXT_ENTRY_ROLES = frozenset({"textbox", "searchbox", "combobox", "spinbutton"})
+_SELECT_ROLES = frozenset({"combobox", "listbox"})
+
+
+def _requires_post_submit_settlement(action: SemanticBrowserAction) -> bool:
+    if action.action == "browser.type":
+        return action.arguments.get("submit") is True
+    element = action.arguments.get("element")
+    return (
+        action.action == "browser.click"
+        and isinstance(element, str)
+        and _SUBMIT_ACTION_LABEL.search(element) is not None
+    )
+
+
+def _settlement_wait_seconds(total_seconds: int) -> tuple[int, ...]:
+    waits: list[int] = []
+    remaining = total_seconds
+    while remaining > 0:
+        wait = min(_MAX_SETTLEMENT_WAIT_SECONDS, remaining)
+        waits.append(wait)
+        remaining -= wait
+    return tuple(waits)
+
+
+def _validated_post_submit_settlement_seconds(value: int) -> int:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not 0 <= value <= _MAX_POST_SUBMIT_SETTLEMENT_SECONDS
+    ):
+        raise FormatError(
+            "SOVA-SEMANTIC-BROWSER-SETTLEMENT",
+            (
+                "post-submit settlement must be whole seconds between 0 and "
+                f"{_MAX_POST_SUBMIT_SETTLEMENT_SECONDS}"
+            ),
+        )
+    return value
+
+
+def _normalized_accessible_label(value: str) -> str:
+    return " ".join(value.split()).casefold()
+
+
+def _fresh_accessible_ref(
+    snapshot: str,
+    *,
+    element: str,
+    allowed_roles: frozenset[str] | None,
+) -> str:
+    descriptor = _RECORDED_CONTROL_DESCRIPTION.fullmatch(" ".join(element.split()))
+    expected_role = None if descriptor is None else descriptor.group("role").casefold()
+    normalized_element = _normalized_accessible_label(
+        element if descriptor is None else descriptor.group("label")
+    )
+    candidates = {
+        match.group("ref")
+        for line in snapshot.splitlines()
+        for match in (_ACCESSIBLE_CONTROL.search(line),)
+        if match is not None
+        and _normalized_accessible_label(match.group("label")) == normalized_element
+        and (expected_role is None or match.group("role").casefold() == expected_role)
+        and (allowed_roles is None or match.group("role").casefold() in allowed_roles)
+    }
+    if len(candidates) != 1:
+        raise FormatError(
+            "SOVA-SEMANTIC-BROWSER-REPRODUCTION-REBIND",
+            "recorded element must match exactly one compatible control in the fresh observation",
+        )
+    return next(iter(candidates))
+
+
+def _rebind_reproduction_action(
+    mission: SemanticBrowserMission,
+    action: SemanticBrowserAction,
+    observation: SemanticBrowserObservation,
+    *,
+    action_index: int,
+) -> tuple[SemanticBrowserAction, tuple[dict[str, Any], ...]]:
+    arguments = dict(action.arguments)
+    locator_specs: tuple[tuple[str, str, frozenset[str] | None], ...]
+    if action.action == "browser.drag":
+        locator_specs = (
+            ("startTarget", "startElement", None),
+            ("endTarget", "endElement", None),
+        )
+    elif action.action in {"browser.click", "browser.type", "browser.select", "browser.hover"}:
+        locator_name = "ref" if "ref" in arguments else "target"
+        allowed_roles = (
+            _TEXT_ENTRY_ROLES
+            if action.action == "browser.type"
+            else _SELECT_ROLES
+            if action.action == "browser.select"
+            else None
+        )
+        locator_specs = ((locator_name, "element", allowed_roles),)
+    else:
+        return action, ()
+
+    records: list[dict[str, Any]] = []
+    for locator_name, element_name, allowed_roles in locator_specs:
+        original_ref = arguments.get(locator_name)
+        element = arguments.get(element_name)
+        if not isinstance(original_ref, str) or not isinstance(element, str):
+            raise FormatError(
+                "SOVA-SEMANTIC-BROWSER-REPRODUCTION-REBIND",
+                "recorded targeted action is missing its reviewed locator description",
+            )
+        fresh_ref = _fresh_accessible_ref(
+            observation.snapshot,
+            element=element,
+            allowed_roles=allowed_roles,
+        )
+        arguments[locator_name] = fresh_ref
+        records.append(
+            {
+                "actionIndex": action_index,
+                "action": action.action,
+                "locatorField": locator_name,
+                "recordedRef": original_ref,
+                "freshRef": fresh_ref,
+                "elementDigest": sha256_digest(element.encode("utf-8")),
+                "observationDigest": observation.digest,
+            }
+        )
+    rebound = semantic_browser_action_from_mapping(
+        {"action": action.action, "arguments": arguments}, mission
+    )
+    return rebound, tuple(records)
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,15 +275,19 @@ def _step(
     }
 
 
-def _scenario(
+def _scenario(  # noqa: PLR0912, PLR0913, PLR0915 - explicit signed batch construction
     mission: SemanticBrowserMission,
     actions: tuple[SemanticBrowserAction, ...],
     *,
     key: str,
     reset_and_setup: bool,
     max_step_seconds: float = _MAX_STEP_SECONDS,
+    post_submit_settlement_seconds: int = 0,
 ) -> tuple[dict[str, Any], tuple[str, ...]]:
     """Create an exact reviewable action batch plus a fresh observable snapshot."""
+    post_submit_settlement_seconds = _validated_post_submit_settlement_seconds(
+        post_submit_settlement_seconds
+    )
     scenario = scenario_template(
         title=f"Semantic browser mission batch {key}",
         purpose=(
@@ -141,6 +298,7 @@ def _scenario(
     steps: list[dict[str, Any]] = []
     action_step_ids: list[str] = []
     action_snapshot_step_ids: list[str] = []
+    settlement_step_ids: list[str] = []
 
     if reset_and_setup:
         steps.append(
@@ -189,6 +347,30 @@ def _scenario(
             and actions[index].action == "browser.dialog"
         ):
             continue
+        if _requires_post_submit_settlement(action) and "browser.wait" in mission.allowed_actions:
+            if post_submit_settlement_seconds:
+                waits: tuple[tuple[str, dict[str, Any]], ...] = tuple(
+                    ("bounded-declared-time", {"time": seconds})
+                    for seconds in _settlement_wait_seconds(post_submit_settlement_seconds)
+                )
+            else:
+                waits = tuple(
+                    ("bounded-visible-text-gone", {"textGone": marker})
+                    for marker in _POST_SUBMIT_SETTLE_TEXT
+                )
+            for settle_index, (_kind, wait_arguments) in enumerate(waits, 1):
+                settle_id = f"{step_id}-settle-{settle_index:02d}"
+                settle_step = _step(
+                    settle_id,
+                    ("browser.wait", wait_arguments),
+                    offensive=False,
+                )
+                # A target-controlled busy label can persist indefinitely. The shared
+                # mission deadline still caps every wait, and a timeout must not prevent
+                # the final signed snapshot from recording the resulting UI state.
+                settle_step["onFailure"] = "continue"
+                settlement_step_ids.append(settle_id)
+                steps.append(settle_step)
         action_snapshot_id = f"{step_id}-snapshot"
         action_snapshot_step_ids.append(action_snapshot_id)
         steps.append(_step(action_snapshot_id, ("browser.snapshot", {}), offensive=False))
@@ -199,10 +381,24 @@ def _scenario(
         snapshot_id = f"{key}-snapshot"
         steps.append(_step(snapshot_id, ("browser.snapshot", {}), offensive=False))
     scenario["procedure"]["steps"] = steps
+    if post_submit_settlement_seconds:
+        settlement_parameter = {
+            "kind": "bounded-declared-time",
+            "seconds": post_submit_settlement_seconds,
+            "chunks": list(_settlement_wait_seconds(post_submit_settlement_seconds)),
+            "enabled": bool(settlement_step_ids),
+        }
+    else:
+        settlement_parameter = {
+            "kind": "bounded-visible-text-gone",
+            "markers": list(_POST_SUBMIT_SETTLE_TEXT),
+            "enabled": bool(settlement_step_ids),
+        }
     scenario["parameters"] = {
         "missionDigest": mission.digest,
         "batchKey": key,
         "plannedActionDigests": [action.digest for action in actions],
+        "postSubmitSettlement": settlement_parameter,
     }
     scenario["preconditions"] = [
         {"kind": "target-control", "method": "verified-control-proof"},
@@ -266,6 +462,7 @@ def _scenario(
             "resetAndSetup": reset_and_setup,
             "snapshotStepId": snapshot_id,
             "actionSnapshotStepIds": action_snapshot_step_ids,
+            "settlementStepIds": settlement_step_ids,
         }
     }
     return scenario, tuple(action_step_ids)
@@ -279,6 +476,7 @@ def _build_batch_capsule(  # noqa: PLR0913 - explicit evidence and deadline inpu
     key: str,
     reset_and_setup: bool,
     max_step_seconds: float = _MAX_STEP_SECONDS,
+    post_submit_settlement_seconds: int = 0,
 ) -> tuple[dict[str, Any], tuple[str, ...]]:
     scenario, action_step_ids = _scenario(
         mission,
@@ -286,6 +484,7 @@ def _build_batch_capsule(  # noqa: PLR0913 - explicit evidence and deadline inpu
         key=key,
         reset_and_setup=reset_and_setup,
         max_step_seconds=max_step_seconds,
+        post_submit_settlement_seconds=post_submit_settlement_seconds,
     )
     manifest = capsule_manifest_template(
         title=scenario["title"],
@@ -301,19 +500,29 @@ def _build_batch_capsule(  # noqa: PLR0913 - explicit evidence and deadline inpu
     return scenario, action_step_ids
 
 
-def _snapshot_text(trace: Path, snapshot_step_id: str) -> str:
-    for event in reversed(TraceReader(trace).events()):
-        if event["kind"] != "tool.completed" or event["phase"] != snapshot_step_id:
+def _snapshot_text(
+    trace: Path,
+    snapshot_step_id: str,
+    *,
+    fallback_step_ids: tuple[str, ...] = (),
+) -> str:
+    events = tuple(TraceReader(trace).events())
+    phase_groups = ((snapshot_step_id,), fallback_step_ids)
+    for phases in phase_groups:
+        if not phases:
             continue
-        payload = event.get("payload")
-        outcome = payload.get("outcome") if isinstance(payload, dict) else None
-        output = outcome.get("output") if isinstance(outcome, dict) else None
-        values = output.get("text") if isinstance(output, dict) else None
-        if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
-            break
-        rendered = "\n".join(values)
-        if rendered:
-            return rendered
+        for event in reversed(events):
+            if event["kind"] != "tool.completed" or event["phase"] not in phases:
+                continue
+            payload = event.get("payload")
+            outcome = payload.get("outcome") if isinstance(payload, dict) else None
+            output = outcome.get("output") if isinstance(outcome, dict) else None
+            values = output.get("text") if isinstance(output, dict) else None
+            if not isinstance(values, list) or not all(isinstance(item, str) for item in values):
+                continue
+            rendered = "\n".join(values)
+            if rendered:
+                return rendered
     raise FormatError(
         "SOVA-SEMANTIC-BROWSER-SNAPSHOT",
         "signed batch trace contains no usable final accessibility snapshot",
@@ -335,9 +544,15 @@ def _bounded_snapshot(value: str) -> str:
 
 
 def _observation(
-    trace: Path, snapshot_step_id: str, *, oracle_passed: bool
+    trace: Path,
+    snapshot_step_id: str,
+    *,
+    oracle_passed: bool,
+    fallback_step_ids: tuple[str, ...] = (),
 ) -> SemanticBrowserObservation:
-    snapshot = _bounded_snapshot(_snapshot_text(trace, snapshot_step_id))
+    snapshot = _bounded_snapshot(
+        _snapshot_text(trace, snapshot_step_id, fallback_step_ids=fallback_step_ids)
+    )
     url_match = _PAGE_URL.search(snapshot)
     if url_match is None:
         raise FormatError(
@@ -371,9 +586,16 @@ def _action_statuses(trace: Path, step_ids: tuple[str, ...]) -> tuple[str, ...]:
 class _DeadlineBatchExecutor:
     """Cap every call to the shared deadline and stop after a failed prerequisite."""
 
-    def __init__(self, executor: MCPExecutorAdapter, *, deadline: float) -> None:
+    def __init__(
+        self,
+        executor: MCPExecutorAdapter,
+        *,
+        deadline: float,
+        final_snapshot_reserve_seconds: float = 0.0,
+    ) -> None:
         self._executor = executor
         self._deadline = deadline
+        self._final_snapshot_reserve_seconds = max(0.0, final_snapshot_reserve_seconds)
         self._failed_prerequisite = False
         self._failure_snapshot_captured = False
         self._effects = {
@@ -406,13 +628,14 @@ class _DeadlineBatchExecutor:
             ),
         )
 
-    def execute(
+    def execute(  # noqa: PLR0911 - explicit fail-closed deadline states
         self,
         request: ActionRequest,
         context: Any,
         cancellation: CancellationToken,
     ) -> ActionOutcome:
-        remaining = self._deadline - time.monotonic()
+        now = time.monotonic()
+        remaining = self._deadline - now
         if remaining <= 0:
             return self._refused(
                 request,
@@ -441,15 +664,40 @@ class _DeadlineBatchExecutor:
                 reason="an earlier action failed; later batch actions were not executed",
             )
 
-        bounded = replace(request, timeout_seconds=min(request.timeout_seconds, remaining))
-        outcome = self._executor.execute(bounded, context, cancellation)
-        if time.monotonic() >= self._deadline:
+        evidence_reserve_active = (
+            request.action != "browser.snapshot" and self._final_snapshot_reserve_seconds > 0
+        )
+        call_deadline = (
+            self._deadline
+            if request.action == "browser.snapshot"
+            else self._deadline - self._final_snapshot_reserve_seconds
+        )
+        call_remaining = call_deadline - now
+        if call_remaining <= 0:
             self._failed_prerequisite = True
             return self._refused(
                 request,
                 status=OutcomeStatus.TIMEOUT,
-                code="SOVA-SEMANTIC-BROWSER-DEADLINE",
-                reason="executor call returned after the shared mission deadline",
+                code="SOVA-SEMANTIC-BROWSER-EVIDENCE-RESERVE",
+                reason="final accessibility snapshot budget was reserved before execution",
+            )
+        bounded = replace(request, timeout_seconds=min(request.timeout_seconds, call_remaining))
+        outcome = self._executor.execute(bounded, context, cancellation)
+        if time.monotonic() >= call_deadline:
+            self._failed_prerequisite = True
+            return self._refused(
+                request,
+                status=OutcomeStatus.TIMEOUT,
+                code=(
+                    "SOVA-SEMANTIC-BROWSER-DEADLINE"
+                    if not evidence_reserve_active
+                    else "SOVA-SEMANTIC-BROWSER-EVIDENCE-RESERVE"
+                ),
+                reason=(
+                    "executor call returned after the shared mission deadline"
+                    if not evidence_reserve_active
+                    else "executor call consumed the reserved final snapshot budget"
+                ),
             )
         if request.action != "browser.snapshot" and outcome.status != OutcomeStatus.SUCCEEDED:
             self._failed_prerequisite = True
@@ -473,6 +721,7 @@ class PlaywrightSemanticBrowserDriver(SemanticBrowserDriver):
         fingerprints: dict[str, Any],
         event_observer: Callable[[dict[str, Any]], None] | None,
         cancellation: CancellationToken | None,
+        post_submit_settlement_seconds: int = 0,
     ) -> None:
         self.destination = destination
         self.executor = executor
@@ -485,6 +734,9 @@ class PlaywrightSemanticBrowserDriver(SemanticBrowserDriver):
         self.fingerprints = fingerprints
         self.event_observer = event_observer
         self.cancellation = cancellation
+        self.post_submit_settlement_seconds = _validated_post_submit_settlement_seconds(
+            post_submit_settlement_seconds
+        )
         self.capsules = destination / "capsules"
         self.traces_dir = destination / "traces"
         self.capsules.mkdir(parents=True, exist_ok=True)
@@ -494,6 +746,8 @@ class PlaywrightSemanticBrowserDriver(SemanticBrowserDriver):
         self.discovery_trace: Path | None = None
         self.reproduction_trace: Path | None = None
         self.reproduction_capsule: Path | None = None
+        self.reproduction_actions: tuple[SemanticBrowserAction, ...] = ()
+        self.reproduction_rebindings: list[dict[str, Any]] = []
         self._deadline: float | None = None
 
     def set_deadline(self, deadline: float) -> None:
@@ -538,6 +792,7 @@ class PlaywrightSemanticBrowserDriver(SemanticBrowserDriver):
             key=key,
             reset_and_setup=reset_and_setup,
             max_step_seconds=min(_MAX_STEP_SECONDS, remaining),
+            post_submit_settlement_seconds=self.post_submit_settlement_seconds,
         )
         session, approvals = authorize_browser_scenarios(
             ((key, scenario),),
@@ -554,7 +809,11 @@ class PlaywrightSemanticBrowserDriver(SemanticBrowserDriver):
         deadline = self._deadline
         if deadline is None:  # pragma: no cover - guarded by _remaining_seconds
             raise AssertionError
-        bounded_executor = _DeadlineBatchExecutor(self.executor, deadline=deadline)
+        bounded_executor = _DeadlineBatchExecutor(
+            self.executor,
+            deadline=deadline,
+            final_snapshot_reserve_seconds=_FINAL_SNAPSHOT_RESERVE_SECONDS,
+        )
         result = run_capsule(
             capsule,
             trace,
@@ -572,25 +831,36 @@ class PlaywrightSemanticBrowserDriver(SemanticBrowserDriver):
         TraceReader(trace).verify(require_signature=True)
         self.capsule_paths.append(capsule)
         self.trace_paths.append(trace)
-        if result.oracle_status == "pass" and key != "reproduction":
+        if (
+            result.oracle_status == "pass"
+            and key != "reproduction"
+            and not key.startswith("reproduction-")
+        ):
             self.discovery_trace = trace
         if key == "reproduction":
             self.reproduction_trace = trace
             self.reproduction_capsule = capsule
-        snapshot_step_id = str(scenario["extensions"]["x-sova-semantic-browser"]["snapshotStepId"])
+        extension = scenario["extensions"]["x-sova-semantic-browser"]
+        snapshot_step_id = str(extension["snapshotStepId"])
+        settlement_step_ids = tuple(str(item) for item in extension["settlementStepIds"])
+        timeout_fallback_step_ids = (
+            (*action_step_ids, *settlement_step_ids) if result.completion != "completed" else ()
+        )
         observation = _observation(
             trace,
             snapshot_step_id,
             oracle_passed=result.oracle_status == "pass",
+            fallback_step_ids=timeout_fallback_step_ids,
         )
-        action_snapshot_step_ids = tuple(
-            str(item)
-            for item in scenario["extensions"]["x-sova-semantic-browser"]["actionSnapshotStepIds"]
-        )
-        pages_visited = tuple(
-            _observation(trace, step_id, oracle_passed=False).url
-            for step_id in action_snapshot_step_ids
-        )
+        action_snapshot_step_ids = tuple(str(item) for item in extension["actionSnapshotStepIds"])
+        pages: list[str] = []
+        for step_id in action_snapshot_step_ids:
+            try:
+                pages.append(_observation(trace, step_id, oracle_passed=False).url)
+            except FormatError:
+                if result.completion != "timeout":
+                    raise
+        pages_visited = tuple(pages or (observation.url,))
         statuses = _action_statuses(trace, action_step_ids)
         if not statuses:
             statuses = ("succeeded" if result.completion == "completed" else "failed",)
@@ -633,12 +903,82 @@ class PlaywrightSemanticBrowserDriver(SemanticBrowserDriver):
             if self.discovery_trace is None
             else sha256_digest(self.discovery_trace.read_bytes())
         )
-        return self._run(
+        setup = self._run(
             mission,
-            actions,
-            key="reproduction",
+            (),
+            key="reproduction-setup",
             reset_and_setup=True,
             source_trace_digest=source_digest,
+        )
+        if setup.observation.oracle_passed:
+            raise FormatError(
+                "SOVA-SEMANTIC-BROWSER-REPRODUCTION-PRECONDITION",
+                "oracle was already present after the fresh reproduction reset",
+            )
+        observation = setup.observation
+        pages = set(setup.pages_visited or (observation.url,))
+        statuses = list(setup.action_statuses)
+        trace_ids = list(setup.evidence_ids)
+        executed: list[SemanticBrowserAction] = []
+        source_digest = sha256_digest(self.trace_paths[-1].read_bytes())
+        final: SemanticExecutionBatch | None = None
+
+        for index, recorded_action in enumerate(actions, 1):
+            rebound, records = _rebind_reproduction_action(
+                mission,
+                recorded_action,
+                observation,
+                action_index=index,
+            )
+            self.reproduction_rebindings.extend(records)
+            executed.append(rebound)
+            key = "reproduction" if index == len(actions) else f"reproduction-step-{index:03d}"
+            batch = self._run(
+                mission,
+                (rebound,),
+                key=key,
+                reset_and_setup=False,
+                source_trace_digest=source_digest,
+            )
+            observation = batch.observation
+            pages.update(batch.pages_visited or (observation.url,))
+            statuses.extend(batch.action_statuses)
+            trace_ids.extend(batch.evidence_ids)
+            source_digest = sha256_digest(self.trace_paths[-1].read_bytes())
+            final = batch
+            if any(status != "succeeded" for status in batch.action_statuses):
+                if key != "reproduction":
+                    final = self._run(
+                        mission,
+                        (),
+                        key="reproduction",
+                        reset_and_setup=False,
+                        source_trace_digest=source_digest,
+                    )
+                    observation = final.observation
+                    pages.update(final.pages_visited or (observation.url,))
+                    statuses.extend(final.action_statuses)
+                    trace_ids.extend(final.evidence_ids)
+                break
+
+        if final is None:
+            final = self._run(
+                mission,
+                (),
+                key="reproduction",
+                reset_and_setup=False,
+                source_trace_digest=source_digest,
+            )
+            observation = final.observation
+            pages.update(final.pages_visited or (observation.url,))
+            statuses.extend(final.action_statuses)
+            trace_ids.extend(final.evidence_ids)
+        self.reproduction_actions = tuple(executed)
+        return SemanticExecutionBatch(
+            observation,
+            tuple(statuses),
+            tuple(trace_ids),
+            tuple(sorted(pages)),
         )
 
 
@@ -674,6 +1014,9 @@ def _result_report(  # noqa: PLR0913 - report bindings are explicit evidence inp
         "execution": {
             "actions": [action.to_mapping() for action in result.actions],
             "actionDigests": [action.digest for action in result.actions],
+            "deterministicRecoveries": list(result.deterministic_recoveries),
+            "reproductionActions": [action.to_mapping() for action in driver.reproduction_actions],
+            "reproductionRebindings": list(driver.reproduction_rebindings),
             "pagesVisited": list(result.pages_visited),
             "tokensUsed": result.tokens_used,
             "traceFiles": [path.name for path in driver.trace_paths],
@@ -703,6 +1046,11 @@ def _result_report(  # noqa: PLR0913 - report bindings are explicit evidence inp
         "limitations": [
             "A pass establishes only the declared deterministic observable oracle.",
             "Accessibility snapshots may omit visual-only interface state.",
+            (
+                "Fresh reproduction rebinds recorded element descriptions only when exactly one "
+                "compatible accessible control is independently observed; raw snapshot refs are "
+                "not portable across browser generations."
+            ),
             "Included-key trace signatures require an external trust policy for identity.",
             (
                 "Allowed-origin request filtering and post-action page-origin drift detection "
@@ -729,6 +1077,7 @@ def run_live_semantic_browser_workflow(  # noqa: PLR0912, PLR0913, PLR0915
     event_observer: SemanticBrowserEventObserver | None = None,
     headless: bool = True,
     record_video: bool = False,
+    post_submit_settlement_seconds: int = 0,
 ) -> SemanticBrowserWorkflowArtifacts:
     """Run an autonomous mission inside explicit target, action, and evidence boundaries."""
     if cancellation is not None and cancellation.cancelled:
@@ -859,10 +1208,12 @@ def run_live_semantic_browser_workflow(  # noqa: PLR0912, PLR0913, PLR0915
     driver: PlaywrightSemanticBrowserDriver
     with (
         start_stdio_client(spec, StdioMCPClient) as client,
-        MCPExecutorAdapter(
+        profiled_playwright_adapter(
             "microsoft-playwright-mcp",
             client,
             playwright_mappings(allowed_origins=origins),
+            profile_lease=profile_lease,
+            workspace=destination,
         ) as executor,
     ):
         recording_started = False
@@ -893,6 +1244,7 @@ def run_live_semantic_browser_workflow(  # noqa: PLR0912, PLR0913, PLR0915
                 fingerprints=fingerprints,
                 event_observer=observer,
                 cancellation=cancellation,
+                post_submit_settlement_seconds=post_submit_settlement_seconds,
             )
             result = run_semantic_browser_workflow(mission, router=router, driver=driver)
             if record_video:
@@ -982,6 +1334,8 @@ def run_live_semantic_browser_workflow(  # noqa: PLR0912, PLR0913, PLR0915
                 if path == driver.discovery_trace
                 else "decisive-reproduction"
                 if path == driver.reproduction_trace
+                else "reproduction-preparation"
+                if path.name.startswith("reproduction-")
                 else "exploration"
             )
             package_role = "trace" if path in decisive_traces else "attachment"
@@ -1011,10 +1365,17 @@ def run_live_semantic_browser_workflow(  # noqa: PLR0912, PLR0913, PLR0915
         )
         reproduction_scenario, _unused = _scenario(
             mission,
-            result.actions,
+            driver.reproduction_actions or result.actions,
             key="reproduction",
             reset_and_setup=True,
+            post_submit_settlement_seconds=driver.post_submit_settlement_seconds,
         )
+        reproduction_scenario["extensions"]["x-sova-semantic-browser"]["reproductionBinding"] = {
+            "mode": "fresh-observation-unique-accessible-label",
+            "adapter": "sova.semantic-browser-driver/0.1",
+            "rebindings": list(driver.reproduction_rebindings),
+            "rawRecordedRefsPortable": False,
+        }
         # Keep the two decisive traces as replay roles so `sova replay capsule`
         # remains unambiguous. Earlier signed traces are content-addressed
         # attachments indexed by trace-history.json in exact execution order.

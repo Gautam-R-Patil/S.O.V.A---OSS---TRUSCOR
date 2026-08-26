@@ -991,6 +991,68 @@ def test_capsule_replay_requires_explicit_media_and_refuses_bad_declared_type(
         render_capsule_timeline(bad_capsule, tmp_path / "bad-media.html")
 
 
+def test_capsule_replay_automatically_selects_video_bound_by_decisive_cues(
+    tmp_path: Path,
+) -> None:
+    trace = tmp_path / "run.sova-trace"
+    writer = TraceWriter(trace)
+    event_id = writer.append("oracle.completed", {"status": "pass", "results": []})
+    assert event_id is not None
+    writer.finalize()
+    primary_video = _synthetic_webm(duration_seconds=7)
+    reproduction_video = _synthetic_webm(duration_seconds=13)
+    cues = {
+        "artifactType": "sova.replay-cues",
+        "schemaVersion": "0.1.0",
+        "mediaName": "primary.webm",
+        "mediaDigest": sha256_digest(primary_video),
+        "synchronization": {
+            "method": "same-host-monotonic-recorder-start-rpc-bound",
+            "uncertaintyMs": "1.000",
+            "frameTimestampAttested": False,
+            "statement": "Fixture.",
+        },
+        "cues": [
+            {
+                "id": "decisive-primary",
+                "label": "Exploit confirmed",
+                "channel": "primary",
+                "eventId": event_id,
+                "eventKind": "oracle.completed",
+                "eventSequence": 0,
+                "oracleStatus": "pass",
+                "offsetSeconds": "3.000000",
+                "chapterOffsetSeconds": "3.100000",
+                "preRollSeconds": "2.000000",
+                "postRollSeconds": "3.000000",
+            }
+        ],
+    }
+    manifest = capsule_manifest_template(
+        title="Cue-bound media selection",
+        summary="Choose the exact primary video by its signed cue digest.",
+        author="Tests",
+    )
+    capsule = tmp_path / "cue-bound-media.sova"
+    build_capsule(
+        capsule,
+        manifest,
+        traces=[trace],
+        attachments={
+            "primary.webm": primary_video,
+            "reproduction.webm": reproduction_video,
+            "replay-cues.json": canonical_json_bytes(cues),
+        },
+    )
+    report = render_capsule_timeline(capsule, tmp_path / "cue-bound-media.html")
+    assert report["visualReplay"] == next(
+        item.path
+        for item in PackageReader(capsule).verify("sova.capsule")
+        if item.role == "visual-replay" and item.digest == sha256_digest(primary_video)
+    )
+    assert report["decisiveCue"]["id"] == "decisive-primary"
+
+
 def test_capsule_replay_rejects_ambiguous_and_mistyped_cue_indexes(tmp_path: Path) -> None:
     trace = tmp_path / "run.sova-trace"
     _trace(trace)
@@ -1043,6 +1105,81 @@ def test_capsule_replay_rejects_ambiguous_and_mistyped_cue_indexes(tmp_path: Pat
     writer.write(mistyped)
     with pytest.raises(FormatError, match="must declare application/json"):
         render_capsule_timeline(mistyped, tmp_path / "mistyped-cues.html")
+
+
+def test_capsule_replay_rejects_invalid_multisurface_cue_bindings(tmp_path: Path) -> None:
+    trace = tmp_path / "run.sova-trace"
+    _trace(trace)
+    manifest = capsule_manifest_template(
+        title="Cue binding failures",
+        summary="Fail-closed cue and media binding fixtures.",
+        author="Tests",
+    )
+    primary_media = _synthetic_webm(duration_seconds=7)
+    other_media = _synthetic_webm(duration_seconds=9)
+    primary_digest = sha256_digest(primary_media)
+
+    def write_capsule(name: str, cue_documents: list[Any], *, second_media: bool = False) -> Path:
+        capsule = tmp_path / f"{name}.sova"
+        writer = PackageWriter(manifest)
+        writer.add_bytes(
+            role="trace",
+            path="traces/run.sova-trace",
+            media_type="application/vnd.sova.trace+zip",
+            data=trace.read_bytes(),
+        )
+        writer.add_bytes(
+            role="visual-replay",
+            path="evidence/primary.webm",
+            media_type="video/webm",
+            data=primary_media,
+        )
+        if second_media:
+            writer.add_bytes(
+                role="visual-replay",
+                path="evidence/other.webm",
+                media_type="video/webm",
+                data=other_media,
+            )
+        for index, document in enumerate(cue_documents, 1):
+            writer.add_bytes(
+                role="replay-cues",
+                path=f"evidence/cues-{index}.json",
+                media_type="application/json",
+                data=canonical_json_bytes(document),
+            )
+        writer.write(capsule)
+        return capsule
+
+    cases: tuple[tuple[str, list[Any], bool, str], ...] = (
+        ("root", [[]], False, "root must be an object"),
+        ("unbound", [{"mediaDigest": "sha256:" + "f" * 64}], False, "does not bind"),
+        (
+            "unsupported-surface",
+            [{"mediaDigest": primary_digest, "surface": "terminal"}],
+            False,
+            "unsupported replay cue surface",
+        ),
+        (
+            "conflicting-surface",
+            [{"mediaDigest": primary_digest, "surface": "computer"}],
+            False,
+            "surface conflicts",
+        ),
+        (
+            "duplicate-media",
+            [
+                {"mediaDigest": primary_digest, "surface": "browser", "index": 1},
+                {"mediaDigest": primary_digest, "surface": "browser", "index": 2},
+            ],
+            True,
+            "multiple replay cue indexes for one",
+        ),
+    )
+    for name, documents, second_media, message in cases:
+        capsule = write_capsule(name, documents, second_media=second_media)
+        with pytest.raises(FormatError, match=message):
+            render_capsule_timeline(capsule, tmp_path / f"{name}.html")
 
 
 def test_replay_media_path_mp4_and_link_guards_are_deterministic(

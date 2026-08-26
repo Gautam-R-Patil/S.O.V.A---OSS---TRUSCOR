@@ -54,6 +54,31 @@ from sova.community import (
     validate_browser_swarm_document,
     verify_probe_response,
 )
+from sova.community.executor_capsule_reproduction import (
+    build_executor_capsule_reproduction_document,
+)
+from sova.community.executor_chamber_config import validate_executor_chamber_document
+from sova.community.executor_engine import run_executor_engine_document
+from sova.community.executor_engine_full import (
+    ComputerBackendSpec,
+    LocalComputerAuthorization,
+    MelraComputerBackendSpec,
+    NativeWindowsComputerBackendSpec,
+    run_full_capability_web_engine,
+)
+from sova.community.executor_engine_runtime_config import (
+    build_executor_engine_runtime_surfaces,
+    parse_executor_engine_runtime_document,
+)
+from sova.community.executor_surfaces import ExactProcessSurfaceSpec
+from sova.community.live_executor_engine import run_live_web_executor_engine
+from sova.community.software_executor_engine import (
+    SoftwareLaunchSpec,
+    build_authorized_software_runtime,
+    create_local_software_control_proof,
+    melra_software_computer_surface_factory,
+)
+from sova.community.swarm import run_software_swarm, run_stress_profile, run_web_swarm
 from sova.composition import (
     CompositionBudget,
     CompositionObservation,
@@ -110,6 +135,7 @@ from sova.formats import (
 from sova.formats.errors import FormatError
 from sova.live import (
     adaptive_browser_policy_from_mapping,
+    adversarial_tactic_ids,
     browser_campaign_from_mapping,
     challenge_from_mapping,
     collect_website_control_proof,
@@ -156,10 +182,14 @@ from sova.providers import provider_model_router, provider_runtime_from_mapping
 from sova.registry import (
     CommunityHTTPService,
     CommunityServiceConfig,
+    RegistryClient,
+    RegistryEndpoint,
+    auto_contribute_after_run,
     check_community_service_health,
     create_community_service_token,
     prepare_community_submission,
     prepare_contribution,
+    resolve_registry_capsule,
     serialize_community_submission,
     sync_registry,
     verify_community_service_index,
@@ -199,6 +229,13 @@ from sova.runtime import (
     run_oci_agent_conformance,
     standard_profile,
 )
+from sova.runtime.native_windows_computer import (
+    native_window_targets_from_mapping,
+    native_windows_computer_surface_factory,
+    native_windows_discovery_surface_factory,
+)
+from sova.runtime.software_target import attest_software_target
+from sova.runtime.window_recording import SoftwareWindowRecordingCoordinator
 from sova.safety import (
     DisclosureRequest,
     VulnerabilityState,
@@ -233,6 +270,23 @@ def _add_browser_profile_arguments(parser: argparse.ArgumentParser) -> None:
         "--browser-profile-handle",
         help="opaque handle provisioned for the exact target digest",
     )
+
+
+def _add_contribution_arguments(parser: argparse.ArgumentParser) -> None:
+    """Registry contribution is on by default; every run gets exactly one opt-out flag."""
+    parser.add_argument(
+        "--no-contribute",
+        action="store_true",
+        help="opt out of the default-on registry contribution of this run's capsule and trace",
+    )
+    parser.add_argument(
+        "--registry-url",
+        help="loopback registry service origin, e.g. http://127.0.0.1:8787; omit for the "
+        "local git-PR-instructions fallback (nothing is ever pushed automatically)",
+    )
+    parser.add_argument("--registry-token", help="operator bearer token for --registry-url")
+    parser.add_argument("--contributor-name", default="SOVA operator")
+    parser.add_argument("--contributor-identity", default="unknown")
 
 
 def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
@@ -383,6 +437,15 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     target_prove.add_argument("challenge", type=_path)
     target_prove.add_argument("destination", type=_path)
     target_prove.set_defaults(handler=_target_prove)
+    target_prove_software = target_commands.add_parser(
+        "prove-software",
+        help="create a short-lived proof bound to an exact local executable and workspace",
+    )
+    target_prove_software.add_argument("manifest", type=_path)
+    target_prove_software.add_argument("executable", type=_path)
+    target_prove_software.add_argument("destination", type=_path)
+    target_prove_software.add_argument("--workspace-seed", type=_path)
+    target_prove_software.set_defaults(handler=_target_prove_software)
     target_browser_kit = target_commands.add_parser(
         "browser-kit",
         help="write an inert authorized-browser target, campaign, plan, and instructions",
@@ -552,6 +615,10 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         help="HTML destination; defaults to FINDING-replay.html beside the capsule",
     )
     replay_open.add_argument(
+        "--nested-capsule",
+        help="exact internal nested finding path; defaults to the first verified finding",
+    )
+    replay_open.add_argument(
         "--no-open",
         action="store_true",
         help="render and report the replay without launching the local browser",
@@ -567,6 +634,11 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     open_media_group = replay_open.add_mutually_exclusive_group()
     open_media_group.add_argument(
         "--media-object", help="exact internal visual-replay path shown by sova inspect"
+    )
+    open_media_group.add_argument(
+        "--surface",
+        choices=("browser", "computer"),
+        help="select the cue-bound browser or computer recording",
     )
     open_media_group.add_argument("--no-media", action="store_true")
     replay_open.set_defaults(handler=_replay_open)
@@ -595,6 +667,10 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     replay_capsule.add_argument(
         "--primary-trace", help="exact internal package path shown by sova inspect"
     )
+    replay_capsule.add_argument(
+        "--nested-capsule",
+        help="exact internal nested finding path; defaults to the first verified finding",
+    )
     comparison_group = replay_capsule.add_mutually_exclusive_group()
     comparison_group.add_argument(
         "--comparison-trace", help="exact internal package path shown by sova inspect"
@@ -603,6 +679,11 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     media_group = replay_capsule.add_mutually_exclusive_group()
     media_group.add_argument(
         "--media-object", help="exact internal visual-replay path shown by sova inspect"
+    )
+    media_group.add_argument(
+        "--surface",
+        choices=("browser", "computer"),
+        help="select the cue-bound browser or computer recording",
     )
     media_group.add_argument("--no-media", action="store_true")
     replay_capsule.set_defaults(handler=_replay_capsule)
@@ -1162,6 +1243,22 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     registry_verify.add_argument("root", type=_path)
     registry_verify.add_argument("--trusted-key-id", action="append")
     registry_verify.set_defaults(handler=_registry_verify)
+    registry_replay = registry_commands.add_parser(
+        "replay",
+        help="verify and open one exact trusted registry capsule, including nested findings",
+    )
+    registry_replay.add_argument("root", type=_path)
+    registry_replay.add_argument("entry_id")
+    registry_replay.add_argument("version")
+    registry_replay.add_argument("destination", type=_path)
+    registry_replay.add_argument("--trusted-key-id", action="append", required=True)
+    registry_replay.add_argument("--nested-capsule")
+    registry_replay.add_argument(
+        "--surface",
+        choices=("browser", "computer"),
+        help="select the exact digest-bound visual proof surface",
+    )
+    registry_replay.set_defaults(handler=_registry_replay)
     registry_serve = registry_commands.add_parser(
         "serve",
         help="serve a loopback-only staged registry and verified standard leaderboard",
@@ -1273,6 +1370,471 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     probe_verify.add_argument("--key-id")
     probe_verify.add_argument("--revoked-key-id", action="append", default=[])
     probe_verify.set_defaults(handler=_probe_verify)
+
+    engine_parser = commands.add_parser(
+        "engine",
+        help=("validate or run SOVA's authorization-gated heterogeneous multi-agent engine"),
+    )
+    engine_commands = engine_parser.add_subparsers(dest="engine_command")
+    engine_validate = engine_commands.add_parser(
+        "validate",
+        help="effect-free validation of a strict multi-agent executor-chamber document",
+    )
+    engine_validate.add_argument("specification", type=_path)
+    engine_validate.add_argument("--allow-provider-calls", action="store_true")
+    engine_validate.add_argument("--allow-offensive-actions", action="store_true")
+    engine_validate.set_defaults(handler=_engine_validate)
+    engine_reproduce_plan = engine_commands.add_parser(
+        "reproduce-plan",
+        help=(
+            "compile an engine finding capsule into a provider-free exact-action chamber "
+            "document for a fresh authorized runtime"
+        ),
+    )
+    engine_reproduce_plan.add_argument("capsule", type=_path)
+    engine_reproduce_plan.add_argument("destination", type=_path)
+    engine_reproduce_plan.set_defaults(handler=_engine_reproduce_plan)
+    engine_run_web = engine_commands.add_parser(
+        "run-web",
+        help=("run 2-8 agents over an authorized browser and disposable file workspace"),
+    )
+    engine_run_web.add_argument("manifest", type=_path)
+    engine_run_web.add_argument("mission", type=_path)
+    engine_run_web.add_argument("specification", type=_path)
+    engine_run_web.add_argument("destination", type=_path)
+    engine_run_web.add_argument("--control-proof", type=_path)
+    engine_run_web.add_argument("--package-runner", type=_path)
+    engine_run_web.add_argument("--browser-executable", type=_path)
+    engine_run_web.add_argument("--playwright-package-cache", type=_path)
+    engine_run_web.add_argument("--playwright-browser-cache", type=_path)
+    engine_run_web.add_argument("--workspace-seed", type=_path)
+    engine_run_web.add_argument(
+        "--runtime-surfaces",
+        type=_path,
+        help=(
+            "strict sova.executor-engine-runtime document for disposable files and "
+            "explicitly acknowledged shell-free host process templates"
+        ),
+    )
+    engine_run_web.add_argument("--headed", action="store_true")
+    engine_run_web.add_argument(
+        "--record-video",
+        action="store_true",
+        help=(
+            "request signed decisive video evidence; fails closed until the engine "
+            "recorder lifecycle is available"
+        ),
+    )
+    engine_run_web.add_argument(
+        "--docker",
+        type=_path,
+        help="Docker CLI path for declared digest-pinned OCI planner participants",
+    )
+    _add_browser_profile_arguments(engine_run_web)
+    engine_run_web.add_argument(
+        "--allow-provider-calls",
+        action="store_true",
+        help="explicitly permit configured provider calls, which may incur cost",
+    )
+    engine_run_web.add_argument(
+        "--allow-sandboxed-agent-code",
+        action="store_true",
+        help=("permit declared planner images only through separately approved attested gVisor"),
+    )
+    engine_run_web.add_argument(
+        "--allow-target-observation-disclosure",
+        action="store_true",
+        help="send only bounded secret-redacted target observations to declared planners",
+    )
+    engine_run_web.add_argument(
+        "--allow-offensive-actions",
+        action="store_true",
+        help="exactly match an offensive=true mission and chamber authority declaration",
+    )
+    engine_run_web.add_argument(
+        "--stream-jsonl",
+        action="store_true",
+        help="stream each already-redacted event with its signed trace channel",
+    )
+    _add_contribution_arguments(engine_run_web)
+    engine_run_web.set_defaults(handler=_engine_run_web)
+    engine_run_software = engine_commands.add_parser(
+        "run-software",
+        help=(
+            "launch and measure an authorized local application separately for discovery "
+            "and reproduction, with disposable files, reviewed processes, and optional "
+            "MELRA computer use"
+        ),
+    )
+    engine_run_software.add_argument("manifest", type=_path)
+    engine_run_software.add_argument("specification", type=_path)
+    engine_run_software.add_argument("destination", type=_path)
+    engine_run_software.add_argument("--executable", type=_path, required=True)
+    engine_run_software.add_argument(
+        "--launch-arg",
+        action="append",
+        default=[],
+        help="one fixed target launch argv item; repeat for more (never interpreted by a shell)",
+    )
+    engine_run_software.add_argument("--workspace-seed", type=_path)
+    engine_run_software.add_argument("--workspace-parent", type=_path)
+    engine_run_software.add_argument(
+        "--runtime-surfaces",
+        type=_path,
+        help=(
+            "portable runtime document declaring multiple exact shell-free process "
+            "templates; workspace.enabled must be false because software runs already "
+            "include one disposable workspace"
+        ),
+    )
+    engine_run_software.add_argument("--control-proof", type=_path, required=True)
+    engine_run_software.add_argument("--window-title-contains")
+    engine_run_software.add_argument(
+        "--record-screen",
+        action="store_true",
+        help=(
+            "record only the exact OS-attested target window and bind decisive frames "
+            "to the signed finding replay"
+        ),
+    )
+    engine_run_software.add_argument(
+        "--recording-interval-seconds",
+        type=float,
+        default=0.5,
+        help="bounded exact-window frame interval (0.1 to 5.0 seconds)",
+    )
+    engine_run_software.add_argument("--melra-node", type=_path)
+    engine_run_software.add_argument("--melra-cli", type=_path)
+    engine_run_software.add_argument("--melra-policy", type=_path)
+    engine_run_software.add_argument(
+        "--native-window-map",
+        type=_path,
+        help=(
+            "operator-reviewed exact-window target map for dependency-free Windows "
+            "click/type computer use; mutually exclusive with MELRA"
+        ),
+    )
+    engine_run_software.add_argument(
+        "--discover-native-window",
+        action="store_true",
+        help=(
+            "dynamically discover visible enabled controls inside only the exact "
+            "OS-attested target HWND on every planner observation"
+        ),
+    )
+    engine_run_software.add_argument(
+        "--melra-mutations",
+        default="computer.click,computer.type",
+        help="comma-separated reviewed computer mutation ceiling",
+    )
+    engine_run_software.add_argument("--process-template-id")
+    engine_run_software.add_argument("--process-executable", type=_path)
+    engine_run_software.add_argument("--process-argv-prefix", action="append", default=[])
+    engine_run_software.add_argument("--trusted-host-process", action="store_true")
+    engine_run_software.add_argument("--allow-provider-calls", action="store_true")
+    engine_run_software.add_argument("--allow-offensive-actions", action="store_true")
+    engine_run_software.add_argument(
+        "--allow-target-observation-disclosure",
+        action="store_true",
+        help="send only bounded secret-redacted target observations to declared planners",
+    )
+    engine_run_software.add_argument("--stream-jsonl", action="store_true")
+    _add_contribution_arguments(engine_run_software)
+    engine_run_software.set_defaults(handler=_engine_run_software)
+    engine_swarm_software = engine_commands.add_parser(
+        "swarm-software",
+        help=(
+            "run concurrent isolated agents over separately launched/measured software "
+            "targets with a signed adaptive blackboard and aggregate effect budget"
+        ),
+    )
+    engine_swarm_software.add_argument("manifest", type=_path)
+    engine_swarm_software.add_argument(
+        "specification",
+        type=_path,
+        help="one-active-participant sova.executor-chamber document template",
+    )
+    engine_swarm_software.add_argument("destination", type=_path)
+    engine_swarm_software.add_argument("--agents", type=int, required=True)
+    engine_swarm_software.add_argument("--persona", action="append", default=[])
+    engine_swarm_software.add_argument("--max-concurrency", type=int, default=8)
+    engine_swarm_software.add_argument("--executable", type=_path, required=True)
+    engine_swarm_software.add_argument("--launch-arg", action="append", default=[])
+    engine_swarm_software.add_argument("--workspace-seed", type=_path)
+    engine_swarm_software.add_argument(
+        "--runtime-surfaces",
+        type=_path,
+        help="portable multi-process runtime document (workspace.enabled must be false)",
+    )
+    engine_swarm_software.add_argument("--control-proof", type=_path, required=True)
+    engine_swarm_software.add_argument("--window-title-contains")
+    engine_swarm_software.add_argument("--record-screen", action="store_true")
+    engine_swarm_software.add_argument("--recording-interval-seconds", type=float, default=0.5)
+    engine_swarm_software.add_argument("--melra-node", type=_path)
+    engine_swarm_software.add_argument("--melra-cli", type=_path)
+    engine_swarm_software.add_argument("--melra-policy", type=_path)
+    engine_swarm_software.add_argument("--native-window-map", type=_path)
+    engine_swarm_software.add_argument("--discover-native-window", action="store_true")
+    engine_swarm_software.add_argument("--melra-mutations", default="computer.click,computer.type")
+    engine_swarm_software.add_argument("--process-template-id")
+    engine_swarm_software.add_argument("--process-executable", type=_path)
+    engine_swarm_software.add_argument("--process-argv-prefix", action="append", default=[])
+    engine_swarm_software.add_argument("--trusted-host-process", action="store_true")
+    engine_swarm_software.add_argument("--allow-provider-calls", action="store_true")
+    engine_swarm_software.add_argument("--allow-offensive-actions", action="store_true")
+    engine_swarm_software.add_argument("--allow-target-observation-disclosure", action="store_true")
+    engine_swarm_software.add_argument("--stream-jsonl", action="store_true")
+    _add_contribution_arguments(engine_swarm_software)
+    engine_swarm_software.set_defaults(handler=_engine_swarm_software)
+    engine_swarm_web = engine_commands.add_parser(
+        "swarm-web",
+        help=(
+            "run N concurrent isolated agents, each its own browser context and "
+            "workspace, over one authorized target, sharing a redacted blackboard"
+        ),
+    )
+    engine_swarm_web.add_argument("manifest", type=_path)
+    engine_swarm_web.add_argument("mission", type=_path)
+    engine_swarm_web.add_argument(
+        "specification",
+        type=_path,
+        help="one-participant sova.executor-chamber document template",
+    )
+    engine_swarm_web.add_argument("destination", type=_path)
+    engine_swarm_web.add_argument(
+        "--agents",
+        type=int,
+        help="number of concurrent agents; prompted interactively if omitted",
+    )
+    engine_swarm_web.add_argument("--persona", action="append", default=[])
+    engine_swarm_web.add_argument("--allow-large-swarm", action="store_true")
+    engine_swarm_web.add_argument("--max-concurrency", type=int, default=8)
+    engine_swarm_web.add_argument("--control-proof", type=_path)
+    engine_swarm_web.add_argument("--package-runner", type=_path)
+    engine_swarm_web.add_argument("--browser-executable", type=_path)
+    engine_swarm_web.add_argument("--playwright-package-cache", type=_path)
+    engine_swarm_web.add_argument("--playwright-browser-cache", type=_path)
+    engine_swarm_web.add_argument("--workspace-seed", type=_path)
+    engine_swarm_web.add_argument(
+        "--runtime-surfaces",
+        type=_path,
+        help=(
+            "strict sova.executor-engine-runtime document applied independently to "
+            "every worker for disposable files and reviewed shell-free processes"
+        ),
+    )
+    engine_swarm_web.add_argument("--headed", action="store_true")
+    engine_swarm_web.add_argument("--record-video", action="store_true")
+    engine_swarm_web.add_argument(
+        "--allow-provider-calls",
+        action="store_true",
+        help="explicitly permit configured provider calls, which may incur cost",
+    )
+    engine_swarm_web.add_argument(
+        "--allow-target-observation-disclosure",
+        action="store_true",
+        help="send only bounded secret-redacted target observations to declared planners",
+    )
+    engine_swarm_web.add_argument(
+        "--allow-offensive-actions",
+        action="store_true",
+        help="exactly match an offensive=true mission and chamber authority declaration",
+    )
+    engine_swarm_web.add_argument("--stream-jsonl", action="store_true")
+    _add_contribution_arguments(engine_swarm_web)
+    engine_swarm_web.set_defaults(handler=_engine_swarm_web)
+    engine_full_web = engine_commands.add_parser(
+        "full-web",
+        help=(
+            "run one authorized agent over browser + workspace, plus an optional "
+            "independently authorized MELRA/native Windows computer surface and/or "
+            "one reviewed host process"
+        ),
+    )
+    engine_full_web.add_argument("manifest", type=_path)
+    engine_full_web.add_argument("mission", type=_path)
+    engine_full_web.add_argument("specification", type=_path)
+    engine_full_web.add_argument("destination", type=_path)
+    engine_full_web.add_argument("--control-proof", type=_path)
+    engine_full_web.add_argument("--package-runner", type=_path)
+    engine_full_web.add_argument("--browser-executable", type=_path)
+    engine_full_web.add_argument("--playwright-package-cache", type=_path)
+    engine_full_web.add_argument("--playwright-browser-cache", type=_path)
+    engine_full_web.add_argument("--workspace-seed", type=_path)
+    engine_full_web.add_argument("--headed", action="store_true")
+    engine_full_web.add_argument(
+        "--record-video",
+        action="store_true",
+        help="record signed primary and reproduction videos with decisive oracle cues",
+    )
+    engine_full_web.add_argument(
+        "--record-computer-screen",
+        action="store_true",
+        help="record the exact authorized computer HWND in both execution phases",
+    )
+    engine_full_web.add_argument(
+        "--computer-recording-interval-seconds",
+        type=float,
+        default=0.5,
+        help="bounded exact-window capture interval (0.1 to 5.0 seconds)",
+    )
+    engine_full_web.add_argument(
+        "--melra-node",
+        type=_path,
+        help="MELRA Node.js executable; supplying this adds a computer surface",
+    )
+    engine_full_web.add_argument(
+        "--melra-cli",
+        type=_path,
+        help="MELRA CLI entrypoint; required together with --melra-node",
+    )
+    engine_full_web.add_argument(
+        "--melra-policy",
+        type=_path,
+        help="existing MELRA policy file copied into this run's disposable workspace",
+    )
+    engine_full_web.add_argument(
+        "--melra-target-executable",
+        "--computer-target-executable",
+        dest="melra_target_executable",
+        type=_path,
+        help="exact executable image for OS measurement of the composed computer target",
+    )
+    engine_full_web.add_argument(
+        "--melra-pid",
+        "--computer-pid",
+        dest="melra_pid",
+        type=int,
+        help="live computer-target pid; SOVA verifies its executable and process generation",
+    )
+    engine_full_web.add_argument(
+        "--melra-window-id",
+        "--computer-window-id",
+        dest="melra_window_id",
+        type=int,
+        help="live target window handle; SOVA verifies ownership by the measured pid",
+    )
+    engine_full_web.add_argument(
+        "--computer-target-manifest",
+        type=_path,
+        help=(
+            "local-process target manifest independently authorizing the composed window; "
+            "required for any computer backend"
+        ),
+    )
+    engine_full_web.add_argument(
+        "--computer-control-proof",
+        type=_path,
+        help=(
+            "optional fresh local-possession proof for the computer target; when omitted "
+            "SOVA captures one from the exact local executable and workspace seed"
+        ),
+    )
+    engine_full_web.add_argument(
+        "--native-window-map",
+        type=_path,
+        help="operator-reviewed exact-HWND coordinate map; mutually exclusive with MELRA",
+    )
+    engine_full_web.add_argument(
+        "--discover-native-window",
+        action="store_true",
+        help=(
+            "discover only visible enabled controls owned by the exact attested HWND; "
+            "mutually exclusive with MELRA and --native-window-map"
+        ),
+    )
+    engine_full_web.add_argument(
+        "--melra-mutations",
+        default="computer.click,computer.type",
+        help="comma-separated reviewed computer mutation ceiling",
+    )
+    engine_full_web.add_argument(
+        "--process-template-id",
+        help="identifier for the one reviewed host-process template; adds a process surface",
+    )
+    engine_full_web.add_argument("--process-executable", type=_path)
+    engine_full_web.add_argument(
+        "--process-argv-prefix",
+        action="append",
+        default=[],
+        help="one fixed reviewed argv-prefix item; repeat for more",
+    )
+    engine_full_web.add_argument(
+        "--trusted-host-process",
+        action="store_true",
+        help="explicit operator acknowledgement required to admit a host-process template",
+    )
+    engine_full_web.add_argument(
+        "--allow-provider-calls",
+        action="store_true",
+        help="explicitly permit configured provider calls, which may incur cost",
+    )
+    engine_full_web.add_argument(
+        "--allow-target-observation-disclosure",
+        action="store_true",
+        help="send only bounded secret-redacted target observations to declared planners",
+    )
+    engine_full_web.add_argument(
+        "--allow-offensive-actions",
+        action="store_true",
+        help="exactly match an offensive=true mission and chamber authority declaration",
+    )
+    engine_full_web.add_argument("--stream-jsonl", action="store_true")
+    _add_contribution_arguments(engine_full_web)
+    engine_full_web.set_defaults(handler=_engine_full_web)
+    engine_stress_web = engine_commands.add_parser(
+        "stress-web",
+        help=(
+            "run a bounded authorized robustness ('stress') profile: the curated "
+            "adversarial-tactic battery fanned across concurrent agents with "
+            "bounded repetition, never raw request flooding"
+        ),
+    )
+    engine_stress_web.add_argument("manifest", type=_path)
+    engine_stress_web.add_argument(
+        "specification",
+        type=_path,
+        help="one-participant sova.executor-chamber document template",
+    )
+    engine_stress_web.add_argument("destination", type=_path)
+    engine_stress_web.add_argument("--entry-url", required=True)
+    engine_stress_web.add_argument(
+        "--agents",
+        type=int,
+        help="number of concurrent agents; prompted interactively if omitted",
+    )
+    engine_stress_web.add_argument(
+        "--repetitions",
+        type=int,
+        default=1,
+        help="bounded per-agent repeat passes over the tactic battery (max 25)",
+    )
+    engine_stress_web.add_argument(
+        "--tactics",
+        help=(
+            "comma-separated adversarial tactic ids; defaults to the full curated "
+            f"library ({', '.join(adversarial_tactic_ids())})"
+        ),
+    )
+    engine_stress_web.add_argument("--control-proof", type=_path)
+    engine_stress_web.add_argument("--package-runner", type=_path)
+    engine_stress_web.add_argument("--browser-executable", type=_path)
+    engine_stress_web.add_argument("--playwright-package-cache", type=_path)
+    engine_stress_web.add_argument("--playwright-browser-cache", type=_path)
+    engine_stress_web.add_argument("--headed", action="store_true")
+    engine_stress_web.add_argument(
+        "--allow-provider-calls",
+        action="store_true",
+        help="explicitly permit configured provider calls, which may incur cost",
+    )
+    engine_stress_web.add_argument(
+        "--allow-target-observation-disclosure",
+        action="store_true",
+        help="send only bounded secret-redacted target observations to declared planners",
+    )
+    engine_stress_web.add_argument("--stream-jsonl", action="store_true")
+    _add_contribution_arguments(engine_stress_web)
+    engine_stress_web.set_defaults(handler=_engine_stress_web)
 
     arena_parser = commands.add_parser(
         "arena", help="run deterministic local evidence-first Arena fixtures"
@@ -1459,6 +2021,39 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
         help="stream each redacted event with its coordinator or participant channel",
     )
     arena_swarm_web.set_defaults(handler=_arena_swarm_web)
+    arena_run_software = arena_commands.add_parser(
+        "run-software",
+        parents=[engine_run_software],
+        add_help=False,
+        help=(
+            "run the authorization-gated SOVA Engine against one phase-owned local "
+            "application and preserve complete Arena evidence"
+        ),
+    )
+    arena_run_software.set_defaults(handler=_arena_run_software_engine, arena_mode=True)
+    arena_swarm_software = arena_commands.add_parser(
+        "swarm-software",
+        parents=[engine_swarm_software],
+        add_help=False,
+        help=(
+            "run isolated adaptive SOVA Engine workers against separately launched "
+            "software targets and merge their replayable findings"
+        ),
+    )
+    arena_swarm_software.set_defaults(
+        handler=_arena_swarm_software_engine,
+        arena_mode=True,
+    )
+    arena_full_web = arena_commands.add_parser(
+        "full-web",
+        parents=[engine_full_web],
+        add_help=False,
+        help=(
+            "run the complete authorization-gated browser, computer, workspace, and "
+            "reviewed-process engine while preserving Arena evidence"
+        ),
+    )
+    arena_full_web.set_defaults(handler=_arena_full_web_engine, arena_mode=True)
 
     leaderboard_parser = commands.add_parser(
         "leaderboard", help="build a verified static local leaderboard"
@@ -1701,6 +2296,28 @@ def _target_prove(args: argparse.Namespace) -> int:
     proof = collect_website_control_proof(challenge)
     args.destination.write_bytes(canonical_json_bytes(proof.to_mapping()) + b"\n")
     sys.stdout.buffer.write(canonical_json_bytes(proof.to_mapping()) + b"\n")
+    return 0
+
+
+def _target_prove_software(args: argparse.Namespace) -> int:
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    proof = create_local_software_control_proof(
+        target,
+        args.executable,
+        workspace_seed=args.workspace_seed,
+    )
+    args.destination.write_bytes(canonical_json_bytes(proof.to_mapping()) + b"\n")
+    report = {
+        "artifactType": "sova.local-software-control-proof-result",
+        "schemaVersion": "0.1.0",
+        "proof": str(args.destination),
+        "authorityTarget": proof.subject,
+        "expiresAt": proof.to_mapping()["expiresAt"],
+        "executableDigest": proof.evidence["executableDigest"],
+        "workspaceFingerprint": proof.evidence["workspaceFingerprint"],
+        "targetDigest": proof.evidence["targetDigest"],
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
     return 0
 
 
@@ -2371,8 +2988,10 @@ def _capsule_replay_selection(args: argparse.Namespace) -> CapsuleReplaySelectio
         primary_trace=args.primary_trace,
         comparison_trace=args.comparison_trace,
         media_object=args.media_object,
+        surface=getattr(args, "surface", None),
         no_comparison=args.no_comparison,
         no_media=args.no_media,
+        nested_capsule=getattr(args, "nested_capsule", None),
     )
 
 
@@ -2381,7 +3000,13 @@ def _derived_replay_destination(source: Path) -> Path:
 
 
 def _local_replay_uri(destination: Path) -> str:
-    resolved = destination.resolve(strict=True)
+    try:
+        resolved = destination.resolve(strict=True)
+    except OSError as error:
+        raise FormatError(
+            "SOVA-REPLAY-LOCAL-FILE",
+            "generated replay must be one real local HTML file",
+        ) from error
     if not resolved.is_file() or resolved.suffix.casefold() not in {".htm", ".html"}:
         raise FormatError(
             "SOVA-REPLAY-LOCAL-FILE",
@@ -2536,6 +3161,908 @@ def _probe_issue(args: argparse.Namespace) -> int:
         + b"\n"
     )
     return 0
+
+
+def _engine_validate(args: argparse.Namespace) -> int:
+    document = _load_object(args.specification)
+    validated = validate_executor_chamber_document(
+        document,
+        provider_calls_authorized=bool(args.allow_provider_calls),
+        offensive=bool(args.allow_offensive_actions),
+    )
+    report = {
+        "artifactType": "sova.executor-engine-validation",
+        "schemaVersion": "0.1.0",
+        "status": "accepted",
+        "documentDigest": validated.document_digest,
+        "authorityTarget": validated.authority.authority_target,
+        "providerCalls": validated.authority.provider_calls,
+        "offensive": validated.authority.offensive,
+        "participants": [item.identifier for item in validated.case.participants],
+        "models": [
+            {
+                "participant": item.participant_id,
+                "adapter": item.adapter,
+                "runtimeDigest": item.runtime_digest,
+            }
+            for item in validated.models
+        ],
+        "grants": [
+            {
+                "id": item.identifier,
+                "bindingId": item.binding_id,
+                "codecId": item.codec_id,
+                "argumentSchemaDigest": item.argument_schema_digest,
+            }
+            for item in validated.grants
+        ],
+        "budget": validated.budget.to_mapping(),
+        "runtimeMaterialized": False,
+        "executorsStarted": False,
+        "providerCallsMade": False,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _engine_reproduce_plan(args: argparse.Namespace) -> int:
+    document = build_executor_capsule_reproduction_document(args.capsule)
+    encoded = canonical_json_bytes(document)
+    args.destination.write_bytes(encoded + b"\n")
+    report = {
+        "artifactType": "sova.executor-capsule-reproduction-plan-result",
+        "schemaVersion": "0.1.0",
+        "sourceCapsule": str(args.capsule),
+        "sourceCapsuleDigest": sha256_digest(args.capsule.read_bytes()),
+        "destination": str(args.destination),
+        "documentDigest": sha256_digest(encoded),
+        "authorityTarget": document["authorization"]["authorityTarget"],
+        "actionCount": document["budget"]["maxTotalActions"],
+        "providerCalls": False,
+        "freshTargetAndAuthorizationRequired": True,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _engine_run_web(args: argparse.Namespace) -> int:
+    if not args.allow_target_observation_disclosure:
+        raise FormatError(
+            "SOVA-TARGET-OBSERVATION-DISCLOSURE-NOT-ALLOWED",
+            "the executor engine requires explicit redacted target observation disclosure",
+        )
+    _require_live_campaign_terminal()
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    mission = semantic_browser_mission_from_mapping(_load_object(args.mission))
+    chamber_document = _load_object(args.specification)
+    proof = (
+        control_proof_from_mapping(_load_object(args.control_proof))
+        if args.control_proof is not None
+        else None
+    )
+    package_runner, browser = _campaign_executables(args)
+
+    additional_surface_factory = None
+    additional_codec_factories = None
+    additional_surface_contract_digest = None
+    runtime_surfaces_path = getattr(args, "runtime_surfaces", None)
+    if runtime_surfaces_path is not None:
+        # Host-process and workspace surfaces only today; a declarative MELRA
+        # computer-use surface is not yet wired through this document (compose
+        # `sova.community.executor_surfaces.melra_computer_surface_generation`
+        # directly at the Python API level in the meantime).
+        config = parse_executor_engine_runtime_document(_load_object(runtime_surfaces_path))
+        builder = build_executor_engine_runtime_surfaces(config)
+        preview = builder("primary")
+        try:
+            additional_surface_contract_digest = sha256_digest(
+                canonical_json_bytes(
+                    [
+                        item.contract_mapping()
+                        for item in sorted(preview, key=lambda item: item.sensor_name)
+                    ]
+                )
+            )
+        finally:
+            for surface in reversed(preview):
+                surface.close()
+        additional_surface_factory = builder
+        additional_codec_factories = builder.codec_factories
+
+    def observe(channel: str, event: dict[str, Any]) -> None:
+        envelope = {
+            "artifactType": "sova.executor-engine-live-event",
+            "schemaVersion": "0.1.0",
+            "channel": channel,
+            "event": event,
+        }
+        sys.stdout.buffer.write(canonical_json_bytes(envelope) + b"\n")
+        sys.stdout.buffer.flush()
+
+    with _browser_profile_lease(args, target) as profile_lease:
+        artifacts = run_live_web_executor_engine(
+            target,
+            mission,
+            chamber_document,
+            args.destination,
+            package_runner=package_runner,
+            browser_executable=browser,
+            approval_prompt=_live_campaign_prompt,
+            secret_resolver=os.getenv,
+            provider_calls_authorized=args.allow_provider_calls,
+            target_observation_disclosure_authorized=args.allow_target_observation_disclosure,
+            control_proof=proof,
+            profile_lease=profile_lease,
+            offensive=args.allow_offensive_actions,
+            headless=not getattr(args, "headed", False),
+            record_video=getattr(args, "record_video", False),
+            package_cache=getattr(args, "playwright_package_cache", None),
+            browser_cache=getattr(args, "playwright_browser_cache", None),
+            workspace_seed=getattr(args, "workspace_seed", None),
+            additional_surface_factory=additional_surface_factory,
+            additional_codec_factories=additional_codec_factories,
+            additional_surface_contract_digest=additional_surface_contract_digest,
+            event_observer=observe if args.stream_jsonl else None,
+        )
+    contribution = _contribute_run_evidence(
+        args,
+        capsule=artifacts.capsule,
+        trace=artifacts.trace,
+        destination=args.destination,
+    )
+    output = {
+        "artifactType": "sova.executor-engine-cli-result",
+        "schemaVersion": "0.1.0",
+        "status": artifacts.status,
+        "report": str(artifacts.report),
+        "trace": str(artifacts.trace),
+        "reproductionTrace": (
+            None if artifacts.reproduction_trace is None else str(artifacts.reproduction_trace)
+        ),
+        "capsule": None if artifacts.capsule is None else str(artifacts.capsule),
+        "liveEvents": str(artifacts.live_events),
+        "contribution": contribution,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
+    return 0 if artifacts.status == "pass" else 2
+
+
+def _contribute_run_evidence(
+    args: argparse.Namespace,
+    *,
+    capsule: Path | None,
+    trace: Path,
+    destination: Path,
+) -> dict[str, Any]:
+    """Contribute this run's capsule and trace; never mask the primary run's own result.
+
+    Registry contribution is on by default (the founder's decision); this
+    only ever runs after the primary engine/swarm result already succeeded,
+    and a contribution-side failure (a failed gate, an unreachable service)
+    is reported alongside the run output rather than raised, so it can never
+    turn an otherwise-successful run into a CLI failure.
+    """
+    if capsule is None:
+        return {
+            "artifactType": "sova.auto-contribution-result",
+            "schemaVersion": "0.1.0",
+            "contributed": False,
+            "reason": "no-capsule-produced",
+        }
+    registry_client = None
+    if getattr(args, "registry_url", None) is not None:
+        if not getattr(args, "registry_token", None):
+            return {
+                "artifactType": "sova.auto-contribution-result",
+                "schemaVersion": "0.1.0",
+                "contributed": False,
+                "reason": "registry-url-without-token",
+            }
+        registry_client = RegistryClient(RegistryEndpoint(args.registry_url, args.registry_token))
+    try:
+        return auto_contribute_after_run(
+            capsule=capsule,
+            trace=trace,
+            staging_destination=destination / "contribution",
+            contributor={
+                "name": args.contributor_name,
+                "identity": args.contributor_identity,
+            },
+            enabled=not getattr(args, "no_contribute", False),
+            registry_client=registry_client,
+        )
+    except FormatError as error:
+        return {
+            "artifactType": "sova.auto-contribution-result",
+            "schemaVersion": "0.1.0",
+            "contributed": False,
+            "reason": "contribution-failed",
+            "error": {"code": error.issue.code, "message": str(error)},
+        }
+
+
+def _prompt_agent_count(args: argparse.Namespace) -> int:
+    """Always ask the operator how many agents; never silently default."""
+    if getattr(args, "agents", None) is not None:
+        count = args.agents
+        if not isinstance(count, int) or count < 1:
+            raise FormatError(
+                "SOVA-SWARM-CLI-AGENTS",
+                "--agents must be a positive integer",
+            )
+        return count
+    if not sys.stdin.isatty():
+        raise FormatError(
+            "SOVA-SWARM-CLI-AGENTS",
+            "swarm-web requires --agents in a non-interactive environment",
+        )
+    hard_cap = "any positive number" if args.allow_large_swarm else "2-8"
+    response = input(f"How many agents should join the swarm? [{hard_cap}]: ")
+    try:
+        count = int(response.strip())
+    except ValueError as error:
+        raise FormatError(
+            "SOVA-SWARM-CLI-AGENTS",
+            "agent count must be an integer",
+        ) from error
+    if count < 1:
+        raise FormatError("SOVA-SWARM-CLI-AGENTS", "agent count must be at least one")
+    return count
+
+
+def _engine_swarm_web(args: argparse.Namespace) -> int:
+    if not args.allow_target_observation_disclosure:
+        raise FormatError(
+            "SOVA-TARGET-OBSERVATION-DISCLOSURE-NOT-ALLOWED",
+            "the swarm engine requires explicit redacted target observation disclosure",
+        )
+    _require_live_campaign_terminal()
+    agent_count = _prompt_agent_count(args)
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    mission = semantic_browser_mission_from_mapping(_load_object(args.mission))
+    base_document = _load_object(args.specification)
+    proof = (
+        control_proof_from_mapping(_load_object(args.control_proof))
+        if args.control_proof is not None
+        else None
+    )
+    package_runner, browser = _campaign_executables(args)
+    personas = tuple(args.persona) if args.persona else None
+    additional_surface_factory = None
+    additional_codec_factories = None
+    additional_surface_contract_digest = None
+    runtime_surfaces_path = getattr(args, "runtime_surfaces", None)
+    if runtime_surfaces_path is not None:
+        config = parse_executor_engine_runtime_document(_load_object(runtime_surfaces_path))
+        builder = build_executor_engine_runtime_surfaces(config)
+        preview = builder("primary")
+        try:
+            additional_surface_contract_digest = sha256_digest(
+                canonical_json_bytes(
+                    [
+                        item.contract_mapping()
+                        for item in sorted(preview, key=lambda item: item.sensor_name)
+                    ]
+                )
+            )
+        finally:
+            for surface in reversed(preview):
+                surface.close()
+        additional_surface_factory = builder
+        additional_codec_factories = builder.codec_factories
+
+    def observe(channel: str, event: dict[str, Any]) -> None:
+        envelope = {
+            "artifactType": "sova.swarm-live-event",
+            "schemaVersion": "0.1.0",
+            "channel": channel,
+            "event": event,
+        }
+        sys.stdout.buffer.write(canonical_json_bytes(envelope) + b"\n")
+        sys.stdout.buffer.flush()
+
+    artifacts = run_web_swarm(
+        target,
+        mission,
+        base_document,
+        args.destination,
+        agent_count=agent_count,
+        package_runner=package_runner,
+        browser_executable=browser,
+        approval_prompt=_live_campaign_prompt,
+        secret_resolver=os.getenv,
+        provider_calls_authorized=args.allow_provider_calls,
+        target_observation_disclosure_authorized=args.allow_target_observation_disclosure,
+        personas=personas,
+        control_proof=proof,
+        offensive=args.allow_offensive_actions,
+        headless=not getattr(args, "headed", False),
+        record_video=getattr(args, "record_video", False),
+        package_cache=getattr(args, "playwright_package_cache", None),
+        browser_cache=getattr(args, "playwright_browser_cache", None),
+        workspace_seed=getattr(args, "workspace_seed", None),
+        max_concurrency=args.max_concurrency,
+        allow_large_swarm=args.allow_large_swarm,
+        event_observer=observe if args.stream_jsonl else None,
+        additional_surface_factory=additional_surface_factory,
+        additional_codec_factories=additional_codec_factories,
+        additional_surface_contract_digest=additional_surface_contract_digest,
+    )
+    contribution = _contribute_run_evidence(
+        args,
+        capsule=artifacts.swarm_capsule,
+        trace=artifacts.coordinator_trace,
+        destination=artifacts.destination,
+    )
+    output = {
+        "artifactType": "sova.swarm-cli-result",
+        "schemaVersion": "0.1.0",
+        "agentCount": artifacts.agent_count,
+        "destination": str(artifacts.destination),
+        "swarmCapsule": str(artifacts.swarm_capsule),
+        "coordinatorTrace": str(artifacts.coordinator_trace),
+        "report": artifacts.report,
+        "contribution": contribution,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
+    per_agent = artifacts.report.get("perAgentSummaries", [])
+    failed = sum(1 for item in per_agent if item.get("status") != "pass")
+    return 0 if failed == 0 else 2
+
+
+def _arena_run_software_engine(args: argparse.Namespace) -> int:
+    """Route Arena software execution through the same authorization/evidence engine."""
+    args.arena_mode = True
+    return _engine_run_software(args)
+
+
+def _arena_swarm_software_engine(args: argparse.Namespace) -> int:
+    """Route Arena software swarms through the same isolated engine workers."""
+    args.arena_mode = True
+    return _engine_swarm_software(args)
+
+
+def _arena_full_web_engine(args: argparse.Namespace) -> int:
+    """Route Arena full-capability execution through the exact SOVA Engine path."""
+    args.arena_mode = True
+    return _engine_full_web(args)
+
+
+def _full_capability_computer_spec(args: argparse.Namespace) -> ComputerBackendSpec | None:
+    melra_fields = (args.melra_node, args.melra_cli, args.melra_policy)
+    target_fields = (
+        args.computer_target_manifest,
+        args.melra_target_executable,
+        args.melra_pid,
+        args.melra_window_id,
+    )
+    native_map = args.native_window_map
+    discover_native = args.discover_native_window
+    melra_requested = any(value is not None for value in melra_fields)
+    native_requested = native_map is not None or discover_native
+    if (
+        not melra_requested
+        and not native_requested
+        and all(value is None for value in target_fields)
+    ):
+        return None
+    if melra_requested == native_requested:
+        raise FormatError(
+            "SOVA-ENGINE-CLI-COMPUTER",
+            "select exactly one MELRA or native Windows computer backend",
+        )
+    if native_map is not None and discover_native:
+        raise FormatError(
+            "SOVA-ENGINE-CLI-COMPUTER",
+            "--native-window-map and --discover-native-window are mutually exclusive",
+        )
+    if any(value is None for value in target_fields):
+        raise FormatError(
+            "SOVA-ENGINE-CLI-COMPUTER",
+            "--computer-target-manifest, --computer-target-executable, --computer-pid, "
+            "and --computer-window-id must all be supplied for computer use",
+        )
+    software_target = target_manifest_from_mapping(_load_object(args.computer_target_manifest))
+    proof = (
+        create_local_software_control_proof(
+            software_target,
+            args.melra_target_executable,
+            workspace_seed=args.workspace_seed,
+        )
+        if args.computer_control_proof is None
+        else control_proof_from_mapping(_load_object(args.computer_control_proof))
+    )
+    authorization = LocalComputerAuthorization(
+        software_target,
+        proof,
+        attest_software_target(
+            args.melra_target_executable,
+            pid=args.melra_pid,
+            window_id=args.melra_window_id,
+        ),
+    )
+    if native_requested:
+        return NativeWindowsComputerBackendSpec(
+            authorization,
+            reviewed_targets=(
+                None
+                if native_map is None
+                else native_window_targets_from_mapping(_load_object(native_map))
+            ),
+            discover_controls=discover_native,
+        )
+    if any(value is None for value in melra_fields):
+        raise FormatError(
+            "SOVA-ENGINE-CLI-MELRA",
+            "--melra-node, --melra-cli, and --melra-policy must all be supplied together",
+        )
+    policy_source: Path = args.melra_policy
+
+    def policy_factory(workspace: Path) -> Path:
+        target_policy = workspace / "melra-policy.json"
+        target_policy.write_bytes(policy_source.read_bytes())
+        return target_policy
+
+    mutations = tuple(item.strip() for item in args.melra_mutations.split(",") if item.strip())
+    return MelraComputerBackendSpec(
+        node_executable=args.melra_node,
+        cli_entrypoint=args.melra_cli,
+        policy_factory=policy_factory,
+        authorization=authorization,
+        mutations=mutations,
+    )
+
+
+def _full_capability_process_spec(args: argparse.Namespace) -> ExactProcessSurfaceSpec | None:
+    if args.process_template_id is None and args.process_executable is None:
+        return None
+    if args.process_template_id is None or args.process_executable is None:
+        raise FormatError(
+            "SOVA-ENGINE-CLI-PROCESS",
+            "--process-template-id and --process-executable must be supplied together",
+        )
+    return ExactProcessSurfaceSpec(
+        args.process_template_id,
+        args.process_executable,
+        tuple(args.process_argv_prefix),
+        trusted_host_process_acknowledged=args.trusted_host_process,
+    )
+
+
+def _software_computer_surface_factory(args: argparse.Namespace) -> Any:
+    fields = (args.melra_node, args.melra_cli, args.melra_policy)
+    native_map = getattr(args, "native_window_map", None)
+    discover_native = getattr(args, "discover_native_window", False)
+    if native_map is not None and discover_native:
+        raise FormatError(
+            "SOVA-ENGINE-CLI-SOFTWARE-COMPUTER",
+            "--native-window-map and --discover-native-window are mutually exclusive",
+        )
+    if native_map is not None:
+        if any(value is not None for value in fields):
+            raise FormatError(
+                "SOVA-ENGINE-CLI-SOFTWARE-COMPUTER",
+                "--native-window-map and the MELRA computer backend are mutually exclusive",
+            )
+        return native_windows_computer_surface_factory(
+            native_window_targets_from_mapping(_load_object(native_map))
+        )
+    if discover_native:
+        if any(value is not None for value in fields):
+            raise FormatError(
+                "SOVA-ENGINE-CLI-SOFTWARE-COMPUTER",
+                "--discover-native-window and the MELRA computer backend are mutually exclusive",
+            )
+        return native_windows_discovery_surface_factory()
+    if all(value is None for value in fields):
+        if args.window_title_contains is not None and not getattr(args, "record_screen", False):
+            raise FormatError(
+                "SOVA-ENGINE-CLI-SOFTWARE-COMPUTER",
+                "--window-title-contains requires MELRA computer use or --record-screen",
+            )
+        return None
+    if any(value is None for value in fields):
+        raise FormatError(
+            "SOVA-ENGINE-CLI-SOFTWARE-COMPUTER",
+            "--melra-node, --melra-cli, and --melra-policy must be supplied together",
+        )
+    policy_source: Path = args.melra_policy
+
+    def policy_factory(workspace: Path) -> Path:
+        target = workspace / "melra-policy.json"
+        target.write_bytes(policy_source.read_bytes())
+        return target
+
+    mutations = tuple(item.strip() for item in args.melra_mutations.split(",") if item.strip())
+    return melra_software_computer_surface_factory(
+        node_executable=args.melra_node,
+        cli_entrypoint=args.melra_cli,
+        policy_factory=policy_factory,
+        mutations=mutations,
+    )
+
+
+def _software_runtime_surfaces(
+    args: argparse.Namespace,
+    *,
+    direct_process_template: ExactProcessSurfaceSpec | None,
+) -> tuple[Any | None, dict[str, Any] | None, str | None]:
+    path = getattr(args, "runtime_surfaces", None)
+    if path is None:
+        return None, None, None
+    if direct_process_template is not None:
+        raise FormatError(
+            "SOVA-SOFTWARE-ENGINE-RUNTIME-SURFACES",
+            "--runtime-surfaces and the legacy single process template are mutually exclusive",
+        )
+    config = parse_executor_engine_runtime_document(_load_object(path))
+    if config.workspace.enabled or not config.host_processes:
+        raise FormatError(
+            "SOVA-SOFTWARE-ENGINE-RUNTIME-SURFACES",
+            "software runtime surfaces require workspace.enabled=false and at least one process",
+        )
+    builder = build_executor_engine_runtime_surfaces(config)
+    preview = builder("primary")
+    try:
+        digest = sha256_digest(
+            canonical_json_bytes(
+                [
+                    item.contract_mapping()
+                    for item in sorted(preview, key=lambda item: item.sensor_name)
+                ]
+            )
+        )
+    finally:
+        for surface in reversed(preview):
+            surface.close()
+    return builder, dict(builder.codec_factories), digest
+
+
+def _engine_run_software(args: argparse.Namespace) -> int:
+    if not args.allow_target_observation_disclosure:
+        raise FormatError(
+            "SOVA-TARGET-OBSERVATION-DISCLOSURE-NOT-ALLOWED",
+            "the software engine requires explicit redacted target observation disclosure",
+        )
+    _require_live_campaign_terminal()
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    chamber_document = _load_object(args.specification)
+    proof = control_proof_from_mapping(_load_object(args.control_proof))
+    process_template = _full_capability_process_spec(args)
+    computer_factory = _software_computer_surface_factory(args)
+    runtime_surface_factory, runtime_codecs, runtime_contract_digest = _software_runtime_surfaces(
+        args, direct_process_template=process_template
+    )
+    recording = (
+        SoftwareWindowRecordingCoordinator(
+            args.destination / "recordings",
+            interval_seconds=args.recording_interval_seconds,
+        )
+        if args.record_screen
+        else None
+    )
+
+    def observe(channel: str, event: dict[str, Any]) -> None:
+        if recording is not None:
+            recording.observe(channel, event)
+        if not args.stream_jsonl:
+            return
+        envelope = {
+            "artifactType": "sova.executor-engine-live-event",
+            "schemaVersion": "0.1.0",
+            "channel": channel,
+            "event": event,
+        }
+        sys.stdout.buffer.write(canonical_json_bytes(envelope) + b"\n")
+        sys.stdout.buffer.flush()
+
+    with TemporaryDirectory(prefix="sova-software-engine-parent-") as temporary_parent:
+        workspace_parent = (
+            Path(temporary_parent) if args.workspace_parent is None else args.workspace_parent
+        )
+        runtime = build_authorized_software_runtime(
+            target,
+            SoftwareLaunchSpec(
+                args.executable,
+                tuple(args.launch_arg),
+                window_required=computer_factory is not None or recording is not None,
+                window_title_contains=args.window_title_contains,
+            ),
+            workspace_parent=workspace_parent,
+            workspace_seed=args.workspace_seed,
+            process_templates=(() if process_template is None else (process_template,)),
+            computer_surface_factory=computer_factory,
+            window_recording=recording,
+            additional_surface_factory=runtime_surface_factory,
+            additional_codec_factories=runtime_codecs,
+            additional_surface_contract_digest=runtime_contract_digest,
+        )
+        artifacts = run_executor_engine_document(
+            chamber_document,
+            args.destination,
+            runtime=runtime,
+            proof=proof,
+            approval_prompt=_live_campaign_prompt,
+            secret_resolver=os.getenv,
+            provider_calls_authorized=args.allow_provider_calls,
+            offensive=args.allow_offensive_actions,
+            event_observer=observe if args.stream_jsonl or recording is not None else None,
+            capsule_attachment_provider=(None if recording is None else recording.attachments),
+        )
+    contribution = _contribute_run_evidence(
+        args,
+        capsule=artifacts.capsule,
+        trace=artifacts.trace,
+        destination=args.destination,
+    )
+    output = {
+        "artifactType": (
+            "sova.arena-executor-engine-cli-result"
+            if getattr(args, "arena_mode", False)
+            else "sova.executor-engine-cli-result"
+        ),
+        "schemaVersion": "0.1.0",
+        "surface": "software",
+        "status": artifacts.status,
+        "report": str(artifacts.report),
+        "trace": str(artifacts.trace),
+        "reproductionTrace": (
+            None if artifacts.reproduction_trace is None else str(artifacts.reproduction_trace)
+        ),
+        "capsule": None if artifacts.capsule is None else str(artifacts.capsule),
+        "liveEvents": str(artifacts.live_events),
+        "contribution": contribution,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
+    return 0 if artifacts.status == "pass" else 2
+
+
+def _engine_swarm_software(args: argparse.Namespace) -> int:
+    if not args.allow_target_observation_disclosure:
+        raise FormatError(
+            "SOVA-TARGET-OBSERVATION-DISCLOSURE-NOT-ALLOWED",
+            "the software swarm requires explicit redacted target observation disclosure",
+        )
+    _require_live_campaign_terminal()
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    chamber_document = _load_object(args.specification)
+    proof = control_proof_from_mapping(_load_object(args.control_proof))
+    process_template = _full_capability_process_spec(args)
+    computer_factory = _software_computer_surface_factory(args)
+    runtime_surface_factory, runtime_codecs, runtime_contract_digest = _software_runtime_surfaces(
+        args, direct_process_template=process_template
+    )
+
+    def observe(channel: str, event: dict[str, Any]) -> None:
+        envelope = {
+            "artifactType": "sova.executor-engine-live-event",
+            "schemaVersion": "0.1.0",
+            "channel": channel,
+            "event": event,
+        }
+        sys.stdout.buffer.write(canonical_json_bytes(envelope) + b"\n")
+        sys.stdout.buffer.flush()
+
+    artifacts = run_software_swarm(
+        target,
+        SoftwareLaunchSpec(
+            args.executable,
+            tuple(args.launch_arg),
+            window_required=computer_factory is not None or args.record_screen,
+            window_title_contains=args.window_title_contains,
+        ),
+        chamber_document,
+        args.destination,
+        agent_count=_prompt_agent_count(args),
+        personas=tuple(args.persona) or None,
+        max_concurrency=args.max_concurrency,
+        approval_prompt=_live_campaign_prompt,
+        secret_resolver=os.getenv,
+        provider_calls_authorized=args.allow_provider_calls,
+        target_observation_disclosure_authorized=True,
+        proof=proof,
+        workspace_seed=args.workspace_seed,
+        process_templates=(() if process_template is None else (process_template,)),
+        computer_surface_factory=computer_factory,
+        offensive=args.allow_offensive_actions,
+        event_observer=observe if args.stream_jsonl else None,
+        record_window=args.record_screen,
+        recording_interval_seconds=args.recording_interval_seconds,
+        additional_surface_factory=runtime_surface_factory,
+        additional_codec_factories=runtime_codecs,
+        additional_surface_contract_digest=runtime_contract_digest,
+    )
+    contribution = _contribute_run_evidence(
+        args,
+        capsule=artifacts.swarm_capsule,
+        trace=artifacts.coordinator_trace,
+        destination=args.destination,
+    )
+    output = {
+        "artifactType": (
+            "sova.arena-software-swarm-cli-result"
+            if getattr(args, "arena_mode", False)
+            else "sova.swarm-cli-result"
+        ),
+        "schemaVersion": "0.1.0",
+        "surface": "software",
+        "agentCount": artifacts.agent_count,
+        "destination": str(artifacts.destination),
+        "swarmCapsule": str(artifacts.swarm_capsule),
+        "coordinatorTrace": str(artifacts.coordinator_trace),
+        "report": artifacts.report,
+        "contribution": contribution,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
+    failed = sum(
+        1 for item in artifacts.report.get("perAgentSummaries", []) if item.get("status") != "pass"
+    )
+    return 0 if failed == 0 else 2
+
+
+def _engine_full_web(args: argparse.Namespace) -> int:
+    if not args.allow_target_observation_disclosure:
+        raise FormatError(
+            "SOVA-TARGET-OBSERVATION-DISCLOSURE-NOT-ALLOWED",
+            "the executor engine requires explicit redacted target observation disclosure",
+        )
+    _require_live_campaign_terminal()
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    mission = semantic_browser_mission_from_mapping(_load_object(args.mission))
+    chamber_document = _load_object(args.specification)
+    proof = (
+        control_proof_from_mapping(_load_object(args.control_proof))
+        if args.control_proof is not None
+        else None
+    )
+    package_runner, browser = _campaign_executables(args)
+    computer = _full_capability_computer_spec(args)
+    process_template = _full_capability_process_spec(args)
+
+    arena_mode = bool(getattr(args, "arena_mode", False))
+
+    def observe(channel: str, event: dict[str, Any]) -> None:
+        envelope = {
+            "artifactType": (
+                "sova.arena-full-web-live-event"
+                if arena_mode
+                else "sova.executor-engine-live-event"
+            ),
+            "schemaVersion": "0.1.0",
+            "channel": channel,
+            "event": event,
+        }
+        sys.stdout.buffer.write(canonical_json_bytes(envelope) + b"\n")
+        sys.stdout.buffer.flush()
+
+    artifacts = run_full_capability_web_engine(
+        target,
+        mission,
+        chamber_document,
+        args.destination,
+        package_runner=package_runner,
+        browser_executable=browser,
+        approval_prompt=_live_campaign_prompt,
+        secret_resolver=os.getenv,
+        provider_calls_authorized=args.allow_provider_calls,
+        target_observation_disclosure_authorized=args.allow_target_observation_disclosure,
+        control_proof=proof,
+        computer=computer,
+        process_template=process_template,
+        offensive=args.allow_offensive_actions,
+        headless=not getattr(args, "headed", False),
+        record_video=getattr(args, "record_video", False),
+        record_computer_screen=getattr(args, "record_computer_screen", False),
+        computer_recording_interval_seconds=getattr(
+            args, "computer_recording_interval_seconds", 0.5
+        ),
+        package_cache=getattr(args, "playwright_package_cache", None),
+        browser_cache=getattr(args, "playwright_browser_cache", None),
+        workspace_seed=getattr(args, "workspace_seed", None),
+        event_observer=observe if args.stream_jsonl else None,
+    )
+    contribution = _contribute_run_evidence(
+        args,
+        capsule=artifacts.capsule,
+        trace=artifacts.trace,
+        destination=args.destination,
+    )
+    output = {
+        "artifactType": (
+            "sova.arena-full-web-cli-result" if arena_mode else "sova.executor-engine-cli-result"
+        ),
+        "schemaVersion": "0.1.0",
+        "status": artifacts.status,
+        "report": str(artifacts.report),
+        "trace": str(artifacts.trace),
+        "reproductionTrace": (
+            None if artifacts.reproduction_trace is None else str(artifacts.reproduction_trace)
+        ),
+        "capsule": None if artifacts.capsule is None else str(artifacts.capsule),
+        "liveEvents": str(artifacts.live_events),
+        "visualReplays": [str(path) for path in artifacts.visual_replays],
+        "replayCues": [str(path) for path in artifacts.replay_cues],
+        "contribution": contribution,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
+    return 0 if artifacts.status == "pass" else 2
+
+
+def _engine_stress_web(args: argparse.Namespace) -> int:
+    if not args.allow_target_observation_disclosure:
+        raise FormatError(
+            "SOVA-TARGET-OBSERVATION-DISCLOSURE-NOT-ALLOWED",
+            "the stress profile requires explicit redacted target observation disclosure",
+        )
+    _require_live_campaign_terminal()
+    args.allow_large_swarm = False  # the stress agent ceiling is never operator-raised
+    agent_count = _prompt_agent_count(args)
+    target = target_manifest_from_mapping(_load_object(args.manifest))
+    base_document = _load_object(args.specification)
+    proof = (
+        control_proof_from_mapping(_load_object(args.control_proof))
+        if args.control_proof is not None
+        else None
+    )
+    package_runner, browser = _campaign_executables(args)
+    tactic_ids = (
+        tuple(item.strip() for item in args.tactics.split(",") if item.strip())
+        if args.tactics
+        else None
+    )
+
+    def observe(channel: str, event: dict[str, Any]) -> None:
+        envelope = {
+            "artifactType": "sova.stress-live-event",
+            "schemaVersion": "0.1.0",
+            "channel": channel,
+            "event": event,
+        }
+        sys.stdout.buffer.write(canonical_json_bytes(envelope) + b"\n")
+        sys.stdout.buffer.flush()
+
+    report = run_stress_profile(
+        target,
+        base_document,
+        args.destination,
+        entry_url=args.entry_url,
+        package_runner=package_runner,
+        browser_executable=browser,
+        approval_prompt=_live_campaign_prompt,
+        secret_resolver=os.getenv,
+        provider_calls_authorized=args.allow_provider_calls,
+        target_observation_disclosure_authorized=args.allow_target_observation_disclosure,
+        agent_count=agent_count,
+        repetitions=args.repetitions,
+        tactic_ids=tactic_ids,
+        control_proof=proof,
+        headless=not getattr(args, "headed", False),
+        package_cache=getattr(args, "playwright_package_cache", None),
+        browser_cache=getattr(args, "playwright_browser_cache", None),
+        event_observer=observe if args.stream_jsonl else None,
+    )
+    contribution = _contribute_run_evidence(
+        args,
+        capsule=report.swarm.swarm_capsule,
+        trace=report.swarm.coordinator_trace,
+        destination=report.destination,
+    )
+    output = {
+        "artifactType": "sova.stress-cli-result",
+        "schemaVersion": "0.1.0",
+        "agentCount": report.agent_count,
+        "repetitions": report.repetitions,
+        "tacticIds": list(report.tactic_ids),
+        "destination": str(report.destination),
+        "swarmCapsule": str(report.swarm.swarm_capsule),
+        "coordinatorTrace": str(report.swarm.coordinator_trace),
+        "report": report.swarm.report,
+        "contribution": contribution,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(output) + b"\n")
+    per_agent = report.swarm.report.get("perAgentSummaries", [])
+    failed = sum(1 for item in per_agent if item.get("status") != "pass")
+    return 0 if failed == 0 else 2
 
 
 def _arena_run(args: argparse.Namespace) -> int:
@@ -4197,6 +5724,31 @@ def _ci(args: argparse.Namespace) -> int:
 def _registry_verify(args: argparse.Namespace) -> int:
     trusted = frozenset(args.trusted_key_id or [])
     report = verify_registry(args.root, trusted_key_ids=trusted)
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _registry_replay(args: argparse.Namespace) -> int:
+    capsule, resolution = resolve_registry_capsule(
+        args.root,
+        entry_id=args.entry_id,
+        version=args.version,
+        trusted_key_ids=frozenset(args.trusted_key_id),
+    )
+    replay = render_capsule_timeline(
+        capsule,
+        args.destination,
+        selection=CapsuleReplaySelection(
+            nested_capsule=args.nested_capsule,
+            surface=getattr(args, "surface", None),
+        ),
+    )
+    report = {
+        "artifactType": "sova.registry-capsule-replay",
+        "schemaVersion": "0.1.0",
+        "resolution": resolution,
+        "replay": replay,
+    }
     sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
     return 0
 

@@ -6,21 +6,23 @@ from __future__ import annotations
 import argparse
 import builtins
 import json
+import os
 import shutil
 import sys
+import threading
+import webbrowser
 from contextlib import nullcontext
+from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any
+from typing import Any, cast
 
 import pytest
 
 from sova import cli
 from sova.formats.errors import FormatError
 from sova.live import owned_web_target
+from sova.replay import VerificationState
 from sova.runtime import ModelRouter
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def _intent() -> SimpleNamespace:
@@ -760,7 +762,7 @@ def test_semantic_arena_accepts_only_approved_attested_oci_agent(
 
 
 def _agent_arena_args(tmp_path: Path, **changes: Any) -> argparse.Namespace:
-    values = {
+    values: dict[str, Any] = {
         "specification": tmp_path / "agent-arena.json",
         "destination": tmp_path / "agent-arena-output",
         "allow_provider_calls": False,
@@ -972,6 +974,368 @@ def test_arena_chamber_cli_requires_fixture_authority_and_streams_canonical_even
     output = [json.loads(line) for line in capfd.readouterr().out.splitlines()]
     assert output[0] == {"kind": "run.started", "sequence": 0}
     assert output[-1]["artifactType"] == "sova.arena-chamber-cli-result"
+
+
+def test_arena_engine_routes_delegate_to_the_exact_engine_handlers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[tuple[str, bool]] = []
+
+    def run_one(args: argparse.Namespace) -> int:
+        observed.append(("one", args.arena_mode))
+        return 7
+
+    def run_swarm(args: argparse.Namespace) -> int:
+        observed.append(("swarm", args.arena_mode))
+        return 8
+
+    def run_full(args: argparse.Namespace) -> int:
+        observed.append(("full", args.arena_mode))
+        return 9
+
+    monkeypatch.setattr(cli, "_engine_run_software", run_one)
+    monkeypatch.setattr(cli, "_engine_swarm_software", run_swarm)
+    monkeypatch.setattr(cli, "_engine_full_web", run_full)
+    assert cli._arena_run_software_engine(argparse.Namespace()) == 7
+    assert cli._arena_swarm_software_engine(argparse.Namespace()) == 8
+    assert cli._arena_full_web_engine(argparse.Namespace()) == 9
+    assert observed == [("one", True), ("swarm", True), ("full", True)]
+
+
+def test_new_engine_validation_reproduction_and_software_proof_handlers_execute(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    validated = SimpleNamespace(
+        document_digest="sha256:" + "1" * 64,
+        authority=SimpleNamespace(
+            authority_target="owned.example",
+            provider_calls=False,
+            offensive=False,
+        ),
+        case=SimpleNamespace(
+            participants=(SimpleNamespace(identifier="agent-01"),),
+        ),
+        models=(
+            SimpleNamespace(
+                participant_id="agent-01",
+                adapter="scripted",
+                runtime_digest="sha256:" + "2" * 64,
+            ),
+        ),
+        grants=(
+            SimpleNamespace(
+                identifier="browser",
+                binding_id="browser:primary",
+                codec_id="sova.action-codec.browser/0.1.0",
+                argument_schema_digest="sha256:" + "3" * 64,
+            ),
+        ),
+        budget=SimpleNamespace(to_mapping=lambda: {"maxTotalActions": 2}),
+    )
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {})
+    monkeypatch.setattr(
+        cli,
+        "validate_executor_chamber_document",
+        lambda *_args, **_kwargs: validated,
+    )
+    assert (
+        cli._engine_validate(
+            argparse.Namespace(
+                specification=tmp_path / "engine.json",
+                allow_provider_calls=False,
+                allow_offensive_actions=False,
+            )
+        )
+        == 0
+    )
+    validation = json.loads(capfd.readouterr().out)
+    assert validation["executorsStarted"] is False
+    assert validation["participants"] == ["agent-01"]
+
+    capsule = tmp_path / "finding.sova"
+    capsule.write_bytes(b"capsule")
+    destination = tmp_path / "reproduction.json"
+    reproduction = {
+        "authorization": {"authorityTarget": "owned.example"},
+        "budget": {"maxTotalActions": 2},
+    }
+    monkeypatch.setattr(
+        cli,
+        "build_executor_capsule_reproduction_document",
+        lambda _path: reproduction,
+    )
+    assert (
+        cli._engine_reproduce_plan(argparse.Namespace(capsule=capsule, destination=destination))
+        == 0
+    )
+    result = json.loads(capfd.readouterr().out)
+    assert result["freshTargetAndAuthorizationRequired"] is True
+    assert json.loads(destination.read_text(encoding="utf-8")) == reproduction
+
+    target = object()
+    proof_mapping = {
+        "expiresAt": "2026-08-25T01:00:00Z",
+    }
+    proof = SimpleNamespace(
+        subject="sova:local-software:fixture",
+        evidence={
+            "executableDigest": "sha256:" + "4" * 64,
+            "workspaceFingerprint": "sha256:" + "5" * 64,
+            "targetDigest": "sha256:" + "6" * 64,
+        },
+        to_mapping=lambda: proof_mapping,
+    )
+    monkeypatch.setattr(cli, "target_manifest_from_mapping", lambda _value: target)
+    monkeypatch.setattr(
+        cli,
+        "create_local_software_control_proof",
+        lambda *_args, **_kwargs: proof,
+    )
+    proof_path = tmp_path / "control-proof.json"
+    assert (
+        cli._target_prove_software(
+            argparse.Namespace(
+                manifest=tmp_path / "target.json",
+                executable=tmp_path / "target.exe",
+                destination=proof_path,
+                workspace_seed=tmp_path / "seed",
+            )
+        )
+        == 0
+    )
+    proof_result = json.loads(capfd.readouterr().out)
+    assert proof_result["authorityTarget"] == proof.subject
+    assert json.loads(proof_path.read_text(encoding="utf-8")) == proof_mapping
+
+
+def _engine_route_args(tmp_path: Path, **changes: Any) -> argparse.Namespace:
+    values: dict[str, Any] = {
+        "manifest": tmp_path / "target.json",
+        "mission": tmp_path / "mission.json",
+        "specification": tmp_path / "engine.json",
+        "control_proof": tmp_path / "proof.json",
+        "destination": tmp_path / "engine-output",
+        "package_runner": None,
+        "browser_executable": None,
+        "allow_provider_calls": False,
+        "allow_target_observation_disclosure": True,
+        "allow_offensive_actions": False,
+        "headed": False,
+        "record_video": False,
+        "playwright_package_cache": None,
+        "playwright_browser_cache": None,
+        "workspace_seed": None,
+        "runtime_surfaces": None,
+        "stream_jsonl": True,
+        "browser_profile_vault": None,
+        "browser_profile_handle": None,
+        "registry_url": None,
+        "registry_token": None,
+        "contributor_name": "fixture",
+        "contributor_identity": "fixture@example.invalid",
+        "no_contribute": True,
+        "agents": 2,
+        "allow_large_swarm": False,
+        "persona": ["workflow", "state"],
+        "max_concurrency": 2,
+        "entry_url": "http://127.0.0.1:8199/",
+        "repetitions": 2,
+        "tactics": "instruction-priority-conflict,tool-result-spoofing",
+        "melra_node": None,
+        "melra_cli": None,
+        "melra_policy": None,
+        "melra_target_executable": None,
+        "melra_pid": None,
+        "melra_window_id": None,
+        "melra_mutations": "computer.click,computer.type",
+        "computer_target_manifest": None,
+        "computer_control_proof": None,
+        "process_template_id": None,
+        "process_executable": None,
+        "process_argv_prefix": [],
+        "trusted_host_process": False,
+        "executable": tmp_path / "software.exe",
+        "launch_arg": [],
+        "native_window_map": None,
+        "discover_native_window": False,
+        "window_title_contains": None,
+        "record_screen": False,
+        "recording_interval_seconds": 0.25,
+        "workspace_parent": tmp_path / "workspaces",
+        "arena_mode": False,
+    }
+    values.update(changes)
+    return argparse.Namespace(**values)
+
+
+def test_web_engine_swarm_full_and_stress_handlers_bind_every_live_control(  # noqa: PLR0915
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    target, mission, proof, lease = object(), object(), object(), object()
+    executable = tmp_path / "runner.exe"
+    executable.write_bytes(b"fixture")
+    engine = SimpleNamespace(
+        status="pass",
+        report=tmp_path / "report.json",
+        trace=tmp_path / "primary.sova-trace",
+        reproduction_trace=tmp_path / "reproduction.sova-trace",
+        capsule=tmp_path / "finding.sova",
+        live_events=tmp_path / "live-events.jsonl",
+        visual_replays=(tmp_path / "decisive.webm",),
+        replay_cues=(tmp_path / "replay-cues.json",),
+    )
+    swarm = SimpleNamespace(
+        agent_count=2,
+        destination=tmp_path / "swarm-output",
+        swarm_capsule=tmp_path / "swarm.sova",
+        coordinator_trace=tmp_path / "coordinator.sova-trace",
+        report={"perAgentSummaries": [{"status": "pass"}, {"status": "pass"}]},
+    )
+    monkeypatch.setattr(cli, "_require_live_campaign_terminal", lambda: None)
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {})
+    monkeypatch.setattr(cli, "target_manifest_from_mapping", lambda _value: target)
+    monkeypatch.setattr(cli, "semantic_browser_mission_from_mapping", lambda _value: mission)
+    monkeypatch.setattr(cli, "control_proof_from_mapping", lambda _value: proof)
+    monkeypatch.setattr(cli, "_campaign_executables", lambda _args: (executable, executable))
+    monkeypatch.setattr(cli, "_browser_profile_lease", lambda *_args: nullcontext(lease))
+    monkeypatch.setattr(cli, "_contribute_run_evidence", lambda *_args, **_kwargs: {})
+
+    def run_one(*args: object, **options: Any) -> Any:
+        assert args[:3] == (target, mission, {})
+        assert options["profile_lease"] is lease
+        assert options["control_proof"] is proof
+        assert options["target_observation_disclosure_authorized"] is True
+        options["event_observer"]("agent-01", {"kind": "tool.completed"})
+        return engine
+
+    monkeypatch.setattr(cli, "run_live_web_executor_engine", run_one)
+    assert cli._engine_run_web(_engine_route_args(tmp_path)) == 0
+    web_output = [json.loads(line) for line in capfd.readouterr().out.splitlines()]
+    assert web_output[0]["artifactType"] == "sova.executor-engine-live-event"
+    assert web_output[-1]["status"] == "pass"
+
+    def run_swarm(*args: object, **options: Any) -> Any:
+        assert args[:3] == (target, mission, {})
+        assert options["agent_count"] == 2
+        assert options["personas"] == ("workflow", "state")
+        options["event_observer"]("coordinator", {"kind": "sova.swarm.completed"})
+        return swarm
+
+    monkeypatch.setattr(cli, "run_web_swarm", run_swarm)
+    assert cli._engine_swarm_web(_engine_route_args(tmp_path)) == 0
+    swarm_output = [json.loads(line) for line in capfd.readouterr().out.splitlines()]
+    assert swarm_output[0]["artifactType"] == "sova.swarm-live-event"
+    assert swarm_output[-1]["agentCount"] == 2
+
+    monkeypatch.setattr(cli, "_full_capability_computer_spec", lambda _args: "computer")
+    monkeypatch.setattr(cli, "_full_capability_process_spec", lambda _args: "process")
+
+    def run_full(*args: object, **options: Any) -> Any:
+        assert args[:3] == (target, mission, {})
+        assert options["computer"] == "computer"
+        assert options["process_template"] == "process"
+        options["event_observer"]("full", {"kind": "tool.completed"})
+        return engine
+
+    monkeypatch.setattr(cli, "run_full_capability_web_engine", run_full)
+    assert cli._engine_full_web(_engine_route_args(tmp_path)) == 0
+    full_output = [json.loads(line) for line in capfd.readouterr().out.splitlines()]
+    assert full_output[-1]["visualReplays"][0].endswith("decisive.webm")
+
+    arena_args = _engine_route_args(tmp_path)
+    arena_args.arena_mode = True
+    assert cli._engine_full_web(arena_args) == 0
+    arena_output = [json.loads(line) for line in capfd.readouterr().out.splitlines()]
+    assert arena_output[0]["artifactType"] == "sova.arena-full-web-live-event"
+    assert arena_output[-1]["artifactType"] == "sova.arena-full-web-cli-result"
+
+    stress = SimpleNamespace(
+        agent_count=2,
+        repetitions=2,
+        tactic_ids=("instruction-priority-conflict", "tool-result-spoofing"),
+        destination=tmp_path / "stress-output",
+        swarm=swarm,
+    )
+
+    def run_stress(*args: object, **options: Any) -> Any:
+        assert args[:2] == (target, {})
+        assert options["agent_count"] == 2
+        assert options["repetitions"] == 2
+        options["event_observer"]("stress", {"kind": "sova.stress.completed"})
+        return stress
+
+    monkeypatch.setattr(cli, "run_stress_profile", run_stress)
+    stress_args = _engine_route_args(tmp_path)
+    assert cli._engine_stress_web(stress_args) == 0
+    stress_output = [json.loads(line) for line in capfd.readouterr().out.splitlines()]
+    assert stress_output[0]["artifactType"] == "sova.stress-live-event"
+    assert stress_output[-1]["repetitions"] == 2
+    assert stress_args.allow_large_swarm is False
+
+
+def test_software_engine_and_swarm_handlers_bind_fresh_runtime_and_recording(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    target, proof, runtime = object(), object(), object()
+    (tmp_path / "software.exe").write_bytes(b"fixture")
+    engine = SimpleNamespace(
+        status="pass",
+        report=tmp_path / "software-report.json",
+        trace=tmp_path / "software.sova-trace",
+        reproduction_trace=tmp_path / "software-reproduction.sova-trace",
+        capsule=tmp_path / "software.sova",
+        live_events=tmp_path / "software-events.jsonl",
+    )
+    swarm = SimpleNamespace(
+        agent_count=2,
+        destination=tmp_path / "software-swarm",
+        swarm_capsule=tmp_path / "software-swarm.sova",
+        coordinator_trace=tmp_path / "software-coordinator.sova-trace",
+        report={"perAgentSummaries": [{"status": "pass"}, {"status": "pass"}]},
+    )
+    monkeypatch.setattr(cli, "_require_live_campaign_terminal", lambda: None)
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {})
+    monkeypatch.setattr(cli, "target_manifest_from_mapping", lambda _value: target)
+    monkeypatch.setattr(cli, "control_proof_from_mapping", lambda _value: proof)
+    monkeypatch.setattr(cli, "_full_capability_process_spec", lambda _args: None)
+    monkeypatch.setattr(cli, "_software_computer_surface_factory", lambda _args: None)
+    monkeypatch.setattr(
+        cli, "_software_runtime_surfaces", lambda *_args, **_kwargs: (None, None, None)
+    )
+    monkeypatch.setattr(cli, "build_authorized_software_runtime", lambda *_args, **_kwargs: runtime)
+    monkeypatch.setattr(cli, "_contribute_run_evidence", lambda *_args, **_kwargs: {})
+
+    def run_one(document: object, destination: Path, **options: Any) -> Any:
+        assert document == {}
+        assert destination == tmp_path / "engine-output"
+        assert options["runtime"] is runtime
+        options["event_observer"]("software", {"kind": "tool.completed"})
+        return engine
+
+    monkeypatch.setattr(cli, "run_executor_engine_document", run_one)
+    args = _engine_route_args(tmp_path)
+    assert cli._engine_run_software(args) == 0
+    output = [json.loads(line) for line in capfd.readouterr().out.splitlines()]
+    assert output[0]["channel"] == "software"
+    assert output[-1]["surface"] == "software"
+
+    def run_swarm(*args: object, **options: Any) -> Any:
+        assert args[0] is target and args[2] == {}
+        assert options["agent_count"] == 2
+        options["event_observer"]("software-swarm", {"kind": "tool.completed"})
+        return swarm
+
+    monkeypatch.setattr(cli, "run_software_swarm", run_swarm)
+    assert cli._engine_swarm_software(_engine_route_args(tmp_path)) == 0
+    swarm_output = [json.loads(line) for line in capfd.readouterr().out.splitlines()]
+    assert swarm_output[0]["channel"] == "software-swarm"
+    assert swarm_output[-1]["surface"] == "software"
 
 
 def test_browser_swarm_cli_requires_profile_and_streams_channels(
@@ -1279,6 +1643,89 @@ def test_target_proof_and_reference_fixture_routes(
     target.configuration["allowedOrigins"] = ["https://different.example"]
     with pytest.raises(FormatError, match="does not match"):
         cli._target_prove(args)
+
+
+def test_registry_replay_requires_trusted_resolution_and_threads_nested_selection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    capsule = tmp_path / "object"
+    captured: dict[str, Any] = {}
+
+    def resolve(root: Path, **options: Any) -> tuple[Path, dict[str, Any]]:
+        captured["root"] = root
+        captured.update(options)
+        return capsule, {"registryIdentityTrusted": True}
+
+    def render(source: Path, destination: Path, *, selection: Any) -> dict[str, Any]:
+        captured["source"] = source
+        captured["destination"] = destination
+        captured["nested"] = selection.nested_capsule
+        captured["surface"] = selection.surface
+        return {"opensAtDecisiveMoment": True}
+
+    monkeypatch.setattr(cli, "resolve_registry_capsule", resolve)
+    monkeypatch.setattr(cli, "render_capsule_timeline", render)
+    args = argparse.Namespace(
+        root=tmp_path / "registry",
+        entry_id="finding",
+        version="1.0.0",
+        destination=tmp_path / "replay.html",
+        trusted_key_id=["sha256:" + "1" * 64],
+        nested_capsule="capsules/agent-02-finding.sova",
+        surface="computer",
+    )
+    assert cli._registry_replay(args) == 0
+    output = json.loads(capfd.readouterr().out)
+    assert output["artifactType"] == "sova.registry-capsule-replay"
+    assert captured["source"] == capsule
+    assert captured["nested"] == "capsules/agent-02-finding.sova"
+    assert captured["surface"] == "computer"
+
+
+def test_software_runtime_surfaces_load_multiple_exact_process_templates(
+    tmp_path: Path,
+) -> None:
+    document = {
+        "artifactType": "sova.executor-engine-runtime",
+        "schemaVersion": "0.1.0",
+        "workspace": {
+            "enabled": False,
+            "maxReadBytes": 1024,
+            "maxWriteBytes": 1024,
+        },
+        "hostProcesses": [
+            {
+                "id": identifier,
+                "executable": str(Path(sys.executable).resolve()),
+                "argvPrefix": ["-c", f"print('{identifier}')"],
+                "maxArgs": 4,
+                "maxArgBytes": 4096,
+                "maxOutputBytes": 4096,
+                "trustedHostProcessAcknowledged": True,
+            }
+            for identifier in ("first", "second")
+        ],
+    }
+    path = tmp_path / "runtime.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    factory, codecs, digest = cli._software_runtime_surfaces(
+        argparse.Namespace(runtime_surfaces=path),
+        direct_process_template=None,
+    )
+    assert factory is not None
+    assert sorted(codecs or {}) == [
+        "sova.action-codec.process.first/0.1.0",
+        "sova.action-codec.process.second/0.1.0",
+    ]
+    assert isinstance(digest, str) and digest.startswith("sha256:")
+    surfaces = factory("reproduction")
+    try:
+        assert [item.sensor_name for item in surfaces] == ["process_first", "process_second"]
+    finally:
+        for surface in reversed(surfaces):
+            surface.close()
 
 
 def test_counterfactual_cli_and_local_mcp_human_approval_routes(
@@ -1622,3 +2069,671 @@ def test_compose_duplicate_and_snapshot_ci_branches(
     )
     assert sarif.is_file()
     capfd.readouterr()
+
+
+def test_swarm_agent_count_cli_requires_explicit_valid_operator_choice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(FormatError, match="positive integer"):
+        cli._prompt_agent_count(argparse.Namespace(agents=0, allow_large_swarm=False))
+
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: False))
+    with pytest.raises(FormatError, match="requires --agents"):
+        cli._prompt_agent_count(argparse.Namespace(agents=None, allow_large_swarm=False))
+
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr(builtins, "input", lambda _prompt="": "not-a-number")
+    with pytest.raises(FormatError, match="must be an integer"):
+        cli._prompt_agent_count(argparse.Namespace(agents=None, allow_large_swarm=False))
+    monkeypatch.setattr(builtins, "input", lambda _prompt="": "0")
+    with pytest.raises(FormatError, match="at least one"):
+        cli._prompt_agent_count(argparse.Namespace(agents=None, allow_large_swarm=True))
+    monkeypatch.setattr(builtins, "input", lambda _prompt="": "3")
+    assert cli._prompt_agent_count(argparse.Namespace(agents=None, allow_large_swarm=False)) == 3
+
+
+def _software_surface_args(**changes: Any) -> argparse.Namespace:
+    values: dict[str, Any] = {
+        "melra_node": None,
+        "melra_cli": None,
+        "melra_policy": None,
+        "melra_target_executable": None,
+        "melra_pid": None,
+        "melra_window_id": None,
+        "melra_mutations": "click,type_text",
+        "computer_target_manifest": None,
+        "computer_control_proof": None,
+        "workspace_seed": None,
+        "native_window_map": None,
+        "discover_native_window": False,
+        "window_title_contains": None,
+        "record_screen": False,
+        "process_template_id": None,
+        "process_executable": None,
+        "process_argv_prefix": [],
+        "trusted_host_process": False,
+        "runtime_surfaces": None,
+    }
+    values.update(changes)
+    return argparse.Namespace(**values)
+
+
+def test_engine_surface_cli_rejects_ambiguous_partial_configuration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert cli._full_capability_process_spec(_software_surface_args()) is None
+    with pytest.raises(FormatError, match="supplied together"):
+        cli._full_capability_process_spec(_software_surface_args(process_template_id="fixture"))
+    executable = tmp_path / "tool.exe"
+    executable.write_bytes(b"fixture")
+    process = cli._full_capability_process_spec(
+        _software_surface_args(
+            process_template_id="fixture",
+            process_executable=executable,
+            process_argv_prefix=["--safe"],
+            trusted_host_process=True,
+        )
+    )
+    assert process is not None
+    assert process.trusted_host_process_acknowledged is True
+
+    assert cli._full_capability_computer_spec(_software_surface_args()) is None
+    with pytest.raises(FormatError, match="must all be supplied"):
+        cli._full_capability_computer_spec(_software_surface_args(melra_node=tmp_path / "node.exe"))
+
+    native_map = tmp_path / "native.json"
+    native_map.write_text("{}", encoding="utf-8")
+    with pytest.raises(FormatError, match="mutually exclusive"):
+        cli._software_computer_surface_factory(
+            _software_surface_args(native_window_map=native_map, discover_native_window=True)
+        )
+    with pytest.raises(FormatError, match="MELRA computer backend"):
+        cli._software_computer_surface_factory(
+            _software_surface_args(native_window_map=native_map, melra_node=tmp_path / "node.exe")
+        )
+    with pytest.raises(FormatError, match="MELRA computer backend"):
+        cli._software_computer_surface_factory(
+            _software_surface_args(discover_native_window=True, melra_cli=tmp_path / "melra.js")
+        )
+    with pytest.raises(FormatError, match="requires MELRA"):
+        cli._software_computer_surface_factory(
+            _software_surface_args(window_title_contains="Owned window")
+        )
+    assert cli._software_computer_surface_factory(_software_surface_args()) is None
+    with pytest.raises(FormatError, match="must be supplied together"):
+        cli._software_computer_surface_factory(_software_surface_args(melra_policy=tmp_path / "p"))
+
+    sentinel = object()
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {"targets": []})
+    monkeypatch.setattr(cli, "native_window_targets_from_mapping", lambda _value: ("target",))
+    monkeypatch.setattr(cli, "native_windows_computer_surface_factory", lambda _value: sentinel)
+    assert (
+        cli._software_computer_surface_factory(_software_surface_args(native_window_map=native_map))
+        is sentinel
+    )
+    monkeypatch.setattr(cli, "native_windows_discovery_surface_factory", lambda: sentinel)
+    assert (
+        cli._software_computer_surface_factory(_software_surface_args(discover_native_window=True))
+        is sentinel
+    )
+
+
+def test_full_computer_surface_copies_policy_and_binds_exact_attestation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy = tmp_path / "policy.json"
+    policy.write_text('{"allow":true}', encoding="utf-8")
+    attestation = object()
+    target = object()
+    proof = object()
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {})
+    monkeypatch.setattr(cli, "target_manifest_from_mapping", lambda _value: target)
+    monkeypatch.setattr(
+        cli,
+        "create_local_software_control_proof",
+        lambda *_args, **_kwargs: proof,
+    )
+    monkeypatch.setattr(cli, "attest_software_target", lambda *_args, **_kwargs: attestation)
+    monkeypatch.setattr(
+        cli,
+        "LocalComputerAuthorization",
+        lambda received_target, received_proof, received_attestation: SimpleNamespace(
+            software_target=received_target,
+            control_proof=received_proof,
+            target_attestation=received_attestation,
+        ),
+    )
+    monkeypatch.setattr(cli, "MelraComputerBackendSpec", SimpleNamespace)
+    specification = cli._full_capability_computer_spec(
+        _software_surface_args(
+            melra_node=tmp_path / "node.exe",
+            melra_cli=tmp_path / "melra.js",
+            melra_policy=policy,
+            melra_target_executable=tmp_path / "owned.exe",
+            melra_pid=42,
+            melra_window_id=99,
+            computer_target_manifest=tmp_path / "software-target.json",
+            melra_mutations=" click, ,type_text ",
+        )
+    )
+    assert specification is not None
+    melra_specification = cast("Any", specification)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    copied = melra_specification.policy_factory(workspace)
+    assert copied.read_bytes() == policy.read_bytes()
+    assert melra_specification.authorization.target_attestation is attestation
+    assert melra_specification.authorization.software_target is target
+    assert melra_specification.authorization.control_proof is proof
+    assert melra_specification.mutations == ("click", "type_text")
+
+
+def test_full_computer_surface_builds_independently_authorized_native_backend(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = object()
+    proof = object()
+    attestation = object()
+    authorization = object()
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {})
+    monkeypatch.setattr(cli, "target_manifest_from_mapping", lambda _value: target)
+    monkeypatch.setattr(
+        cli,
+        "create_local_software_control_proof",
+        lambda *_args, **_kwargs: proof,
+    )
+    monkeypatch.setattr(cli, "attest_software_target", lambda *_args, **_kwargs: attestation)
+    monkeypatch.setattr(
+        cli,
+        "LocalComputerAuthorization",
+        lambda *_args: authorization,
+    )
+    monkeypatch.setattr(
+        cli,
+        "NativeWindowsComputerBackendSpec",
+        lambda received_authorization, **options: SimpleNamespace(
+            authorization=received_authorization,
+            **options,
+        ),
+    )
+    specification = cli._full_capability_computer_spec(
+        _software_surface_args(
+            discover_native_window=True,
+            melra_target_executable=tmp_path / "owned.exe",
+            melra_pid=42,
+            melra_window_id=99,
+            computer_target_manifest=tmp_path / "software-target.json",
+        )
+    )
+    native_specification = cast("Any", specification)
+    assert native_specification.authorization is authorization
+    assert native_specification.reviewed_targets is None
+    assert native_specification.discover_controls is True
+
+
+def test_software_runtime_surface_cli_validates_and_previews_contracts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = tmp_path / "runtime.json"
+    runtime.write_text("{}", encoding="utf-8")
+    assert cli._software_runtime_surfaces(
+        _software_surface_args(), direct_process_template=None
+    ) == (None, None, None)
+    with pytest.raises(FormatError, match="mutually exclusive"):
+        cli._software_runtime_surfaces(
+            _software_surface_args(runtime_surfaces=runtime),
+            direct_process_template=cast("Any", object()),
+        )
+
+    monkeypatch.setattr(
+        cli,
+        "parse_executor_engine_runtime_document",
+        lambda _value: SimpleNamespace(workspace=SimpleNamespace(enabled=True), host_processes=()),
+    )
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {})
+    with pytest.raises(FormatError, match=r"workspace\.enabled=false"):
+        cli._software_runtime_surfaces(
+            _software_surface_args(runtime_surfaces=runtime), direct_process_template=None
+        )
+
+    closed: list[str] = []
+
+    class Builder:
+        def __init__(self) -> None:
+            self.codec_factories = {"process.run/0.1": object()}
+
+        def __call__(self, phase: str) -> list[Any]:
+            return [
+                SimpleNamespace(
+                    sensor_name=f"sensor:{phase}",
+                    contract_mapping=lambda: {"name": "fixture"},
+                    close=lambda: closed.append(phase),
+                )
+            ]
+
+    builder = Builder()
+    monkeypatch.setattr(
+        cli,
+        "parse_executor_engine_runtime_document",
+        lambda _value: SimpleNamespace(
+            workspace=SimpleNamespace(enabled=False), host_processes=(1,)
+        ),
+    )
+    monkeypatch.setattr(cli, "build_executor_engine_runtime_surfaces", lambda _config: builder)
+    actual_builder, codecs, digest = cli._software_runtime_surfaces(
+        _software_surface_args(runtime_surfaces=runtime), direct_process_template=None
+    )
+    assert actual_builder is builder
+    assert codecs == builder.codec_factories
+    assert digest is not None
+    assert closed == ["primary"]
+
+
+def test_replay_local_file_and_browser_open_failures_are_reported(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(FormatError, match="real local HTML"):
+        cli._local_replay_uri(tmp_path / "missing.html")
+    wrong = tmp_path / "replay.txt"
+    wrong.write_text("x", encoding="utf-8")
+    with pytest.raises(FormatError, match="real local HTML"):
+        cli._local_replay_uri(wrong)
+
+    destination = tmp_path / "replay.html"
+
+    def render(_source: Path, output: Path, *, selection: object) -> dict[str, object]:
+        del selection
+        output.write_text("<html></html>", encoding="utf-8")
+        return {"rendered": True}
+
+    monkeypatch.setattr(cli, "render_capsule_timeline", render)
+    monkeypatch.setattr(webbrowser, "open", lambda *_args, **_kwargs: False)
+    args = argparse.Namespace(
+        source=tmp_path / "finding.sova",
+        output=destination,
+        no_open=False,
+        primary_trace=None,
+        comparison_trace=None,
+        media_object=None,
+        no_comparison=False,
+        no_media=False,
+        nested_capsule=None,
+    )
+    assert cli._replay_open(args) == 0
+    assert json.loads(capfd.readouterr().out)["openError"] == "default-browser-refused-local-file"
+
+    def fail_open(*_args: Any, **_kwargs: Any) -> bool:
+        raise OSError
+
+    monkeypatch.setattr(webbrowser, "open", fail_open)
+    assert cli._replay_open(args) == 0
+    assert json.loads(capfd.readouterr().out)["openError"] == "default-browser-launch-failed"
+
+
+def test_adaptive_browser_cli_requires_provider_permission_and_reports_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    base = argparse.Namespace(
+        allow_provider_calls=False,
+        manifest=tmp_path / "target.json",
+        campaign=tmp_path / "campaign.json",
+        policy=tmp_path / "policy.json",
+        provider_runtime=tmp_path / "provider.json",
+        control_proof=None,
+        destination=tmp_path / "result",
+    )
+    with pytest.raises(FormatError, match="explicit --allow-provider-calls"):
+        cli._hunt_adaptive_browser(base)
+
+    target, campaign, policy = object(), object(), object()
+    runtime = SimpleNamespace(max_model_turns=2, max_total_tokens=100)
+    monkeypatch.setattr(cli, "_require_live_campaign_terminal", lambda: None)
+    monkeypatch.setattr(cli, "_load_object", lambda path: {"path": str(path)})
+    monkeypatch.setattr(cli, "target_manifest_from_mapping", lambda _value: target)
+    monkeypatch.setattr(cli, "browser_campaign_from_mapping", lambda _value: campaign)
+    monkeypatch.setattr(cli, "adaptive_browser_policy_from_mapping", lambda _value: policy)
+    monkeypatch.setattr(cli, "provider_runtime_from_mapping", lambda _value: runtime)
+    monkeypatch.setattr(cli, "_campaign_executables", lambda _args: ("runner", "browser"))
+    monkeypatch.setattr(cli, "_browser_profile_lease", lambda *_args: nullcontext(None))
+    monkeypatch.setattr(cli, "provider_model_router", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        cli,
+        "run_adaptive_agent_browser_campaign",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            status="pass",
+            rounds=(1, 2),
+            report=tmp_path / "report.json",
+            coordinator_trace=tmp_path / "coordinator.sova-trace",
+            discovery_capsule=tmp_path / "finding.sova",
+        ),
+    )
+    base.allow_provider_calls = True
+    assert cli._hunt_adaptive_browser(base) == 0
+    output = json.loads(capfd.readouterr().out)
+    assert output["rounds"] == 2
+    assert output["discoveryCapsule"].endswith("finding.sova")
+
+
+def test_verify_replay_help_and_bounded_replay_service_branches(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    invalid = SimpleNamespace(
+        accepted=False,
+        state=VerificationState.INVALID,
+        to_mapping=lambda: {"state": "invalid"},
+    )
+    monkeypatch.setattr(cli, "verify_artifact", lambda *_args, **_kwargs: invalid)
+    assert (
+        cli._verify(
+            argparse.Namespace(path=tmp_path / "artifact", require_signature=False, key_id=None)
+        )
+        == 2
+    )
+    capfd.readouterr()
+
+    printed: list[bool] = []
+    parser = argparse.ArgumentParser(add_help=False)
+    monkeypatch.setattr(parser, "print_help", lambda: printed.append(True))
+    assert cli._replay_help(argparse.Namespace(replay_parser=parser)) == 0
+    assert printed == [True]
+
+    with pytest.raises(FormatError, match=r"between 0\.1 seconds"):
+        cli._replay_serve(
+            argparse.Namespace(source=tmp_path / "source", port=0, duration_seconds=0)
+        )
+
+    stopped: list[bool] = []
+    service = SimpleNamespace(url="http://127.0.0.1:1", stop=lambda: stopped.append(True))
+    monkeypatch.setattr(
+        cli,
+        "ReplayHTTPService",
+        lambda _config: SimpleNamespace(start=lambda: service),
+    )
+    monkeypatch.setattr(threading.Event, "wait", lambda _self, _duration: True)
+    assert (
+        cli._replay_serve(
+            argparse.Namespace(source=tmp_path / "source", port=0, duration_seconds=0.1)
+        )
+        == 0
+    )
+    assert stopped == [True]
+    capfd.readouterr()
+
+
+def test_auto_contribution_absence_token_and_failure_are_reported(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args = argparse.Namespace(
+        registry_url=None,
+        registry_token=None,
+        contributor_name="Fixture",
+        contributor_identity="fixture@example.invalid",
+        no_contribute=False,
+    )
+    absent = cli._contribute_run_evidence(
+        args, capsule=None, trace=tmp_path / "run.sova-trace", destination=tmp_path
+    )
+    assert absent["reason"] == "no-capsule-produced"
+    args.registry_url = "http://127.0.0.1:1"
+    no_token = cli._contribute_run_evidence(
+        args,
+        capsule=tmp_path / "finding.sova",
+        trace=tmp_path / "run.sova-trace",
+        destination=tmp_path,
+    )
+    assert no_token["reason"] == "registry-url-without-token"
+
+    args.registry_url = None
+    monkeypatch.setattr(
+        cli,
+        "auto_contribute_after_run",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            FormatError("SOVA-CONTRIBUTION-FIXTURE", "fixture contribution failure")
+        ),
+    )
+    failed = cli._contribute_run_evidence(
+        args,
+        capsule=tmp_path / "finding.sova",
+        trace=tmp_path / "run.sova-trace",
+        destination=tmp_path,
+    )
+    assert failed["reason"] == "contribution-failed"
+    assert failed["error"]["code"] == "SOVA-CONTRIBUTION-FIXTURE"
+
+
+def test_software_melra_factory_copies_policy_and_binds_mutations(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy = tmp_path / "policy.json"
+    policy.write_text('{"allow":true}', encoding="utf-8")
+    observed: dict[str, Any] = {}
+
+    def build(**values: Any) -> object:
+        observed.update(values)
+        return object()
+
+    monkeypatch.setattr(cli, "melra_software_computer_surface_factory", build)
+    result = cli._software_computer_surface_factory(
+        _software_surface_args(
+            melra_node=tmp_path / "node.exe",
+            melra_cli=tmp_path / "melra.js",
+            melra_policy=policy,
+            melra_mutations=" click, ,type_text ",
+        )
+    )
+    assert result is not None
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    copied = observed["policy_factory"](workspace)
+    assert copied.read_bytes() == policy.read_bytes()
+    assert observed["mutations"] == ("click", "type_text")
+
+
+def test_profile_map_and_new_document_atomic_error_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    standard = object()
+    monkeypatch.setattr(cli, "standard_profile", lambda: standard)
+    assert cli._run_profile(None) is standard
+
+    report = SimpleNamespace(graph=object(), to_mapping=lambda: {"mapped": True})
+    monkeypatch.setattr(cli, "build_capability_map", lambda *_args, **_kwargs: report)
+    snapshots: list[object] = []
+    monkeypatch.setattr(cli, "write_tool_snapshot", lambda _path, graph: snapshots.append(graph))
+    args = argparse.Namespace(
+        root=tmp_path,
+        inventory=[],
+        observed_inventory=[],
+        authorize_runtime_inventory=False,
+        baseline=None,
+        write_tool_snapshot=tmp_path / "tools.json",
+        output=None,
+    )
+    assert cli._map(args) == 0
+    assert snapshots == [report.graph]
+    assert json.loads(capfd.readouterr().out) == {"mapped": True}
+
+    writes = iter((2, 3))
+    chunks: list[bytes] = []
+
+    def partial_write(_descriptor: int, value: bytes) -> int:
+        chunks.append(value)
+        return next(writes)
+
+    monkeypatch.setattr(os, "write", partial_write)
+    monkeypatch.setattr(os, "fsync", lambda _descriptor: None)
+    cli._write_all_descriptor(1, b"abcde")
+    assert chunks == [b"abcde", b"cde"]
+    monkeypatch.setattr(os, "write", lambda *_args: 0)
+    with pytest.raises(OSError):
+        cli._write_all_descriptor(1, b"x")
+
+    destination = tmp_path / "atomic.json"
+    monkeypatch.setattr(
+        cli,
+        "_write_all_descriptor",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError()),
+    )
+    with pytest.raises(RuntimeError):
+        cli._write_new_document(destination, {"fixture": True})
+    assert not destination.exists()
+
+
+def test_evidence_trace_behavior_registry_and_self_check_cli_status_branches(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    bundle = SimpleNamespace(to_mapping=lambda: {"artifactType": "sova.evidence"})
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {})
+    monkeypatch.setattr(cli, "build_evidence_bundle", lambda _value: bundle)
+    monkeypatch.setattr(cli, "validate_document", lambda *_args: None)
+    assert cli._evidence(argparse.Namespace(specification=tmp_path / "e.json", format="json")) == 0
+    capfd.readouterr()
+    monkeypatch.setattr(cli, "evidence_to_sarif", lambda _bundle: {"version": "2.1.0"})
+    assert cli._evidence(argparse.Namespace(specification=tmp_path / "e.json", format="sarif")) == 0
+    capfd.readouterr()
+
+    monkeypatch.setattr(cli, "record_local_process", lambda *_args: {"processStatus": "failed"})
+    assert (
+        cli._trace_run(
+            argparse.Namespace(specification=tmp_path / "run.json", destination=tmp_path / "out")
+        )
+        == 3
+    )
+    capfd.readouterr()
+
+    drift = SimpleNamespace(behavioral_drift=True, to_mapping=lambda: {"drift": True})
+    monkeypatch.setattr(cli, "_snapshot_from_file", lambda _path: object())
+    monkeypatch.setattr(cli, "compare_behavior_snapshots", lambda *_args: drift)
+    assert cli._behavior_diff(argparse.Namespace(left=tmp_path / "a", right=tmp_path / "b")) == 1
+    capfd.readouterr()
+
+    upload = tmp_path / "upload.json"
+    upload.write_text("exists", encoding="utf-8")
+    with pytest.raises(FormatError, match="already exists"):
+        cli._registry_prepare_upload(argparse.Namespace(output=upload))
+
+    monkeypatch.setattr(cli, "verify_integrity_manifest", lambda *_args: {"status": "failed"})
+    assert (
+        cli._self_check_verify(
+            argparse.Namespace(root=tmp_path, manifest=tmp_path / "manifest.json")
+        )
+        == 1
+    )
+    capfd.readouterr()
+
+
+def test_direct_trace_command_rejects_noninteractive_empty_sensitive_and_bad_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args = argparse.Namespace(
+        argv=[],
+        working_directory=tmp_path,
+        timeout_seconds=1,
+        capture_profile="standard",
+        destination=tmp_path / "trace",
+    )
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: False))
+    with pytest.raises(FormatError, match="human-operated"):
+        cli._trace_command(args)
+    monkeypatch.setattr(sys, "stdin", SimpleNamespace(isatty=lambda: True))
+    with pytest.raises(FormatError, match="provide an executable"):
+        cli._trace_command(args)
+    args.argv = ["--", "fixture", "--api-key=value"]
+    with pytest.raises(FormatError, match="credential-bearing"):
+        cli._trace_command(args)
+    args.argv = ["--", str(tmp_path / "missing.exe")]
+    with pytest.raises(FormatError, match="does not exist"):
+        cli._trace_command(args)
+    executable = tmp_path / "tool.exe"
+    executable.write_bytes(b"fixture")
+    args.argv = ["--", str(executable)]
+    args.working_directory = tmp_path / "missing-cwd"
+    with pytest.raises(FormatError, match="working directory"):
+        cli._trace_command(args)
+    args.working_directory = tmp_path
+    monkeypatch.setattr(builtins, "input", lambda _prompt="": "wrong")
+    with pytest.raises(FormatError, match="approval phrase"):
+        cli._trace_command(args)
+
+
+def test_monitor_configuration_interrupt_status_and_main_error_rendering(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(cli, "_load_object", lambda _path: {})
+    monkeypatch.setattr(cli, "monitoring_jobs_from_document", lambda *_args, **_kwargs: ())
+    base = argparse.Namespace(
+        specification=tmp_path / "monitor.json",
+        workspace=tmp_path,
+        state=tmp_path / "state.json",
+        alert_webhook=None,
+        alert_secret_env=None,
+    )
+    with pytest.raises(FormatError, match="supplied together"):
+        cli._monitor_service(
+            argparse.Namespace(**{**vars(base), "alert_webhook": "http://127.0.0.1:1"})
+        )
+    with pytest.raises(FormatError, match="environment name is invalid"):
+        cli._monitor_service(
+            argparse.Namespace(
+                **{
+                    **vars(base),
+                    "alert_webhook": "http://127.0.0.1:1",
+                    "alert_secret_env": "bad-name",
+                }
+            )
+        )
+    with pytest.raises(FormatError, match="secret is unavailable"):
+        cli._monitor_service(
+            argparse.Namespace(
+                **{
+                    **vars(base),
+                    "alert_webhook": "http://127.0.0.1:1",
+                    "alert_secret_env": "SOVA_MISSING_FIXTURE_SECRET",
+                }
+            )
+        )
+
+    class Service:
+        def serve(self, *_args: Any, **_kwargs: Any) -> tuple[dict[str, str], ...]:
+            raise KeyboardInterrupt
+
+        @staticmethod
+        def status() -> dict[str, str]:
+            return {"status": "idle"}
+
+    monkeypatch.setattr(cli, "_monitor_service", lambda _args: Service())
+    assert cli._monitor_serve(argparse.Namespace(once=False, poll_seconds=1, **vars(base))) == 0
+    capfd.readouterr()
+
+    class Parser:
+        def __init__(self, error: Exception) -> None:
+            self.error = error
+
+        def parse_args(self, _argv: object) -> argparse.Namespace:
+            return argparse.Namespace(handler=lambda _args: (_ for _ in ()).throw(self.error))
+
+    monkeypatch.setattr(cli, "build_parser", lambda: Parser(FormatError("FIXTURE", "bad")))
+    assert cli.main([]) == 2
+    assert "FIXTURE" in capfd.readouterr().err
+    monkeypatch.setattr(cli, "build_parser", lambda: Parser(OSError("io")))
+    assert cli.main([]) == 2
+    assert "SOVA-IO-ERROR" in capfd.readouterr().err

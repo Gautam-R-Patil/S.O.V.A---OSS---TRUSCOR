@@ -16,7 +16,7 @@ from sova.command_audit import AuditError, audit, command_handlers, function_bod
 
 def test_every_cli_leaf_has_a_unique_registered_handler() -> None:
     handlers = command_handlers()
-    assert len(handlers) == 116
+    assert len(handlers) == 129
     assert len(set(handlers)) == len(handlers)
     assert all(name.startswith("_") for name in handlers.values())
     assert {
@@ -25,6 +25,7 @@ def test_every_cli_leaf_has_a_unique_registered_handler() -> None:
         "detonate action-lab",
         "detonate software",
         "target fixture",
+        "target prove-software",
         "target browser-kit",
         "release sbom",
         "conformance verify",
@@ -35,6 +36,10 @@ def test_every_cli_leaf_has_a_unique_registered_handler() -> None:
         "arena chamber",
         "arena web",
         "arena explore-web",
+        "arena run-software",
+        "arena swarm-software",
+        "arena full-web",
+        "engine reproduce-plan",
         "agent conform-oci",
         "arena swarm-web",
         "probe issue",
@@ -49,6 +54,7 @@ def test_every_cli_leaf_has_a_unique_registered_handler() -> None:
         "registry healthcheck",
         "registry prepare-upload",
         "registry verify-live-index",
+        "registry replay",
         "monitor serve",
         "monitor status",
         "replay serve",

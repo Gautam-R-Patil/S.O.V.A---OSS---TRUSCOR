@@ -7,9 +7,12 @@ from sova.registry.adapters import (
     import_sarif_findings,
     map_external_taxonomy,
 )
+from sova.registry.auto_contribute import auto_contribute_after_run
+from sova.registry.client import RegistryClient, RegistryEndpoint
 from sova.registry.contribution import prepare_contribution, preview_contribution
-from sova.registry.index import build_registry, verify_registry
+from sova.registry.index import build_registry, resolve_registry_capsule, verify_registry
 from sova.registry.model import RegistryEntry, RegistryIndex, VerificationTier
+from sova.registry.pr_contribution import prepare_pr_contribution
 from sova.registry.service import (
     CommunityHTTPService,
     CommunityRegistryStore,
@@ -28,9 +31,12 @@ __all__ = [
     "CommunityRegistryStore",
     "CommunityServiceConfig",
     "CommunityServiceLimits",
+    "RegistryClient",
+    "RegistryEndpoint",
     "RegistryEntry",
     "RegistryIndex",
     "VerificationTier",
+    "auto_contribute_after_run",
     "build_registry",
     "check_community_service_health",
     "create_community_service_token",
@@ -40,7 +46,9 @@ __all__ = [
     "map_external_taxonomy",
     "prepare_community_submission",
     "prepare_contribution",
+    "prepare_pr_contribution",
     "preview_contribution",
+    "resolve_registry_capsule",
     "serialize_community_submission",
     "sync_registry",
     "verify_community_service_index",

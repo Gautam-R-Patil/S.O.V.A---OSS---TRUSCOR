@@ -26,6 +26,33 @@ def test_parser_is_named_sova() -> None:
     assert build_parser().prog == "sova"
 
 
+def test_parser_exposes_multisurface_recording_and_replay_selection() -> None:
+    parser = build_parser()
+    engine = parser.parse_args(
+        [
+            "engine",
+            "full-web",
+            "target.json",
+            "mission.json",
+            "chamber.json",
+            "result",
+            "--record-video",
+            "--record-computer-screen",
+            "--computer-recording-interval-seconds",
+            "0.25",
+        ]
+    )
+    assert engine.record_video is True
+    assert engine.record_computer_screen is True
+    assert engine.computer_recording_interval_seconds == 0.25
+
+    replay = parser.parse_args(
+        ["replay", "open", "finding.sova", "--surface", "computer", "--no-open"]
+    )
+    assert replay.surface == "computer"
+    assert replay.no_open is True
+
+
 def test_empty_invocation_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
     assert main([]) == 0
     captured = capsys.readouterr()

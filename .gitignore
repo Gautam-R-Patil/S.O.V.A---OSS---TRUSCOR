@@ -67,12 +67,16 @@ dist/
 build/
 coverage/
 .coverage
+/.coverage-*
 coverage.json
 /coverage-*.json
 htmlcov/
 *.log
 audit-requirements.txt
 /.validation/
+/.test-artifacts/
+/.test-tmp-*/
+/.tmp-*/
 tmp/
 temp/
 /.tmp/

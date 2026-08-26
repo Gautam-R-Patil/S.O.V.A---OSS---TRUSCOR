@@ -173,6 +173,23 @@ def test_archive_preflight_rejects_compressed_nested_and_prefixed_secrets(tmp_pa
         registry_module._archive_preflight(boundary_secret)
 
 
+def test_archive_preflight_allows_namespaced_authorization_identifiers(tmp_path: Path) -> None:
+    trace = tmp_path / "namespaced-authorization.sova-trace"
+    with zipfile.ZipFile(trace, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "events/000000.jsonl",
+            b'{"authorityTarget":"sova:authorization:synthetic-demo"}\n',
+        )
+
+    registry_module._archive_preflight(trace)
+
+    credential = tmp_path / "authorization-secret.sova-trace"
+    with zipfile.ZipFile(credential, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("events/000000.jsonl", b"authorization=synthetic-secret-value\n")
+    with pytest.raises(FormatError, match="credential-shaped archive content"):
+        registry_module._archive_preflight(credential)
+
+
 def test_archive_preflight_bounds_nested_size_and_depth(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

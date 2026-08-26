@@ -25,10 +25,14 @@ semantics.
 writes one self-contained, offline HTML file. `sova replay capsule CAPSULE
 OUTPUT` verifies a `.sova` package and selects its primary trace, optional
 reproduction trace, and optional typed visual replay without manual extraction.
-If the capsule also contains one typed `replay-cues` object, the renderer
-verifies that its media digest matches the selected recording and that every
-cue names a real passing `oracle.completed` event at the exact recorded
-sequence in the selected trace pair.
+If the capsule contains typed `replay-cues` objects, the renderer verifies that
+each primary cue index binds exactly one recording by digest and that every cue
+names a real passing `oracle.completed` event at the exact recorded sequence in
+the selected trace pair. Browser video and exact-window computer frame archives
+may coexist in one finding. The default is the cue-bound browser recording;
+`--surface computer` selects the cue-bound desktop recording, while
+`--media-object` remains the exact descriptor-level override. Conflicting,
+duplicated, unbound, or mistyped cue indexes fail closed.
 `sova replay serve SOURCE` starts a bounded
 foreground service on literal `127.0.0.1` and prints a random capability URL.
 The service exists for local live tailing; it is not production HTTP.
@@ -43,25 +47,28 @@ Both interfaces provide:
 - payload, redaction, actor, target, phase, and completion details; and
 - an explicit statement that playback performs no recorded action.
 
-When reviewed WebM or MP4 media is supplied, the static page embeds the bytes
-as a local data URL with native playback controls. Media without a cue index is
-identified as session-level rather than event-time synchronized. A valid cue
-index makes the page select the decisive `oracle.completed` event from either
-trace side, seek to its bounded pre-roll, and expose its declared decisive
-playback window. `opensAtDecisiveMoment` is true only when SOVA parses a
-finalized WebM/MP4 duration and proves that the cue and chapter offsets fall
-inside it; it does not assert that the requested pre/post-roll window itself
-fits. The player clamps the requested window to the available media duration.
-Container magic or a cue object alone is insufficient. The page
+When reviewed WebM, MP4, or SOVA exact-window frame media is supplied, the
+static page embeds the selected bytes locally with native video controls or a
+bounded frame player. Media without a cue index is identified as session-level
+rather than event-time synchronized. A valid cue index makes the page select
+the decisive `oracle.completed` event from either trace side, seek to its
+bounded pre-roll or decisive frame, and expose its declared decisive playback
+window. `opensAtDecisiveMoment` is true only when SOVA proves that the cue and
+chapter offsets fall inside the finalized selected media duration; it does not
+assert that the requested pre/post-roll window itself fits. The player clamps
+the requested window to the available media duration. Container magic or a cue
+object alone is insufficient. The page
 displays the synchronization method and uncertainty; it does not call
 host-clock synchronization a cryptographic frame timestamp. Media is never
 accepted by the live-tail service.
 
-Capsule replay uses exact verified object descriptors. If more than one
-candidate comparison trace or visual recording exists, it refuses ambiguity
-and requires an internal object path shown by `sova inspect`. Package members
-are copied into a private temporary directory only long enough to render the
-page; archive member names are never used as host extraction paths.
+Capsule replay uses exact verified object descriptors. Multiple visual
+recordings are admitted only when typed cue indexes establish unique
+digest-bound pairs; surface selection must still identify exactly one pair.
+Ambiguous comparison traces or unindexed visual recordings require an internal
+object path shown by `sova inspect`. Package members are copied into a private
+temporary directory only long enough to render the page; archive member names
+are never used as host extraction paths.
 
 The visual model borrows the useful evidence-navigation pattern of trace
 processors such as Perfetto: multiple time lanes, selection, filtering, and a
@@ -112,11 +119,12 @@ All trace-controlled values enter the DOM through `textContent`, safe element
 properties, or JSON that escapes `<`, `>`, `&`, U+2028, and U+2029. The page has
 a restrictive Content Security Policy, no remote dependencies, no forms, and
 no execution bridge. Trace payloads cannot become HTML, CSS, URLs, or script.
-Static media is limited to one reviewed WebM/MP4 regular file of at most 128
-MiB. Empty, linked, unsupported, ambiguous, or digest-invalid media is refused.
-Replay cues are capped at 64 entries and 256 KiB, require canonical decimal
-timings, must be digest-bound to the selected media, and may reference only
-events present in the selected verified traces.
+The page renders one selected reviewed WebM/MP4 regular file of at most 128 MiB
+or one bounded exact-window SOVA frame archive at a time. Empty, linked,
+unsupported, ambiguous, or digest-invalid media is refused. Replay cues are
+capped at 64 entries and 256 KiB, require canonical decimal timings, declare or
+unambiguously infer `browser`/`computer`, must be digest-bound to the selected
+media, and may reference only events present in the selected verified traces.
 Embedded video pixels are sensitive evidence and receive no automatic visual
 redaction.
 

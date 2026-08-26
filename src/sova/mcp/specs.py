@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import secrets
 import sys
@@ -24,9 +25,6 @@ if TYPE_CHECKING:
 
 _CUA_PIPE = re.compile(r"^\\\\\.\\pipe\\sova-cua-[a-f0-9]{32}$")
 _WINDOWS_PROFILE_COOKIE_MIGRATION = sys.platform == "win32"
-_WINDOWS_PROFILE_CONFIG = (
-    b'{"browser":{"launchOptions":{"args":["--enable-features=TriggerNetworkDataMigration"]}}}\n'
-)
 
 
 def _file(path: Path, role: str) -> str:
@@ -104,9 +102,12 @@ def playwright_stdio_spec(  # noqa: PLR0913 - launch security inputs remain expl
             workspace,
             profile_directory,
             profile_vault_root,
+            record_video=record_video,
         )
     display_args = ("--headless",) if headless else ()
-    video_args = ("--viewport-size", "1280x720", "--caps", "devtools") if record_video else ()
+    video_args: tuple[str, ...] = ("--viewport-size", "1280x720") if record_video else ()
+    if record_video and profile_directory is None:
+        video_args += ("--caps", "devtools")
     return StdioServerSpec(
         "microsoft-playwright-mcp",
         (
@@ -247,6 +248,8 @@ def _playwright_profile_args(
     workspace: Path,
     profile_directory: Path,
     profile_vault_root: Path | None,
+    *,
+    record_video: bool,
 ) -> tuple[str, ...]:
     admission_root = workspace if profile_vault_root is None else profile_vault_root.resolve()
     if not admission_root.is_dir() or admission_root.is_symlink():
@@ -261,11 +264,9 @@ def _playwright_profile_args(
             "Playwright profile directory must be a real existing directory",
         )
     profile_args = ("--user-data-dir", str(profile))
-    if not _WINDOWS_PROFILE_COOKIE_MIGRATION:
-        return profile_args
     config_path = _inside(
         workspace,
-        workspace / ".sova" / "playwright-windows-profile.json",
+        workspace / ".sova" / "playwright-profile.json",
         "Playwright profile configuration",
     )
     if config_path.is_symlink() or (config_path.exists() and not config_path.is_file()):
@@ -273,8 +274,19 @@ def _playwright_profile_args(
             "SOVA-MCP-LAUNCH-PATH",
             "Playwright profile configuration must be a regular file",
         )
-    if not config_path.exists() or config_path.read_bytes() != _WINDOWS_PROFILE_CONFIG:
-        config_path.write_bytes(_WINDOWS_PROFILE_CONFIG)
+    capabilities = ["storage"]
+    if record_video:
+        capabilities.append("devtools")
+    config: dict[str, object] = {"capabilities": capabilities}
+    if _WINDOWS_PROFILE_COOKIE_MIGRATION:
+        config["browser"] = {
+            "launchOptions": {
+                "args": ["--enable-features=TriggerNetworkDataMigration"],
+            }
+        }
+    payload = json.dumps(config, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+    if not config_path.exists() or config_path.read_bytes() != payload:
+        config_path.write_bytes(payload)
     return (*profile_args, "--config", str(config_path))
 
 

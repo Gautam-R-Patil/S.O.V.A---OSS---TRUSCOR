@@ -12,6 +12,7 @@ automation workflow and are not vendored into this repository.
 | `jsonschema` | JSON Schema 2020-12 runtime validation | MIT | [python-jsonschema/jsonschema](https://github.com/python-jsonschema/jsonschema) |
 | `jsonschema-rs` | High-throughput JSON Schema 2020-12 runtime validation; parity-tested against `jsonschema` | MIT | [Stranger6667/jsonschema](https://github.com/Stranger6667/jsonschema) |
 | `mypy` | Static type checking | MIT | [python/mypy](https://github.com/python/mypy) |
+| `pip` | Development environment and isolated wheel-install tooling | MIT | [PyPA pip](https://github.com/pypa/pip) |
 | `pip-audit` | Python dependency vulnerability audit | Apache-2.0 | [pypa/pip-audit](https://github.com/pypa/pip-audit) |
 | `pre-commit` | Local quality-hook runner | MIT | [pre-commit/pre-commit](https://github.com/pre-commit/pre-commit) |
 | `pytest` | Test runner | MIT | [pytest-dev/pytest](https://github.com/pytest-dev/pytest) |
@@ -19,6 +20,7 @@ automation workflow and are not vendored into this repository.
 | `ruff` | Formatting, linting, and Python security rules | MIT | [astral-sh/ruff](https://github.com/astral-sh/ruff) |
 | `types-jsonschema` | Development-only type information for jsonschema | Apache-2.0 | [python/typeshed](https://github.com/python/typeshed) |
 | `uv` | Contributor environment, lockfile, and build runner | Apache-2.0 or MIT | [astral-sh/uv](https://github.com/astral-sh/uv) |
+| `websocket-client` | Development-only installed-Chrome replay acceptance transport | Apache-2.0 | [websocket-client/websocket-client](https://github.com/websocket-client/websocket-client) |
 | `actions/checkout` | GitHub Actions checkout | MIT | [actions/checkout](https://github.com/actions/checkout) |
 | `actions/dependency-review-action` | Pull-request dependency review | MIT | [actions/dependency-review-action](https://github.com/actions/dependency-review-action) |
 | `actions/upload-artifact` | Release-candidate artifact retention | MIT | [actions/upload-artifact](https://github.com/actions/upload-artifact) |

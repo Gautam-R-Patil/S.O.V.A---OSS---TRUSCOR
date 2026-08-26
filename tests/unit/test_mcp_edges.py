@@ -69,9 +69,19 @@ class EdgeClient:
 
 
 class FakeCuaProcess:
-    def __init__(self, *, return_code: int | None = None, wait_timeouts: int = 0) -> None:
+    def __init__(
+        self,
+        *,
+        return_code: int | None = None,
+        wait_timeouts: int = 0,
+        terminate_error: bool = False,
+        kill_error: bool = False,
+    ) -> None:
         self.return_code = return_code
         self.wait_timeouts = wait_timeouts
+        self.terminate_error = terminate_error
+        self.kill_error = kill_error
+        self.stdout = io.BytesIO()
         self.stderr = io.BytesIO(b"synthetic service stderr")
         self.terminated = False
         self.killed = False
@@ -88,9 +98,13 @@ class FakeCuaProcess:
 
     def terminate(self) -> None:
         self.terminated = True
+        if self.terminate_error:
+            raise PermissionError
 
     def kill(self) -> None:
         self.killed = True
+        if self.kill_error:
+            raise PermissionError
         self.return_code = 0
 
 
@@ -220,6 +234,20 @@ def test_stdio_close_prefers_graceful_exit_then_bounds_terminate_and_kill() -> N
     stuck.close()
     assert stuck_process.terminated is True
     assert stuck_process.killed is True
+
+    exit_race_process = FakeCuaProcess(wait_timeouts=1, terminate_error=True)
+    exit_race = client_for(exit_race_process)
+    exit_race_process.return_code = 0
+    exit_race.close()
+
+    unkillable_process = FakeCuaProcess(
+        wait_timeouts=3,
+        terminate_error=True,
+        kill_error=True,
+    )
+    unkillable = client_for(unkillable_process)
+    with pytest.raises(FormatError, match="did not terminate"):
+        unkillable.close()
 
 
 def test_stdio_spec_rejects_non_allowlisted_environment(tmp_path: Path) -> None:

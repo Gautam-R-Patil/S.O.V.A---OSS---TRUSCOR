@@ -811,7 +811,11 @@ class RestrictedLocalExecutor:
             for key in self._environment_allowlist
             if key in os.environ and not _SECRET_ENV.search(key)
         }
-        for key, value in {**context.environment, **requested}.items():
+        # `ExecutionContext.environment` carries SOVA's target/session/binding
+        # identity metadata. It is verifier input, never implicit child-process
+        # environment. Only the action's explicitly reviewed `env` mapping may
+        # cross into the child.
+        for key, value in requested.items():
             if key not in self._environment_allowlist or _SECRET_ENV.search(key):
                 raise FormatError(
                     "SOVA-LOCAL-ENVIRONMENT-DENIED",
@@ -831,7 +835,7 @@ class RestrictedLocalExecutor:
                     "secret environment key is not allowlisted",
                     details={"key": key},
                 )
-            if key in requested or key in context.environment:
+            if key in requested:
                 raise FormatError(
                     "SOVA-LOCAL-SECRET-CONFLICT",
                     "an environment key cannot be supplied as both plaintext "

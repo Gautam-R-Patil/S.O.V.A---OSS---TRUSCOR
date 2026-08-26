@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
@@ -20,7 +21,6 @@ from sova.runtime import BrowserProfileVault
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from pathlib import Path
 
 
 class _Client:
@@ -37,7 +37,13 @@ class _Client:
     def list_tools(self) -> tuple[MCPTool, ...]:
         return tuple(
             MCPTool(name, name, {"type": "object"}, None, {})
-            for name in ("browser_close", "browser_navigate", "browser_snapshot")
+            for name in (
+                "browser_close",
+                "browser_navigate",
+                "browser_set_storage_state",
+                "browser_snapshot",
+                "browser_storage_state",
+            )
         )
 
     def call_tool(
@@ -47,13 +53,37 @@ class _Client:
         *,
         timeout_seconds: float,
     ) -> MCPToolResult:
-        assert name in {"browser_close", "browser_navigate", "browser_snapshot"}
+        assert name in {
+            "browser_close",
+            "browser_navigate",
+            "browser_set_storage_state",
+            "browser_snapshot",
+            "browser_storage_state",
+        }
         assert timeout_seconds in {10.0, 20, 30}
         self._calls += 1
+        if name == "browser_storage_state":
+            Path(str(arguments["filename"])).write_text(
+                '{"cookies":[],"origins":[]}',
+                encoding="utf-8",
+            )
+        if name == "browser_set_storage_state":
+            assert Path(str(arguments["filename"])).is_file()
         if "url" in arguments:
             self._url = str(arguments["url"])
         url = self._url
-        text = f"- Page URL: {url}\n{self._marker if self._calls == 3 else 'VISIBLE'}"
+        marker = "VISIBLE"
+        if name == "browser_snapshot" and url.endswith("/session/set"):
+            marker = self._marker
+        elif name == "browser_snapshot" and url.endswith("/session/check"):
+            marker = (
+                "SOVA_SESSION_PRESENT"
+                if self._marker in {"SOVA_SESSION_MARKER_SET", "SOVA_SESSION_PRESENT"}
+                else self._marker
+            )
+        elif name == "browser_snapshot":
+            marker = self._marker
+        text = f"- Page URL: {url}\n{marker}"
         return MCPToolResult(
             ({"type": "text", "text": text},),
             None,
@@ -90,8 +120,12 @@ def test_persistent_session_probe_is_two_process_signed_and_profile_safe(
     report = json.loads(artifacts.report.read_text(encoding="utf-8"))
     assert artifacts.status == "pass"
     assert report["restart"]["distinctMcpProcesses"] is True
+    assert report["restart"]["observableSessionPresentBeforeRestart"] is True
+    assert report["restart"]["privateCheckpointCreated"] is True
+    assert report["restart"]["privateCheckpointRestored"] is True
     assert report["integrity"]["signedTraceValid"] is True
     assert report["privacy"]["profilePathIncluded"] is False
+    assert report["privacy"]["checkpointContentIncluded"] is False
     assert report["claims"]["arbitraryProviderLoginVerified"] is False
     rendered = artifacts.report.read_text(encoding="utf-8")
     assert "sova_owned_session=active" not in rendered
@@ -193,6 +227,18 @@ def test_persistent_session_failure_paths_are_explicit(
             workspace=workspace,
             request_id="failed-snapshot",
         )
+    with pytest.raises(FormatError, match="navigation did not succeed"):
+        session_module._execute_session_prime(
+            cast("StdioMCPClient", _Client(3, "x", fail_call=1)),
+            origin=origin,
+            workspace=workspace,
+        )
+    with pytest.raises(FormatError, match="snapshot did not succeed"):
+        session_module._execute_session_prime(
+            cast("StdioMCPClient", _Client(4, "x", fail_call=3)),
+            origin=origin,
+            workspace=workspace,
+        )
     runner = tmp_path / "npx"
     browser = tmp_path / "chrome"
     runner.write_bytes(b"fixture")
@@ -248,7 +294,7 @@ def test_persistent_session_failure_paths_are_explicit(
         monkeypatch.setattr(
             session_module,
             "start_stdio_client",
-            lambda _spec, _factory: _Client(5, "x", fail_call=1),
+            lambda _spec, _factory: _Client(5, "x", fail_call=2),
         )
         with pytest.raises(FormatError, match="navigation did not succeed"):
             run_browser_profile_handoff(
@@ -263,7 +309,7 @@ def test_persistent_session_failure_paths_are_explicit(
         monkeypatch.setattr(
             session_module,
             "start_stdio_client",
-            lambda _spec, _factory: _Client(6, "x", fail_call=3),
+            lambda _spec, _factory: _Client(6, "x", fail_call=4),
         )
         with pytest.raises(FormatError, match="snapshot did not succeed"):
             run_browser_profile_handoff(

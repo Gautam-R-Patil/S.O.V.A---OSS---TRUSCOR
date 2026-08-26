@@ -15,6 +15,42 @@ single-input/single-submit contract. It is not a claim that SOVA autonomously
 tested all AI Goat pages, all nine challenges, every UI workflow, arbitrary
 third-party agents, or the absence of other vulnerabilities.
 
+## Fresh local discovery and replay regression — 2026-08-26
+
+A later credential-free local Qwen run added a separate and narrower proof
+chain. In v10, Qwen autonomously selected the successful reviewed Challenge 1
+seed; SOVA then chose the unique enabled submit control, observed the real flag
+through its deterministic oracle, and sealed the decisive turns. That suite did
+not pass end to end because browser accessibility refs changed after reset. The
+failure was retained and led to a fail-closed fresh-control rebinding fix.
+
+The v16 recorded-source regression verified the exact sealed v10 trace digests,
+replayed the same reviewed action semantics against a fresh loopback browser,
+bound the session-scoped textbox ref only after one exact role-and-label match,
+submitted through SOVA's deterministic recovery, passed the flag oracle, reset
+AI Goat, independently rebound the textbox and submit button, and reproduced
+the finding. The suite reported `1/1 pass`, `confirmed-and-reproduced`, six
+separately authorized evidence batches, and no error. This v16 route is a
+recorded-discovery regression, not a claim of a second autonomous discovery.
+
+| Fresh artifact | Recorded value |
+|---|---|
+| v10 sealed source turn | `turn-003.sova-trace`, SHA-256 `c291b5db3af3413f0596c4b5f8ca6fe02f6deebced83f37eba4958894b11fd85` |
+| v16 discovery capsule | SHA-256 `e342f60974ab87463230aed6ba42239af357f89d26678f22658206a70ceb5e3c` |
+| v16 discovery trace | SHA-256 `727fa8ac67330343c78f8834114b8738fa0a638a975e80a2489b85a30667f964` |
+| v16 reproduction trace | SHA-256 `e29a7a7ddb40ec57ca79a89fb122ecc1ee1106f319c7ebacd0bdf2a5363d61a7` |
+| Browser WebM | 306.12 seconds, SHA-256 `b9c00ef8f60150142f76d0b6fe784bd244973f21a1ff08c73599d772bbd8fdc8` |
+| Discovery / reproduction cues | 153.4065 / 303.0155 seconds; 609.5 ms declared uncertainty |
+| Replay cue document | SHA-256 `0e45b24da24b33646c0b20efc8cee5c15735fc8838f95178541c0b1986e005bc` |
+| Generated decisive replay | 25,275,663 bytes; `opensAtDecisiveMoment: true`; inert playback only |
+
+All six v16 traces and `discovery.sova` passed `sova verify
+--require-signature`. `sova replay capsule` selected the reproduction trace as
+primary, the discovery trace as comparison, the browser WebM by digest, and the
+303.0155-second reproduced oracle event as the default decisive cue. The
+full-nine verifier correctly rejected treating this single-challenge run as a
+nine-challenge pass.
+
 ## Frozen run facts
 
 | Field | Recorded value |
@@ -83,7 +119,7 @@ fallback answered a trivial three-word probe only after about two minutes and
 had already timed out on structured browser planning, so it is not counted as
 all-nine provider evidence either.
 
-## Release-wide validation in the same checkout
+## Historical release-wide validation in the same checkout
 
 - 1,506 tests collected: 1,485 passed, 21 capability-gated skips, zero failures;
 - total statement/branch coverage `95.61%` with the recording module at `93%`;
@@ -98,6 +134,27 @@ The 21 skips are explicit optional host/runtime lanes (Codex login, live CUA
 desktop, installed-browser matrix, MELRA, Docker, and gVisor). They are not
 silently counted as passes. The real installed-Chrome/OpenRouter AI Goat lane
 above was run separately because it is credentialed and operator-authorized.
+
+## Fresh release-wide validation — 2026-08-26
+
+- 2,093 public tests passed, 30 capability-gated skips, zero functional failures;
+- combined statement/branch coverage `95.00%` with the `95%` gate unchanged;
+- Ruff and formatting passed across the 440-file public scope; strict mypy
+  passed across 235 source files;
+- parser/coverage audit executed all 129 leaf commands;
+- repository policy and public-boundary scans passed across 714 files;
+- two wheel and source builds were byte-for-byte identical;
+- the wheel contained 256 entries and the source archive 475, with zero
+  distribution-boundary path violations;
+- isolated-wheel installation resolved 11 compatible packages and passed
+  `sova --version`, the complete help surface, offline initialization, doctor,
+  and dependency consistency checks; and
+- the isolated dependencies had no known vulnerabilities; `sova-oss` itself is
+  unpublished and therefore absent from the public advisory index.
+
+The 30 skips remain explicit host/runtime gates, including live Codex/CUA,
+installed-browser matrix cases, MELRA, gVisor, and other operator-enabled lanes.
+They are not counted as passes.
 
 ## Coverage boundary and next acceptance
 

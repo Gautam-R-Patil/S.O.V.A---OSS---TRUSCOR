@@ -231,4 +231,68 @@ def verify_registry(root: Path, *, trusted_key_ids: frozenset[str] = frozenset()
     }
 
 
-__all__ = ["build_registry", "verify_registry"]
+def resolve_registry_capsule(
+    root: Path,
+    *,
+    entry_id: str,
+    version: str,
+    trusted_key_ids: frozenset[str],
+) -> tuple[Path, dict[str, Any]]:
+    """Resolve one exact trusted registry entry as a verified SOVA capsule.
+
+    Registry objects are content-addressed and intentionally have no filename
+    extension. Resolution therefore verifies the signed index, requires an
+    out-of-band trusted signing key, rechecks the selected object after lookup,
+    and validates the bytes as a capsule before returning the inert local path.
+    """
+    if not entry_id or not version or not trusted_key_ids:
+        raise FormatError(
+            "SOVA-REGISTRY-RESOLVE",
+            "registry replay requires an exact entry id/version and trusted signing key",
+        )
+    root = root.resolve()
+    verification = verify_registry(root, trusted_key_ids=trusted_key_ids)
+    if verification["identityTrusted"] is not True:
+        raise FormatError(
+            "SOVA-REGISTRY-UNTRUSTED",
+            "registry replay requires an explicitly trusted index signing key",
+        )
+    raw = strict_json_loads((root / "index.json").read_bytes())
+    if not isinstance(raw, Mapping) or not isinstance(raw.get("index"), Mapping):
+        raise FormatError("SOVA-REGISTRY-INDEX", "signed index is malformed")
+    index = _index_from_mapping(cast("Mapping[str, Any]", raw["index"]))
+    matches = [
+        item for item in index.entries if item.entry_id == entry_id and item.version == version
+    ]
+    if len(matches) != 1:
+        raise FormatError(
+            "SOVA-REGISTRY-RESOLVE",
+            "registry entry id/version did not resolve uniquely",
+        )
+    entry = matches[0]
+    if entry.object_path is None or entry.digest is None:
+        raise FormatError(
+            "SOVA-REGISTRY-LIFECYCLE",
+            "embargoed or withdrawn registry entries cannot be replayed",
+        )
+    path = (root / entry.object_path).resolve()
+    if root not in path.parents or not path.is_file() or path.is_symlink():
+        raise FormatError("SOVA-REGISTRY-OBJECT", "registry object path is missing or unsafe")
+    data = path.read_bytes()
+    if len(data) != entry.size or sha256_digest(data) != entry.digest:
+        raise FormatError("SOVA-REGISTRY-DIGEST", "registry object changed after verification")
+    PackageReader(path).verify("sova.capsule")
+    return path, {
+        "artifactType": "sova.registry-capsule-resolution",
+        "schemaVersion": "0.1.0",
+        "entryId": entry.entry_id,
+        "version": entry.version,
+        "capsule": str(path),
+        "capsuleDigest": entry.digest,
+        "verificationTier": entry.verification_tier.value,
+        "registryKeyId": verification["keyId"],
+        "registryIdentityTrusted": True,
+    }
+
+
+__all__ = ["build_registry", "resolve_registry_capsule", "verify_registry"]

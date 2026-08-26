@@ -390,6 +390,11 @@ class ActionIntent:
     domain: str | None = None
     offensive: bool = False
     irreversible: bool = False
+    request_digest: str | None = None
+    participant_id: str | None = None
+    session_id: str | None = None
+    observation_digest: str | None = None
+    capability_generation: str | None = None
 
     def __post_init__(self) -> None:
         if not self.id or not self.target or not self.action:
@@ -403,6 +408,45 @@ class ActionIntent:
             raise FormatError(
                 "SOVA-AUTH-EVIDENCE-OBLIGATION",
                 "every executable intent requires declared post-action evidence",
+            )
+        for name, value in (
+            ("request digest", self.request_digest),
+            ("observation digest", self.observation_digest),
+            ("capability generation", self.capability_generation),
+        ):
+            if value is not None and _SHA256.fullmatch(value) is None:
+                raise FormatError(
+                    "SOVA-AUTH-EXECUTION-BINDING",
+                    f"intent {name} must be a lowercase SHA-256 digest",
+                )
+        for name, value in (
+            ("participant id", self.participant_id),
+            ("session id", self.session_id),
+        ):
+            if value is not None and (not value or "\x00" in value):
+                raise FormatError(
+                    "SOVA-AUTH-EXECUTION-BINDING",
+                    f"intent {name} must be non-empty and contain no NUL byte",
+                )
+        contextual = (self.participant_id, self.session_id, self.observation_digest)
+        if self.request_digest is None and any(
+            value is not None for value in (*contextual, self.capability_generation)
+        ):
+            raise FormatError(
+                "SOVA-AUTH-EXECUTION-BINDING",
+                "execution context cannot be bound without a canonical request digest",
+            )
+        if self.request_digest is not None and self.capability_generation is None:
+            raise FormatError(
+                "SOVA-AUTH-EXECUTION-BINDING",
+                "a request-bound intent requires a capability generation digest",
+            )
+        if any(value is not None for value in contextual) and not all(
+            value is not None for value in contextual
+        ):
+            raise FormatError(
+                "SOVA-AUTH-EXECUTION-BINDING",
+                "participant, session, and observation bindings must be supplied together",
             )
 
     @property
@@ -423,6 +467,14 @@ class ActionIntent:
             "domain": self.domain,
             "offensive": self.offensive,
             "irreversible": self.irreversible,
+            "executionBinding": {
+                "contractVersion": "0.1",
+                "requestDigest": self.request_digest,
+                "participantId": self.participant_id,
+                "sessionId": self.session_id,
+                "observationDigest": self.observation_digest,
+                "capabilityGeneration": self.capability_generation,
+            },
         }
 
 
@@ -441,6 +493,7 @@ class AuthorityEnvelope:
     single_use: bool
     ownership: str
     required_containment_digest: str
+    allow_irreversible: bool = False
 
     def __post_init__(self) -> None:
         if not self.id:
@@ -457,6 +510,11 @@ class AuthorityEnvelope:
             raise FormatError(
                 "SOVA-AUTH-CONTAINMENT-DIGEST",
                 "authority requires a lowercase SHA-256 containment digest",
+            )
+        if self.allow_irreversible and self.ownership == "legal-offline":
+            raise FormatError(
+                "SOVA-AUTH-IRREVERSIBLE-OWNERSHIP",
+                "an offline legal-acquisition authority cannot allow irreversible effects",
             )
 
     @property
@@ -476,6 +534,7 @@ class AuthorityEnvelope:
             "singleUse": self.single_use,
             "ownership": self.ownership,
             "requiredContainmentDigest": self.required_containment_digest,
+            "allowIrreversible": self.allow_irreversible,
         }
 
 
@@ -794,6 +853,11 @@ class AuthorizationDecision:
     budget_after: BudgetCost | None
     approval_token_digest: str | None
     decided_at: datetime
+    request_digest: str | None = None
+    participant_id: str | None = None
+    session_id: str | None = None
+    observation_digest: str | None = None
+    capability_generation: str | None = None
 
     @property
     def allowed(self) -> bool:
@@ -819,11 +883,19 @@ class AuthorizationDecision:
             "approvalTokenDigest": self.approval_token_digest,
             "decidedAt": _timestamp(self.decided_at),
             "decidedBy": "sova.authorization-kernel/0.1",
+            "executionBinding": {
+                "contractVersion": "0.1",
+                "requestDigest": self.request_digest,
+                "participantId": self.participant_id,
+                "sessionId": self.session_id,
+                "observationDigest": self.observation_digest,
+                "capabilityGeneration": self.capability_generation,
+            },
         }
 
 
 def _approval_level(intent: ActionIntent) -> ApprovalLevel | None:
-    if intent.offensive or intent.effect == EffectClass.DESTRUCTIVE:
+    if intent.offensive or intent.irreversible or intent.effect == EffectClass.DESTRUCTIVE:
         return ApprovalLevel.DESTRUCTIVE
     if intent.effect == EffectClass.EXTERNAL:
         return ApprovalLevel.EXTERNAL
@@ -862,10 +934,22 @@ class AuthorizationKernel:
         scope_allowed, scope_reasons = authority.scope.allows(intent)
         if not scope_allowed:
             reasons.extend(scope_reasons)
+        if intent.participant_id is not None and intent.participant_id != authority.subject.id:
+            reasons.append("participant-binding-mismatch")
         if intent.effect > authority.max_effect:
             reasons.append("effect-exceeds-authority")
-        if intent.irreversible:
+        if intent.irreversible and not authority.allow_irreversible:
             reasons.append("irreversible-effect-prohibited")
+        if (
+            intent.irreversible
+            and authority.allow_irreversible
+            and authority.ownership
+            not in {
+                "self",
+                "explicit",
+            }
+        ):
+            reasons.append("irreversible-requires-proven-ownership")
         proof_allowed, proof_reasons = validate_control_proof(
             proof,
             target=intent.target,
@@ -909,24 +993,29 @@ class AuthorizationKernel:
             ledger.consume(intent.cost)
             after = ledger.used
         return AuthorizationDecision(
-            "allowed" if not reasons else "denied",
-            authority.id,
-            authority.digest,
-            authority.issued_by.id,
-            authority.issued_by.kind,
-            authority.subject.id,
-            authority.subject.kind,
-            authority.ownership,
-            sha256_digest(canonical_json_bytes(authority.scope.to_mapping())),
-            intent.digest,
-            proof.digest,
-            containment_digest,
-            tuple(reasons),
-            tuple(sorted(intent.required_evidence)),
-            before,
-            after,
-            approval_digest,
-            current,
+            status="allowed" if not reasons else "denied",
+            authority_id=authority.id,
+            authority_digest=authority.digest,
+            issued_by_id=authority.issued_by.id,
+            issued_by_kind=authority.issued_by.kind,
+            subject_id=authority.subject.id,
+            subject_kind=authority.subject.kind,
+            ownership=authority.ownership,
+            scope_digest=sha256_digest(canonical_json_bytes(authority.scope.to_mapping())),
+            intent_digest=intent.digest,
+            proof_digest=proof.digest,
+            containment_digest=containment_digest,
+            reasons=tuple(reasons),
+            required_evidence=tuple(sorted(intent.required_evidence)),
+            budget_before=before,
+            budget_after=after,
+            approval_token_digest=approval_digest,
+            decided_at=current,
+            request_digest=intent.request_digest,
+            participant_id=intent.participant_id,
+            session_id=intent.session_id,
+            observation_digest=intent.observation_digest,
+            capability_generation=intent.capability_generation,
         )
 
 

@@ -14,7 +14,7 @@ human text or HTML artifact is the command's purpose.
 | First value | `map`, `check`, `demo`, `safety backends`, `safety attest-docker`, `safety attest-gvisor`, `executors receipts` |
 | Search and analysis | `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt adaptive-browser`, `hunt-demo`, `forensics reconstruct`, `forensics attribute`, `forensics browser-counterfactual`, `forensics benchmark`, `forensics blind-fixture`, `forensics blind-run`, `forensics blind-score`, `forensics blind-keygen`, `forensics blind-sign-key`, `evidence`, `case build`, `adjudicate`, `compose` |
 | Rehearsal and monitoring | `rehearse prepare`, `rehearse run`, `rehearse agent-run`, `rehearse export`, `trace command`, `trace run`, `trace snapshot`, `diff`, `sentinel`, `monitor serve`, `monitor status`, `ci`, `self-check` |
-| Registry/community | `registry init-service`, `registry prepare-upload`, `registry serve`, `registry healthcheck`, `registry verify-live-index`, `registry verify`, `sync`, `contribute`, `probe issue`, `probe verify`, `arena run`, `arena agent-run`, `arena chamber`, `arena web`, `arena explore-web`, `arena swarm-web`, `leaderboard build`, `ctf build` |
+| Registry/community | `registry init-service`, `registry prepare-upload`, `registry serve`, `registry healthcheck`, `registry verify-live-index`, `registry verify`, `registry replay`, `sync`, `contribute`, `probe issue`, `probe verify`, `arena run`, `arena agent-run`, `arena chamber`, `arena web`, `arena explore-web`, `arena swarm-web`, `arena run-software`, `arena swarm-software`, `arena full-web`, `leaderboard build`, `ctf build` |
 | Extensions and agents | `extension discover`, `extension prepare`, `extension run`, `agent conform-oci` |
 | Local MCP | `mcp manifest`, `mcp init-control`, `mcp approve`, `mcp serve` |
 | Release and compatibility | `release sbom`, `release checksums`, `release verify-checksums`, `conformance export`, `conformance verify` |
@@ -160,6 +160,22 @@ audit-only, and video does not capture participant planning or total host
 activity. See the
 [browser swarm specification](../specifications/executor-backed-browser-swarm-0.1.md).
 
+`engine full-web` composes the authorized browser/workspace engine with an
+independently authorized exact computer window and/or reviewed process surface.
+Use `--record-video --record-computer-screen` to package primary and fresh
+reproduction evidence for both visual surfaces in the same finding. Plain
+`sova replay FINDING.sova` opens the cue-bound browser proof; add
+`--surface computer` to open the exact authorized HWND frames at the same
+decisive passing oracle event. Computer capture remains bounded to the measured
+window and is not a recording of the whole desktop.
+
+`arena full-web` is not a second or reduced Arena implementation. It invokes
+that exact full-capability engine, retains its authorization, deterministic
+oracle, fresh-reproduction, signed-trace, capsule, contribution, and two-surface
+replay contracts, and labels the streamed and terminal reports as Arena
+artifacts. `arena run-software` and `arena swarm-software` apply the same
+single-engine rule to separately launched, measured local applications.
+
 `rehearse agent-run` asks one tool-free provider strategist to propose a strict,
 bounded portable plan for an already prepared workspace. It requires an exact
 approval before disclosing the bounded sanitized inventory and another exact
@@ -184,6 +200,11 @@ public service still requires an operator-owned domain and TLS policy, identity
 and authorization, human moderation, backups and restore exercises, abuse and
 DDoS controls, monitoring, and incident response. See the [community service
 specification](../specifications/self-hosted-community-service-0.1.md).
+After an offline registry and its publisher key are trusted, `registry replay`
+resolves one exact entry/version through that verified index before rendering
+it. `--nested-capsule` chooses an aggregate finding and `--surface browser` or
+`--surface computer` chooses only the corresponding digest-bound decisive
+visual proof; it never executes the capsule.
 
 `sova monitor serve` schedules only declared local snapshot comparisons. It has
 no command/provider/URL field, rejects overlapping instances through an OS

@@ -19,7 +19,12 @@ from sova.executors import (
     SideEffect,
 )
 from sova.formats.errors import FormatError
-from sova.live import SemanticBrowserAction, SemanticBrowserMission
+from sova.live import (
+    SemanticBrowserAction,
+    SemanticBrowserMission,
+    SemanticBrowserObservation,
+    SemanticExecutionBatch,
+)
 from sova.live.browser import owned_web_target, verified_browser_control
 from sova.models import ScriptedModel, ScriptedTurn
 from sova.runtime import ModelRouter, RoleKind
@@ -144,6 +149,339 @@ def test_scenario_keeps_modal_click_and_dialog_atomic_before_snapshot() -> None:
     assert scenario["extensions"]["x-sova-semantic-browser"]["actionSnapshotStepIds"] == [
         "modal-action-002-snapshot"
     ]
+
+
+def test_scenario_settles_submitted_text_before_signed_snapshot() -> None:
+    scenario, action_ids = driver_module._scenario(
+        _mission(),
+        (
+            SemanticBrowserAction(
+                "browser.type",
+                {
+                    "element": "Challenge chat",
+                    "ref": "f2e96",
+                    "text": "reviewed candidate",
+                    "submit": True,
+                },
+            ),
+        ),
+        key="submitted",
+        reset_and_setup=False,
+    )
+    steps = scenario["procedure"]["steps"]
+    assert [step["id"] for step in steps] == [
+        "submitted-action-001",
+        "submitted-action-001-settle-01",
+        "submitted-action-001-settle-02",
+        "submitted-action-001-settle-03",
+        "submitted-action-001-settle-04",
+        "submitted-action-001-snapshot",
+    ]
+    assert action_ids == ("submitted-action-001",)
+    waits = steps[1:-1]
+    assert [step["inputs"] for step in waits] == [
+        {"textGone": "Generating..."},
+        {"textGone": "Loading..."},
+        {"textGone": "Processing..."},
+        {"textGone": "Thinking..."},
+    ]
+    assert all(step["onFailure"] == "continue" for step in waits)
+    assert all("offensive" not in step["inputs"] for step in waits)
+    extension = scenario["extensions"]["x-sova-semantic-browser"]
+    assert extension["settlementStepIds"] == [step["id"] for step in waits]
+    assert scenario["parameters"]["postSubmitSettlement"] == {
+        "kind": "bounded-visible-text-gone",
+        "markers": ["Generating...", "Loading...", "Processing...", "Thinking..."],
+        "enabled": True,
+    }
+
+
+def test_scenario_settles_unique_submit_click_but_not_an_unrelated_click() -> None:
+    cases = (
+        (
+            "submit-click",
+            "Send challenge message",
+            ["browser.click", *("browser.wait" for _ in range(4)), "browser.snapshot"],
+        ),
+        ("other-click", "Open settings", ["browser.click", "browser.snapshot"]),
+    )
+    for key, element, expected_actions in cases:
+        scenario, _action_ids = driver_module._scenario(
+            _mission(),
+            (SemanticBrowserAction("browser.click", {"element": element, "ref": "f4"}),),
+            key=key,
+            reset_and_setup=False,
+        )
+        assert [step["action"] for step in scenario["procedure"]["steps"]] == expected_actions
+
+
+def test_scenario_uses_declared_bounded_submit_latency_budget() -> None:
+    scenario, _action_ids = driver_module._scenario(
+        _mission(),
+        (
+            SemanticBrowserAction(
+                "browser.click", {"element": "Send challenge message", "ref": "f4"}
+            ),
+        ),
+        key="slow-submit",
+        reset_and_setup=False,
+        post_submit_settlement_seconds=65,
+    )
+    steps = scenario["procedure"]["steps"]
+    assert [step["action"] for step in steps] == [
+        "browser.click",
+        "browser.wait",
+        "browser.wait",
+        "browser.wait",
+        "browser.snapshot",
+    ]
+    assert [step["inputs"] for step in steps[1:-1]] == [
+        {"time": 30},
+        {"time": 30},
+        {"time": 5},
+    ]
+    assert scenario["parameters"]["postSubmitSettlement"] == {
+        "kind": "bounded-declared-time",
+        "seconds": 65,
+        "chunks": [30, 30, 5],
+        "enabled": True,
+    }
+
+
+@pytest.mark.parametrize("seconds", (-1, 181, True))
+def test_scenario_rejects_invalid_submit_latency_budget(seconds: int) -> None:
+    with pytest.raises(FormatError, match="post-submit settlement"):
+        driver_module._scenario(
+            _mission(),
+            (),
+            key="invalid-settlement",
+            reset_and_setup=False,
+            post_submit_settlement_seconds=seconds,
+        )
+
+
+def test_reproduction_rebinds_only_one_exact_fresh_accessible_control() -> None:
+    observation = SemanticBrowserObservation(
+        "http://127.0.0.1:9123/start",
+        "Owned fixture",
+        (
+            '- textbox "Message" [ref=f9]\n'
+            '- button "Message" [ref=f10]\n'
+            '- button "Send challenge message" [disabled] [ref=f11]'
+        ),
+    )
+    recorded = SemanticBrowserAction(
+        "browser.type",
+        {"element": 'textbox "Message"', "ref": "f2", "text": "blue owl"},
+    )
+    rebound, records = driver_module._rebind_reproduction_action(
+        _mission(),
+        recorded,
+        observation,
+        action_index=1,
+    )
+    assert rebound.arguments == {
+        "element": 'textbox "Message"',
+        "ref": "f9",
+        "text": "blue owl",
+    }
+    assert len(records) == 1
+    assert records[0]["recordedRef"] == "f2"
+    assert records[0]["freshRef"] == "f9"
+    assert records[0]["observationDigest"] == observation.digest
+
+    ambiguous = replace(
+        observation,
+        snapshot=observation.snapshot + '\n- textbox "Message" [ref=f12]',
+    )
+    with pytest.raises(FormatError, match="exactly one compatible control"):
+        driver_module._rebind_reproduction_action(
+            _mission(),
+            recorded,
+            ambiguous,
+            action_index=1,
+        )
+
+
+def test_reproduction_rebinding_handles_drag_passthrough_and_missing_metadata() -> None:
+    observation = SemanticBrowserObservation(
+        "http://127.0.0.1:9123/start",
+        "Owned fixture",
+        '- button "Start" [ref=f20]\n- button "End" [ref=f21]',
+    )
+    passthrough = SemanticBrowserAction("browser.press", {"key": "Enter"})
+    unchanged, records = driver_module._rebind_reproduction_action(
+        _mission(), passthrough, observation, action_index=1
+    )
+    assert unchanged is passthrough
+    assert records == ()
+
+    mission = replace(_mission(), allowed_actions=(*_mission().allowed_actions, "browser.drag"))
+    drag = SemanticBrowserAction(
+        "browser.drag",
+        {
+            "startElement": 'button "Start"',
+            "startTarget": "f2",
+            "endElement": 'button "End"',
+            "endTarget": "f3",
+        },
+    )
+    rebound, records = driver_module._rebind_reproduction_action(
+        mission, drag, observation, action_index=2
+    )
+    assert rebound.arguments["startTarget"] == "f20"
+    assert rebound.arguments["endTarget"] == "f21"
+    assert [record["locatorField"] for record in records] == ["startTarget", "endTarget"]
+
+    malformed = SemanticBrowserAction("browser.click", {"ref": "f2"})
+    with pytest.raises(FormatError, match="missing its reviewed locator"):
+        driver_module._rebind_reproduction_action(
+            _mission(), malformed, observation, action_index=3
+        )
+
+
+def test_reproduction_emits_terminal_evidence_after_an_intermediate_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    driver = object.__new__(driver_module.PlaywrightSemanticBrowserDriver)
+    discovery = tmp_path / "discovery.sova-trace"
+    discovery.write_bytes(b"discovery")
+    driver.discovery_trace = discovery
+    driver.trace_paths = []
+    driver.reproduction_rebindings = []
+    observation = SemanticBrowserObservation(
+        "http://127.0.0.1:9123/start",
+        "Owned fixture",
+        '- textbox "Message" [ref=f9]\n- button "Send" [ref=f10]',
+    )
+    calls: list[str] = []
+
+    def run(
+        self: driver_module.PlaywrightSemanticBrowserDriver,
+        _mission_value: SemanticBrowserMission,
+        _actions: tuple[SemanticBrowserAction, ...],
+        *,
+        key: str,
+        reset_and_setup: bool,
+        source_trace_digest: str | None = None,
+    ) -> SemanticExecutionBatch:
+        del reset_and_setup, source_trace_digest
+        calls.append(key)
+        trace = tmp_path / f"{key}.sova-trace"
+        trace.write_bytes(key.encode())
+        self.trace_paths.append(trace)
+        status = "failed" if key == "reproduction-step-001" else "succeeded"
+        return SemanticExecutionBatch(observation, (status,), (key,), (observation.url,))
+
+    monkeypatch.setattr(driver_module.PlaywrightSemanticBrowserDriver, "_run", run)
+    batch = driver.reproduce(
+        _mission(),
+        (
+            SemanticBrowserAction(
+                "browser.type",
+                {"element": 'textbox "Message"', "ref": "f2", "text": "blue owl"},
+            ),
+            SemanticBrowserAction("browser.click", {"element": "Send", "ref": "f3"}),
+        ),
+    )
+
+    assert calls == ["reproduction-setup", "reproduction-step-001", "reproduction"]
+    assert batch.action_statuses == ("succeeded", "failed", "succeeded")
+    assert len(driver.reproduction_actions) == 1
+    assert driver.reproduction_actions[0].arguments["ref"] == "f9"
+
+
+def test_reproduction_with_no_recorded_actions_still_emits_terminal_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    driver = object.__new__(driver_module.PlaywrightSemanticBrowserDriver)
+    discovery = tmp_path / "discovery.sova-trace"
+    discovery.write_bytes(b"discovery")
+    driver.discovery_trace = discovery
+    driver.trace_paths = []
+    driver.reproduction_rebindings = []
+    observation = SemanticBrowserObservation(
+        "http://127.0.0.1:9123/start",
+        "Owned fixture",
+        '- textbox "Message" [ref=f9]',
+    )
+    calls: list[str] = []
+
+    def run(
+        self: driver_module.PlaywrightSemanticBrowserDriver,
+        _mission_value: SemanticBrowserMission,
+        _actions: tuple[SemanticBrowserAction, ...],
+        *,
+        key: str,
+        reset_and_setup: bool,
+        source_trace_digest: str | None = None,
+    ) -> SemanticExecutionBatch:
+        del reset_and_setup, source_trace_digest
+        calls.append(key)
+        trace = tmp_path / f"{key}.sova-trace"
+        trace.write_bytes(key.encode())
+        self.trace_paths.append(trace)
+        return SemanticExecutionBatch(observation, ("succeeded",), (key,), (observation.url,))
+
+    monkeypatch.setattr(driver_module.PlaywrightSemanticBrowserDriver, "_run", run)
+    batch = driver.reproduce(_mission(), ())
+
+    assert calls == ["reproduction-setup", "reproduction"]
+    assert batch.action_statuses == ("succeeded", "succeeded")
+    assert driver.reproduction_actions == ()
+
+
+def test_reproduction_rejects_an_oracle_already_present_after_fresh_reset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    driver = object.__new__(driver_module.PlaywrightSemanticBrowserDriver)
+    driver.discovery_trace = None
+    contaminated = SemanticBrowserObservation(
+        "http://127.0.0.1:9123/start",
+        "Owned fixture",
+        "- status: SOVA_WORKFLOW_TRIGGERED",
+        oracle_passed=True,
+    )
+
+    def run(
+        _self: driver_module.PlaywrightSemanticBrowserDriver,
+        _mission_value: SemanticBrowserMission,
+        _actions: tuple[SemanticBrowserAction, ...],
+        *,
+        key: str,
+        reset_and_setup: bool,
+        source_trace_digest: str | None = None,
+    ) -> SemanticExecutionBatch:
+        del key, reset_and_setup, source_trace_digest
+        return SemanticExecutionBatch(contaminated, ("succeeded",))
+
+    monkeypatch.setattr(driver_module.PlaywrightSemanticBrowserDriver, "_run", run)
+    with pytest.raises(FormatError, match="already present"):
+        driver.reproduce(_mission(), ())
+
+
+def test_scenario_does_not_invent_unapproved_post_submit_wait() -> None:
+    mission = replace(
+        _mission(),
+        allowed_actions=tuple(
+            action for action in _mission().allowed_actions if action != "browser.wait"
+        ),
+    )
+    scenario, _action_ids = driver_module._scenario(
+        mission,
+        (
+            SemanticBrowserAction(
+                "browser.type",
+                {"target": "#message", "text": "reviewed candidate", "submit": True},
+            ),
+        ),
+        key="no-wait-grant",
+        reset_and_setup=False,
+    )
+    steps = scenario["procedure"]["steps"]
+    assert [step["action"] for step in steps] == ["browser.type", "browser.snapshot"]
+    assert scenario["extensions"]["x-sova-semantic-browser"]["settlementStepIds"] == []
+    assert scenario["parameters"]["postSubmitSettlement"]["enabled"] is False
 
 
 @pytest.mark.parametrize("remaining", (0.0, float("nan"), float("inf")))
@@ -271,6 +609,118 @@ def test_deadline_executor_refuses_before_underlying_call_after_expiry(
     assert outcome.output["executed"] is False
 
 
+def test_deadline_executor_reserves_time_for_terminal_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = SimpleNamespace(now=10.0)
+    calls: list[ActionRequest] = []
+
+    def execute(request: ActionRequest, *_args: object) -> ActionOutcome:
+        calls.append(request)
+        if request.action == "browser.wait":
+            clock.now = 15.0
+        return ActionOutcome(request.id, OutcomeStatus.SUCCEEDED, SideEffect.READ, {})
+
+    executor = SimpleNamespace(
+        name="fixture-browser",
+        capabilities=lambda: (
+            Capability(
+                "browser.wait",
+                "0.1",
+                SideEffect.READ,
+                idempotent=True,
+                evidence=("aria",),
+            ),
+            Capability(
+                "browser.snapshot",
+                "0.1",
+                SideEffect.READ,
+                idempotent=True,
+                evidence=("aria",),
+            ),
+        ),
+        execute=execute,
+    )
+    monkeypatch.setattr(cast("Any", driver_module).time, "monotonic", lambda: clock.now)
+    bounded = driver_module._DeadlineBatchExecutor(
+        cast("Any", executor),
+        deadline=20.0,
+        final_snapshot_reserve_seconds=5.0,
+    )
+    cancellation = cast("Any", SimpleNamespace(cancelled=False))
+
+    wait = bounded.execute(
+        ActionRequest("wait", "browser.wait", {}, 120),
+        object(),
+        cancellation,
+    )
+    snapshot = bounded.execute(
+        ActionRequest("snapshot", "browser.snapshot", {}, 120),
+        object(),
+        cancellation,
+    )
+
+    assert wait.status == OutcomeStatus.TIMEOUT
+    assert wait.error_code == "SOVA-SEMANTIC-BROWSER-EVIDENCE-RESERVE"
+    assert snapshot.status == OutcomeStatus.SUCCEEDED
+    assert [request.timeout_seconds for request in calls] == [5.0, 5.0]
+
+
+def test_deadline_executor_does_not_start_work_inside_snapshot_reserve(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[ActionRequest] = []
+
+    def execute(request: ActionRequest, *_args: object) -> ActionOutcome:
+        calls.append(request)
+        return ActionOutcome(request.id, OutcomeStatus.SUCCEEDED, SideEffect.READ, {})
+
+    executor = SimpleNamespace(
+        name="fixture-browser",
+        capabilities=lambda: (
+            Capability(
+                "browser.wait",
+                "0.1",
+                SideEffect.READ,
+                idempotent=True,
+                evidence=("aria",),
+            ),
+            Capability(
+                "browser.snapshot",
+                "0.1",
+                SideEffect.READ,
+                idempotent=True,
+                evidence=("aria",),
+            ),
+        ),
+        execute=execute,
+    )
+    monkeypatch.setattr(cast("Any", driver_module).time, "monotonic", lambda: 18.0)
+    bounded = driver_module._DeadlineBatchExecutor(
+        cast("Any", executor),
+        deadline=20.0,
+        final_snapshot_reserve_seconds=5.0,
+    )
+    cancellation = cast("Any", SimpleNamespace(cancelled=False))
+
+    wait = bounded.execute(
+        ActionRequest("wait", "browser.wait", {}, 120),
+        object(),
+        cancellation,
+    )
+    snapshot = bounded.execute(
+        ActionRequest("snapshot", "browser.snapshot", {}, 120),
+        object(),
+        cancellation,
+    )
+
+    assert wait.status == OutcomeStatus.TIMEOUT
+    assert wait.error_code == "SOVA-SEMANTIC-BROWSER-EVIDENCE-RESERVE"
+    assert snapshot.status == OutcomeStatus.SUCCEEDED
+    assert [request.id for request in calls] == ["snapshot"]
+    assert calls[0].timeout_seconds == 2.0
+
+
 def test_deadline_executor_fails_closed_when_underlying_call_returns_late(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -388,7 +838,11 @@ def test_snapshot_extraction_bounding_location_and_status_guards(
     bounded = driver_module._bounded_snapshot(long)
     assert "[SOVA SNAPSHOT TRUNCATED]" in bounded
 
-    monkeypatch.setattr(driver_module, "_snapshot_text", lambda *_args: "Page title: fixture")
+    monkeypatch.setattr(
+        driver_module,
+        "_snapshot_text",
+        lambda *_args, **_kwargs: "Page title: fixture",
+    )
     with pytest.raises(FormatError, match="current page URL"):
         driver_module._observation(trace, "snapshot", oracle_passed=False)
 
@@ -430,6 +884,46 @@ def test_snapshot_extraction_skips_empty_and_unrelated_events(
         lambda _path: SimpleNamespace(events=lambda: events),
     )
     assert driver_module._snapshot_text(tmp_path / "trace.sova-trace", "snapshot") == "usable"
+
+
+def test_snapshot_extraction_uses_only_explicit_signed_timeout_fallbacks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events = [
+        {
+            "kind": "tool.completed",
+            "phase": "unrelated",
+            "payload": {"outcome": {"output": {"text": ["untrusted fallback"]}}},
+        },
+        {
+            "kind": "tool.completed",
+            "phase": "settlement-01",
+            "payload": {
+                "outcome": {
+                    "output": {
+                        "text": [
+                            "### Page\n- Page URL: http://127.0.0.1:9123/challenge\n"
+                            "### Snapshot\n- [Snapshot](page.yml)"
+                        ]
+                    }
+                }
+            },
+        },
+    ]
+    monkeypatch.setattr(
+        driver_module,
+        "TraceReader",
+        lambda _path: SimpleNamespace(events=lambda: events),
+    )
+    trace = tmp_path / "trace.sova-trace"
+    with pytest.raises(FormatError, match="no usable final"):
+        driver_module._snapshot_text(trace, "final-snapshot")
+    assert "127.0.0.1:9123" in driver_module._snapshot_text(
+        trace,
+        "final-snapshot",
+        fallback_step_ids=("settlement-01",),
+    )
 
 
 def test_snapshot_disclosure_fails_closed_if_redactor_withholds_text(

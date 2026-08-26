@@ -40,8 +40,63 @@ _MAX_SELECT_VALUE_CHARS = 256
 _MAX_COVERAGE_LABELS = 64
 _MAX_COVERAGE_LABEL_CHARS = 256
 _MAX_REASON_CHARS = 512
+_MAX_REPAIR_CONTROLS = 32
+_MAX_INTERACTIVE_CONTROLS = 64
+_MAX_CONTROL_DESCRIPTION_CHARS = 512
 _ATOMIC_MODAL_ACTIONS = 2
 _REF = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,127}$")
+_SNAPSHOT_REF = re.compile(r"\[ref=([A-Za-z][A-Za-z0-9_-]{0,127})\]")
+_TEXT_ENTRY_ROLE = re.compile(r"\b(?:textbox|searchbox|combobox|spinbutton)\b", re.IGNORECASE)
+_SELECT_ROLE = re.compile(r"\b(?:combobox|listbox)\b", re.IGNORECASE)
+_INTERACTIVE_SNAPSHOT_ROLE = re.compile(
+    r"\b(?:button|checkbox|combobox|link|listbox|menuitem|radio|searchbox|slider|spinbutton|tab|textbox)\b",
+    re.IGNORECASE,
+)
+_ACCESSIBLE_CONTROL_LINE = re.compile(
+    r'\b(?P<role>button|checkbox|combobox|link|listbox|menuitem|radio|searchbox|slider|spinbutton|tab|textbox)\s+"(?P<label>[^"]{1,256})"[^\n]*?\[ref=(?P<ref>[A-Za-z][A-Za-z0-9_-]{0,127})\]',
+    re.IGNORECASE,
+)
+_CONTROL_DESCRIPTION = re.compile(
+    r'^(?P<role>button|checkbox|combobox|link|listbox|menuitem|radio|searchbox|slider|spinbutton|tab|textbox)\s+"(?P<label>[^"]{1,256})"$',
+    re.IGNORECASE,
+)
+_TEXT_VALUE_AFTER_REF = re.compile(
+    r"\[ref=[A-Za-z][A-Za-z0-9_-]{0,127}\]\s*:\s*\S",
+    re.IGNORECASE,
+)
+_BUTTON_ROLE = re.compile(r"\bbutton\b", re.IGNORECASE)
+_SUBMIT_LABEL = re.compile(r"\b(?:send|submit)\b", re.IGNORECASE)
+_QUOTED_LABEL = re.compile(r'\bbutton\s+"([^"]+)"', re.IGNORECASE)
+_PLANNER_REPAIR_HINTS = {
+    "SOVA-SEMANTIC-WORKFLOW-LOCATOR": (
+        "Use exactly one locator. A ref is only the identifier characters inside [ref=...]."
+    ),
+    "SOVA-SEMANTIC-WORKFLOW-LOCATOR-CONFLICT": (
+        "Use a different observed ref for each different control."
+    ),
+    "SOVA-SEMANTIC-WORKFLOW-LOCATOR-NOT-OBSERVED": (
+        "Copy a ref that occurs exactly once in the current accessibility snapshot."
+    ),
+    "SOVA-SEMANTIC-WORKFLOW-LOCATOR-ROLE": (
+        "Choose the ref on the same snapshot line as the required interactive role; typing must "
+        "use a textbox, searchbox, combobox, or spinbutton, never a parent generic wrapper."
+    ),
+    "SOVA-SEMANTIC-WORKFLOW-ELEMENT-IDENTITY": (
+        "Copy the control's exact quoted accessible label into element, or use the canonical "
+        'role plus label form such as textbox "Type your attack...".'
+    ),
+    "SOVA-SEMANTIC-WORKFLOW-ORACLE-CONTAMINATION": (
+        "Do not place the mission's hidden success marker in any target input. Exercise the "
+        "reviewed workflow and let only target-produced evidence satisfy the oracle."
+    ),
+    "SOVA-SEMANTIC-WORKFLOW-NOOP-TYPE": (
+        "The selected text entry already contains the exact proposed text. Choose a different "
+        "visible action or deliberately propose different text."
+    ),
+    "SOVA-SEMANTIC-WORKFLOW-OBSERVATION-BOUNDARY": (
+        "Return at most one observable UI boundary and make it the final action."
+    ),
+}
 
 _ACTION_ARGUMENTS: dict[str, frozenset[str]] = {
     "browser.navigate": frozenset({"url"}),
@@ -100,6 +155,25 @@ def _reject_sensitive(value: object, *, code: str, message: str) -> None:
     _redacted, records = Redactor(context_id="sova-semantic-browser-input").redact(value)
     if records:
         raise FormatError(code, message)
+
+
+def _contains_exact_string(value: object, expected: str) -> bool:
+    if isinstance(value, str):
+        return expected in value
+    if isinstance(value, dict):
+        return any(_contains_exact_string(item, expected) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_contains_exact_string(item, expected) for item in value)
+    return False
+
+
+def _normalized_control_label(value: str) -> str:
+    return " ".join(value.split()).casefold()
+
+
+def _reject_oracle_contamination(value: object, expected: str, *, message: str) -> None:
+    if _contains_exact_string(value, expected):
+        raise FormatError("SOVA-SEMANTIC-WORKFLOW-ORACLE-CONTAMINATION", message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -267,6 +341,18 @@ class SemanticBrowserMission:
         }
 
 
+def _mission_oracle_is_hidden(mission: SemanticBrowserMission) -> bool:
+    return not _contains_exact_string(
+        {
+            "objective": mission.objective,
+            "seedInputs": mission.seed_inputs,
+            "setupActions": [item.to_mapping() for item in mission.setup_actions],
+            "resetActions": [item.to_mapping() for item in mission.reset_actions],
+        },
+        mission.oracle_contains,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class SemanticBrowserObservation:
     """One secret-redacted browser observation exposed to the isolated planner."""
@@ -342,6 +428,7 @@ class SemanticWorkflowResult:
     stop_reason: str
     actions: tuple[SemanticBrowserAction, ...]
     invocations: tuple[RoleInvocation, ...]
+    deterministic_recoveries: tuple[dict[str, Any], ...]
     discovery: SemanticBrowserObservation
     reproduction: SemanticBrowserObservation | None
     pages_visited: tuple[str, ...]
@@ -640,6 +727,12 @@ def semantic_browser_action_from_mapping(  # noqa: PLR0912 - strict per-action s
         _validate_wait_action(arguments)
     else:  # pragma: no cover - action membership is checked above
         raise AssertionError(action)
+    if _mission_oracle_is_hidden(mission):
+        _reject_oracle_contamination(
+            arguments,
+            mission.oracle_contains,
+            message="planned actions cannot inject the hidden success marker",
+        )
     return SemanticBrowserAction(action, dict(arguments))
 
 
@@ -693,7 +786,7 @@ def _planner_prompt(  # noqa: PLR0913 - all prompt budgets remain explicit
                 "entryOrigin": mission.entry_origin,
                 "allowedActions": {action: schemas[action] for action in mission.allowed_actions},
                 "seedInputs": list(mission.seed_inputs),
-                "oracleContains": mission.oracle_contains,
+                "oracleDigest": sha256_digest(mission.oracle_contains.encode("utf-8")),
                 "offensive": mission.offensive,
             },
             "budget": {
@@ -706,6 +799,7 @@ def _planner_prompt(  # noqa: PLR0913 - all prompt budgets remain explicit
                 "url": observation.url,
                 "title": observation.title,
                 "accessibilitySnapshot": observation.snapshot,
+                "interactiveControls": _interactive_control_summary(observation.snapshot),
                 "digest": observation.digest,
                 "oraclePassed": observation.oracle_passed,
             },
@@ -741,9 +835,14 @@ def _planner_prompt(  # noqa: PLR0913 - all prompt budgets remain explicit
                     "deliberately and in order when the objective requires multiple turns."
                 ),
                 (
-                    "For a visible snapshot control, copy its exact ref and include a meaningful "
-                    "element description; do not use a vague element name without a ref or an "
-                    "already reviewed unique target."
+                    "For a visible snapshot control, copy only its exact ref identifier as the "
+                    "ref value (for '[ref=f2e122]' use 'f2e122', never the surrounding snapshot "
+                    "text). Use the ref on the same line as the interactive role: for typing, "
+                    "select the textbox/combobox line itself, never a parent generic wrapper. "
+                    "Include a meaningful element description; do not use a vague element name "
+                    "without a ref or an already reviewed unique target. For a ref, copy the "
+                    "control's exact quoted accessible label into element (or use role plus "
+                    "quoted label) so fresh-state replay can bind it unambiguously."
                 ),
                 "Prefer a small executable plan and observe again after it runs.",
                 (
@@ -758,12 +857,243 @@ def _planner_prompt(  # noqa: PLR0913 - all prompt budgets remain explicit
     ).decode("utf-8")
 
 
+def _interactive_control_summary(snapshot: str) -> list[dict[str, Any]]:
+    controls: list[dict[str, Any]] = []
+    for line in snapshot.splitlines():
+        ref_match = _SNAPSHOT_REF.search(line)
+        role_match = _INTERACTIVE_SNAPSHOT_ROLE.search(line)
+        if ref_match is None or role_match is None:
+            continue
+        controls.append(
+            {
+                "role": role_match.group(0).casefold(),
+                "ref": ref_match.group(1),
+                "description": line.strip()[:_MAX_CONTROL_DESCRIPTION_CHARS],
+                "disabled": "[disabled]" in line.casefold(),
+                "hasValue": _TEXT_VALUE_AFTER_REF.search(line) is not None,
+            }
+        )
+        if len(controls) >= _MAX_INTERACTIVE_CONTROLS:
+            break
+    return controls
+
+
+def _reject_conflicting_locator_descriptions(
+    actions: tuple[SemanticBrowserAction, ...],
+) -> None:
+    locator_descriptions: dict[tuple[str, str], str] = {}
+    for action in actions:
+        arguments = action.arguments
+        locator = next(
+            (
+                (name, value)
+                for name in ("ref", "target")
+                for value in (arguments.get(name),)
+                if isinstance(value, str)
+            ),
+            None,
+        )
+        element = arguments.get("element")
+        if locator is None or not isinstance(element, str):
+            continue
+        normalized = " ".join(element.split()).casefold()
+        prior = locator_descriptions.setdefault(locator, normalized)
+        if prior != normalized:
+            raise FormatError(
+                "SOVA-SEMANTIC-WORKFLOW-LOCATOR-CONFLICT",
+                "one locator cannot describe multiple different elements in one plan",
+            )
+
+
+def _reject_unobserved_or_incompatible_refs(
+    actions: tuple[SemanticBrowserAction, ...],
+    observation: SemanticBrowserObservation,
+) -> None:
+    ref_lines: dict[str, list[str]] = {}
+    for line in observation.snapshot.splitlines():
+        for match in _SNAPSHOT_REF.finditer(line):
+            ref_lines.setdefault(match.group(1), []).append(line)
+    for action in actions:
+        ref = action.arguments.get("ref")
+        if not isinstance(ref, str):
+            continue
+        lines = ref_lines.get(ref, [])
+        if len(lines) != 1:
+            raise FormatError(
+                "SOVA-SEMANTIC-WORKFLOW-LOCATOR-NOT-OBSERVED",
+                "action ref must identify exactly one control in the current observation",
+            )
+        line = lines[0]
+        role_pattern = (
+            _TEXT_ENTRY_ROLE
+            if action.action == "browser.type"
+            else _SELECT_ROLE
+            if action.action == "browser.select"
+            else None
+        )
+        if role_pattern is not None and role_pattern.search(line) is None:
+            raise FormatError(
+                "SOVA-SEMANTIC-WORKFLOW-LOCATOR-ROLE",
+                "action ref is incompatible with its observed accessibility role",
+            )
+        control = _ACCESSIBLE_CONTROL_LINE.search(line)
+        element = action.arguments.get("element")
+        if control is None or not isinstance(element, str):
+            raise FormatError(
+                "SOVA-SEMANTIC-WORKFLOW-ELEMENT-IDENTITY",
+                "ref-targeted actions require a quoted accessible control label",
+            )
+        descriptor = _CONTROL_DESCRIPTION.fullmatch(" ".join(element.split()))
+        observed_role = control.group("role").casefold()
+        observed_label = _normalized_control_label(control.group("label"))
+        proposed_label = _normalized_control_label(
+            element if descriptor is None else descriptor.group("label")
+        )
+        if proposed_label != observed_label or (
+            descriptor is not None and descriptor.group("role").casefold() != observed_role
+        ):
+            raise FormatError(
+                "SOVA-SEMANTIC-WORKFLOW-ELEMENT-IDENTITY",
+                "action element must match the exact observed accessible control label",
+            )
+        if action.action == "browser.type" and action.arguments.get("submit") is not True:
+            _prefix, marker, suffix = line.partition(f"[ref={ref}]")
+            observed_value = suffix.strip()
+            if marker and observed_value.startswith(":"):
+                observed_value = observed_value[1:].strip().removesuffix("'")
+                if observed_value == action.arguments.get("text"):
+                    raise FormatError(
+                        "SOVA-SEMANTIC-WORKFLOW-NOOP-TYPE",
+                        "text entry already contains the exact proposed text",
+                    )
+
+
+def _planner_repair_context(
+    code: str,
+    observation: SemanticBrowserObservation,
+) -> dict[str, Any]:
+    instruction = _PLANNER_REPAIR_HINTS.get(
+        code,
+        "Return a new plan that satisfies the declared action schema and mission budgets.",
+    )
+    context: dict[str, Any] = {"instruction": instruction}
+    if code in {
+        "SOVA-SEMANTIC-WORKFLOW-LOCATOR",
+        "SOVA-SEMANTIC-WORKFLOW-LOCATOR-NOT-OBSERVED",
+        "SOVA-SEMANTIC-WORKFLOW-LOCATOR-ROLE",
+        "SOVA-SEMANTIC-WORKFLOW-ELEMENT-IDENTITY",
+        "SOVA-SEMANTIC-WORKFLOW-NOOP-TYPE",
+    }:
+        controls = [
+            line.strip()
+            for line in observation.snapshot.splitlines()
+            if _SNAPSHOT_REF.search(line) is not None
+            and _INTERACTIVE_SNAPSHOT_ROLE.search(line) is not None
+        ][:_MAX_REPAIR_CONTROLS]
+        context["observedInteractiveControls"] = controls
+    return context
+
+
+def _observed_ref_value(snapshot: str, ref: str) -> str | None:
+    lines = [line for line in snapshot.splitlines() if f"[ref={ref}]" in line]
+    if len(lines) != 1:
+        return None
+    _prefix, marker, suffix = lines[0].partition(f"[ref={ref}]")
+    observed = suffix.strip()
+    if not marker or not observed.startswith(":"):
+        return None
+    return observed[1:].strip().removesuffix("'")
+
+
+def _submit_button_candidate(snapshot: str) -> tuple[str, str] | None:
+    candidates: list[tuple[str, str]] = []
+    for line in snapshot.splitlines():
+        if (
+            _BUTTON_ROLE.search(line) is None
+            or "[disabled]" in line.casefold()
+            or _SUBMIT_LABEL.search(line) is None
+        ):
+            continue
+        ref_match = _SNAPSHOT_REF.search(line)
+        if ref_match is None:
+            continue
+        quoted = _QUOTED_LABEL.search(line)
+        if quoted is not None:
+            label = quoted.group(1).strip()
+        else:
+            _before_ref, _marker, _after_ref = line.partition("[ref=")
+            role_match = _BUTTON_ROLE.search(_before_ref)
+            label = "" if role_match is None else _before_ref[role_match.end() :].strip()
+        if not label or len(label) > _MAX_ELEMENT_CHARS or _SUBMIT_LABEL.search(label) is None:
+            continue
+        candidates.append((ref_match.group(1), label))
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def _reviewed_seed_submit_recovery(
+    mission: SemanticBrowserMission,
+    observation: SemanticBrowserObservation,
+    prior_actions: tuple[SemanticBrowserAction, ...],
+    history: tuple[dict[str, Any], ...],
+    *,
+    remaining_budget: tuple[int, int],
+) -> tuple[SemanticBrowserAction, dict[str, Any]] | None:
+    remaining_actions, remaining_mutations = remaining_budget
+    if (
+        remaining_actions <= 0
+        or remaining_mutations <= 0
+        or "browser.click" not in mission.allowed_actions
+        or not prior_actions
+        or not history
+    ):
+        return None
+    prior = prior_actions[-1]
+    prior_history = history[-1]
+    statuses = prior_history.get("statuses")
+    ref = prior.arguments.get("ref")
+    text = prior.arguments.get("text")
+    if (
+        prior.action != "browser.type"
+        or prior.arguments.get("submit") is True
+        or not isinstance(ref, str)
+        or not isinstance(text, str)
+        or text not in mission.seed_inputs
+        or not isinstance(statuses, list)
+        or not statuses
+        or any(status != "succeeded" for status in statuses)
+        or _observed_ref_value(observation.snapshot, ref) != text
+    ):
+        return None
+    submit = _submit_button_candidate(observation.snapshot)
+    if submit is None:
+        return None
+    submit_ref, label = submit
+    action = semantic_browser_action_from_mapping(
+        {
+            "action": "browser.click",
+            "arguments": {"element": label, "ref": submit_ref},
+        },
+        mission,
+    )
+    _reject_unobserved_or_incompatible_refs((action,), observation)
+    recovery = {
+        "kind": "reviewed-seed-unique-submit",
+        "sourceActionDigest": prior.digest,
+        "actionDigest": action.digest,
+        "sourceRef": ref,
+        "submitRef": submit_ref,
+        "freshApprovalRequired": True,
+    }
+    return action, recovery
+
+
 def _planner_decision(
     structured: dict[str, Any] | None,
     mission: SemanticBrowserMission,
     *,
     remaining_actions: int,
     remaining_mutations: int,
+    observation: SemanticBrowserObservation | None = None,
 ) -> tuple[str, tuple[SemanticBrowserAction, ...], tuple[str, ...], str]:
     if not isinstance(structured, dict) or set(structured) != {
         "status",
@@ -804,6 +1134,9 @@ def _planner_decision(
     actions = tuple(semantic_browser_action_from_mapping(item, mission) for item in action_values)
     if sum(action.mutation for action in actions) > remaining_mutations:
         raise FormatError("SOVA-SEMANTIC-WORKFLOW-BUDGET", "planned mutations exceed budget")
+    _reject_conflicting_locator_descriptions(actions)
+    if observation is not None:
+        _reject_unobserved_or_incompatible_refs(actions, observation)
     boundaries = [
         index
         for index, action in enumerate(actions)
@@ -855,6 +1188,7 @@ def run_semantic_browser_workflow(  # noqa: PLR0912, PLR0915
     pages = {observation.url}
     actions: list[SemanticBrowserAction] = []
     invocations: list[RoleInvocation] = []
+    deterministic_recoveries: list[dict[str, Any]] = []
     history: list[dict[str, Any]] = []
     failures = 0
     mutations = 0
@@ -879,61 +1213,89 @@ def run_semantic_browser_workflow(  # noqa: PLR0912, PLR0915
             if remaining_actions <= 0:
                 stop_reason = "action-budget"
                 break
-            invocation = router.invoke(
-                RoleKind.EXPLORER,
-                _planner_prompt(
-                    mission,
-                    observation,
-                    tuple(history),
-                    turn=turn,
-                    remaining_actions=remaining_actions,
-                    remaining_mutations=remaining_mutations,
-                ),
-                output_budget=_MAX_MODEL_OUTPUT_BYTES,
+            recovered = _reviewed_seed_submit_recovery(
+                mission,
+                observation,
+                tuple(actions),
+                tuple(history),
+                remaining_budget=(remaining_actions, remaining_mutations),
             )
-            invocations.append(invocation)
-            if invocation.token_count is None:
-                tokens_complete = False
-                if mission.max_total_tokens is not None:
-                    raise FormatError(
-                        "SOVA-SEMANTIC-WORKFLOW-TOKEN-USAGE",
-                        "token budget requires provider-reported usage",
-                    )
+            recovery_record: dict[str, Any] | None = None
+            decision: str
+            planned: tuple[SemanticBrowserAction, ...]
+            coverage: tuple[str, ...]
+            reason: str
+            if recovered is not None:
+                recovery_action, recovery_record = recovered
+                decision = "continue"
+                planned = (recovery_action,)
+                coverage = ("reviewed-seed-form-completion",)
+                reason = (
+                    "SOVA selected the unique enabled submit control for a visible reviewed seed."
+                )
+                deterministic_recoveries.append(recovery_record)
             else:
-                token_count += invocation.token_count
-                if mission.max_total_tokens is not None and token_count > mission.max_total_tokens:
-                    raise FormatError(
-                        "SOVA-SEMANTIC-WORKFLOW-TOKEN-BUDGET", "provider token budget exceeded"
-                    )
-            # Provider transports own their per-call cancellation mechanics. A
-            # response that arrives after the shared mission deadline is retained
-            # only as invocation evidence and can never authorize browser work.
-            if _deadline_reached(deadline):
-                stop_reason = "duration-budget"
-                break
-            try:
-                decision, planned, coverage, reason = _planner_decision(
-                    invocation.structured,
-                    mission,
-                    remaining_actions=remaining_actions,
-                    remaining_mutations=remaining_mutations,
+                invocation = router.invoke(
+                    RoleKind.EXPLORER,
+                    _planner_prompt(
+                        mission,
+                        observation,
+                        tuple(history),
+                        turn=turn,
+                        remaining_actions=remaining_actions,
+                        remaining_mutations=remaining_mutations,
+                    ),
+                    output_budget=_MAX_MODEL_OUTPUT_BYTES,
                 )
-            except FormatError as error:
-                failures += 1
-                history.append(
-                    {
-                        "turn": turn,
-                        "observationDigest": observation.digest,
-                        "plannerRejected": {
-                            "code": error.issue.code,
-                            "path": error.issue.path,
-                        },
-                    }
-                )
-                if failures >= mission.max_consecutive_failures:
-                    stop_reason = "consecutive-planner-rejection-budget"
+                invocations.append(invocation)
+                if invocation.token_count is None:
+                    tokens_complete = False
+                    if mission.max_total_tokens is not None:
+                        raise FormatError(
+                            "SOVA-SEMANTIC-WORKFLOW-TOKEN-USAGE",
+                            "token budget requires provider-reported usage",
+                        )
+                else:
+                    token_count += invocation.token_count
+                    if (
+                        mission.max_total_tokens is not None
+                        and token_count > mission.max_total_tokens
+                    ):
+                        raise FormatError(
+                            "SOVA-SEMANTIC-WORKFLOW-TOKEN-BUDGET",
+                            "provider token budget exceeded",
+                        )
+                # Provider transports own their per-call cancellation mechanics. A
+                # response that arrives after the shared mission deadline is retained
+                # only as invocation evidence and can never authorize browser work.
+                if _deadline_reached(deadline):
+                    stop_reason = "duration-budget"
                     break
-                continue
+                try:
+                    decision, planned, coverage, reason = _planner_decision(
+                        invocation.structured,
+                        mission,
+                        remaining_actions=remaining_actions,
+                        remaining_mutations=remaining_mutations,
+                        observation=observation,
+                    )
+                except FormatError as error:
+                    failures += 1
+                    history.append(
+                        {
+                            "turn": turn,
+                            "observationDigest": observation.digest,
+                            "plannerRejected": {
+                                "code": error.issue.code,
+                                "path": error.issue.path,
+                            },
+                            "repair": _planner_repair_context(error.issue.code, observation),
+                        }
+                    )
+                    if failures >= mission.max_consecutive_failures:
+                        stop_reason = "consecutive-planner-rejection-budget"
+                        break
+                    continue
             if decision != "continue":
                 stop_reason = f"planner-{decision}"
                 break
@@ -971,6 +1333,11 @@ def run_semantic_browser_workflow(  # noqa: PLR0912, PLR0915
                     "coverage": list(coverage),
                     "plannerReason": reason,
                     "evidenceIds": list(batch.evidence_ids),
+                    **(
+                        {"deterministicRecovery": recovery_record}
+                        if recovery_record is not None
+                        else {}
+                    ),
                 }
             )
             observation = batch.observation
@@ -1002,6 +1369,7 @@ def run_semantic_browser_workflow(  # noqa: PLR0912, PLR0915
                         "duration-budget",
                         tuple(actions),
                         tuple(invocations),
+                        tuple(deterministic_recoveries),
                         observation,
                         reproduction.observation,
                         tuple(sorted(pages | set(reproduction_pages))),
@@ -1016,6 +1384,7 @@ def run_semantic_browser_workflow(  # noqa: PLR0912, PLR0915
                     stop_reason,
                     tuple(actions),
                     tuple(invocations),
+                    tuple(deterministic_recoveries),
                     observation,
                     reproduction.observation,
                     tuple(sorted(pages | set(reproduction_pages))),
@@ -1030,6 +1399,7 @@ def run_semantic_browser_workflow(  # noqa: PLR0912, PLR0915
         stop_reason,
         tuple(actions),
         tuple(invocations),
+        tuple(deterministic_recoveries),
         observation,
         None,
         tuple(sorted(pages)),

@@ -52,11 +52,13 @@ _SAFE_FILE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _ALLOWED_FILES = frozenset({".sova", ".sova-trace"})
 _SECRET = re.compile(
-    rb"(?i)[\"']?(api[_-]?key|authorization|cookie|credential|password|secret|token)"
+    rb"(?i)(?<!:)[\"']?"
+    rb"(api[_-]?key|authorization|cookie|credential|password|secret|token)"
     rb"[\"']?\s*[:=]\s*[\"']?[^\s,;\"']{12,}"
 )
 _SECRET_PREFIX = re.compile(
-    rb"(?i)[\"']?(api[_-]?key|authorization|cookie|credential|password|secret|token)"
+    rb"(?i)(?<!:)[\"']?"
+    rb"(api[_-]?key|authorization|cookie|credential|password|secret|token)"
     rb"[\"']?\s*[:=]\s*[\"']?[^\s,;\"']{0,11}$"
 )
 _MAX_EVENTS = 10_000

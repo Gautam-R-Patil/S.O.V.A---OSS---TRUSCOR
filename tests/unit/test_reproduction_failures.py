@@ -45,6 +45,33 @@ def test_scripted_model_exhaustion_mismatch_and_failure() -> None:
         failing.respond("x")
 
 
+def test_scripted_model_can_bind_fresh_observation_digest_for_live_fixtures() -> None:
+    digest = "sha256:" + "a" * 64
+    model = ScriptedModel(
+        [
+            ScriptedTurn(
+                '"observation"',
+                "",
+                {
+                    "actions": [
+                        {
+                            "grantId": "browser-click",
+                            "arguments": {
+                                "action": "browser.click",
+                                "arguments": {"element": "Send", "ref": "e6"},
+                                "observationDigest": "$SOVA_OBSERVATION_DIGEST",
+                            },
+                        }
+                    ]
+                },
+            )
+        ]
+    )
+    response = model.respond('{"observation":{"digest":"' + digest + '"}}')
+    assert response.structured is not None
+    assert response.structured["actions"][0]["arguments"]["observationDigest"] == digest
+
+
 def test_unsupported_action_and_model_mismatch_create_failed_traces(tmp_path: Path) -> None:
     auth = {
         "decision": "allowed",

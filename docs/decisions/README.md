@@ -35,6 +35,7 @@ silently rewrite it.
 | [0025](./0025-local-mcp-out-of-band-authorization.md) | Local MCP with exact out-of-band authorization | Accepted |
 | [0026](./0026-fail-closed-extension-and-provider-ecosystem.md) | Fail-closed extension and provider ecosystem | Accepted |
 | [0027](./0027-evidence-first-local-community-surfaces.md) | Evidence-first local community surfaces | Accepted |
+| [0028](./0028-universal-security-extension-boundary.md) | Universal-security extension boundary | Accepted |
 
 Use the next zero-padded number. Every ADR states its status, date, owner,
 scope, decision, alternatives, consequences, and superseded decisions.

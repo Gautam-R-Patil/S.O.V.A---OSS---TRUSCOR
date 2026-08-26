@@ -34,7 +34,8 @@ from sova.live.recording import (
     write_replay_cues,
 )
 from sova.live.startup import start_stdio_client
-from sova.mcp import MCPExecutorAdapter, StdioMCPClient, playwright_mappings, playwright_stdio_spec
+from sova.mcp import StdioMCPClient, playwright_mappings, playwright_stdio_spec
+from sova.mcp.profile_state import profiled_playwright_adapter
 from sova.reproduction import compare_observable_outcomes
 from sova.safety import (
     ApprovalLevel,
@@ -594,10 +595,12 @@ def run_live_browser_assessment(  # noqa: PLR0913, PLR0915 - evidence phases sta
     }
     with (
         start_stdio_client(spec, StdioMCPClient) as client,
-        MCPExecutorAdapter(
+        profiled_playwright_adapter(
             "microsoft-playwright-mcp",
             client,
             playwright_mappings(allowed_origins=origins),
+            profile_lease=profile_lease,
+            workspace=destination,
         ) as executor,
     ):
         recording_started = False

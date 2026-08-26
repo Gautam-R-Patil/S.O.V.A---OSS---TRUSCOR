@@ -298,6 +298,12 @@ def _assert_complete_trace_history(
         "turn-002.sova-trace",
         "turn-003.sova-trace",
         "turn-004.sova-trace",
+        "reproduction-setup.sova-trace",
+        "reproduction-step-001.sova-trace",
+        "reproduction-step-002.sova-trace",
+        "reproduction-step-003.sova-trace",
+        "reproduction-step-004.sova-trace",
+        "reproduction-step-005.sova-trace",
         "reproduction.sova-trace",
     ]
     assert {item.path for item in trace_descriptors} == {
@@ -327,6 +333,12 @@ def _assert_complete_trace_history(
         "exploration",
         "exploration",
         "decisive-discovery",
+        "reproduction-preparation",
+        "reproduction-preparation",
+        "reproduction-preparation",
+        "reproduction-preparation",
+        "reproduction-preparation",
+        "reproduction-preparation",
         "decisive-reproduction",
     ]
     assert len([item for item in descriptors if item.role == "visual-replay"]) == 1
@@ -363,7 +375,7 @@ def test_semantic_browser_executes_multi_page_plan_reproduces_and_packages(
     )
 
     assert artifacts.status == "pass"
-    assert len(approvals) == 6  # start, four generated batches, fresh reproduction
+    assert len(approvals) == 12  # start, four plans, setup, and six rebound actions
     assert artifacts.discovery_capsule is not None
     assert artifacts.reproduction_trace is not None
     assert artifacts.replay_cues is not None
@@ -377,6 +389,7 @@ def test_semantic_browser_executes_multi_page_plan_reproduces_and_packages(
     assert report["status"] == "pass"
     assert report["stopReason"] == "confirmed-and-reproduced"
     assert report["evidence"]["reproductionEquivalent"] is True
+    assert len(report["execution"]["reproductionRebindings"]) == 6
     assert report["claims"]["autonomousWithinDeclaredActionPolicy"] is True
     assert report["claims"]["allowedOriginRequestFiltering"] is True
     assert report["claims"]["postActionOriginDriftDetection"] is True

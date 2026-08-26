@@ -378,6 +378,8 @@ class MCPExecutorAdapter:
         name: str,
         client: MCPClient,
         mappings: tuple[ToolMapping, ...],
+        *,
+        before_close: Callable[[], None] | None = None,
     ) -> None:
         if not name or not mappings:
             raise FormatError("SOVA-MCP-ADAPTER", "adapter name and mappings are required")
@@ -386,6 +388,7 @@ class MCPExecutorAdapter:
         tools = {tool.name: tool for tool in client.list_tools()}
         self._mappings = {mapping.action: mapping for mapping in mappings if mapping.tool in tools}
         self._tools = tools
+        self._before_close = before_close
         self._closed = False
 
     def __enter__(self) -> Self:
@@ -493,12 +496,27 @@ class MCPExecutorAdapter:
         if self._closed:
             return
         self._closed = True
+        failure: Exception | None = None
         try:
+            if self._before_close is not None:
+                try:
+                    self._before_close()
+                except Exception as error:  # noqa: BLE001 - cleanup still owns the browser
+                    failure = error
             if "browser_close" in self._tools:
                 with suppress(FormatError):
                     self._client.call_tool("browser_close", {}, timeout_seconds=10.0)
         finally:
-            self._client.close()
+            try:
+                self._client.close()
+            except Exception as error:  # noqa: BLE001 - normalized after all cleanup attempts
+                if failure is None:
+                    failure = error
+        if failure is not None:
+            raise FormatError(
+                "SOVA-MCP-ADAPTER-CLEANUP",
+                "MCP adapter lifecycle finalization failed without exposing backend details",
+            ) from failure
 
 
 def playwright_mappings(*, allowed_origins: tuple[str, ...] = ()) -> tuple[ToolMapping, ...]:

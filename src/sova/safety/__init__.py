@@ -46,8 +46,10 @@ from sova.safety.privacy import (
     RetentionController,
     RetentionPolicy,
 )
+from sova.safety.profiles import DEFAULT_FULL_CAPABILITY_ACTIONS, full_capability_authority
 
 __all__ = [
+    "DEFAULT_FULL_CAPABILITY_ACTIONS",
     "ActionIntent",
     "ApprovalBatchChallenge",
     "ApprovalBatchItem",
@@ -83,6 +85,7 @@ __all__ = [
     "RetentionPolicy",
     "Scope",
     "VulnerabilityState",
+    "full_capability_authority",
     "known_backend_descriptors",
     "validate_control_proof",
 ]

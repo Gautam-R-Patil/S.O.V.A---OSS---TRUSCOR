@@ -52,6 +52,22 @@ for an unresponsive server. A persistent profile is not a security sandbox and
 must not be shared concurrently across swarms. Swarms use distinct profiles or
 an explicitly shared identity whose access is serialized.
 
+Persistent launches also enable only Playwright MCP's reviewed storage
+capability. Before the first target action, SOVA restores an optional
+`.sova-playwright-storage-state.json` checkpoint from inside the leased profile.
+Immediately before browser close, it requests a fresh checkpoint and replaces
+the prior file atomically. SOVA accepts only a bounded JSON object containing
+`cookies` and `origins` arrays. The short-lived MCP exchange copy lives under
+the run workspace's private `.sova/playwright-private-state` directory and is
+removed after the call, including error paths.
+
+The checkpoint is credential-equivalent local state. It remains plaintext
+inside the already-sensitive profile vault; SOVA does not claim to encrypt it.
+Its path or contents must never enter model context, signed traces, capsules,
+reports, replay views, registry submissions, or CLI output. Operators must
+protect and delete the entire vault according to the target's credential
+handling requirements.
+
 ## Operator workflow
 
 ```bash
@@ -87,8 +103,11 @@ signed evidence without network access.
 The optional installed-Chrome lane sets a harmless persistent HttpOnly cookie
 on SOVA's self-owned loopback fixture, closes one real Playwright MCP process,
 starts a distinct process using the same exclusively leased profile, and
-observes `SOVA_SESSION_PRESENT`. The signed trace and report are scanned to
-exclude the opaque handle, profile path, and cookie material.
+observes `SOVA_SESSION_PRESENT`. It separately records that the private
+checkpoint was created and restored. The signed trace and report are scanned to
+exclude the opaque handle, profile path, checkpoint contents, and cookie
+material. On 2026-08-26, three consecutive fresh-profile restart probes and the
+complete 30-case installed-browser lane passed on Windows.
 
 This proves one controlled persistence mechanism. It does not prove arbitrary
 provider login compatibility, correct authentication, SSO support, browser

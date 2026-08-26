@@ -11,6 +11,7 @@ import pytest
 
 from sova.capsule import build_capsule, capsule_manifest_template
 from sova.executors import (
+    ActionOutcome,
     ActionRequest,
     CancellationToken,
     Capability,
@@ -126,10 +127,88 @@ class _CrashingExecutor:
         raise RuntimeError("synthetic-sensitive-provider-message")
 
 
+class _CuaStyleAuthorizationExecutor:
+    name = "synthetic-cua-style-executor"
+
+    def __init__(self) -> None:
+        self.requests: list[ActionRequest] = []
+        self.authorizations: list[dict[str, Any]] = []
+
+    def capabilities(self) -> tuple[Capability, ...]:
+        return (
+            Capability(
+                name="computer.type",
+                version="0.1",
+                side_effect=SideEffect.MUTATE,
+                idempotent=False,
+                evidence=("window-state",),
+            ),
+        )
+
+    def execute(
+        self,
+        request: ActionRequest,
+        context: ExecutionContext,
+        cancellation: CancellationToken,
+    ) -> ActionOutcome:
+        del cancellation
+        self.requests.append(request)
+        self.authorizations.append(context.authorization)
+        scope_digest = context.authorization.get("scopeDigest")
+        if (
+            context.authorization.get("decision") != "allowed"
+            or not isinstance(scope_digest, str)
+            or not scope_digest.startswith("sha256:")
+        ):
+            return ActionOutcome(
+                request.id,
+                OutcomeStatus.DENIED,
+                SideEffect.MUTATE,
+                {},
+                error_code="SYNTHETIC-CUA-AUTHORIZATION",
+            )
+        return ActionOutcome(
+            request.id,
+            OutcomeStatus.SUCCEEDED,
+            SideEffect.MUTATE,
+            {"typed": True},
+            verification="fixture-independent-window-state",
+        )
+
+
 class _SecretProvider:
     def resolve(self, reference: str) -> str:
         assert reference == "sova-secret:integration-fixture"
         return "integration-private-value"
+
+
+def _computer_type_scenario(text: str) -> dict[str, Any]:
+    scenario = _scenario()
+    scenario["procedure"]["steps"] = [
+        {
+            "id": "type-fixture",
+            "action": "computer.type",
+            "inputs": {"pid": 42, "windowId": 99, "text": text},
+            "onFailure": "stop",
+            "requires": ["computer.type/0.1"],
+        }
+    ]
+    scenario["safety"]["budgets"]["maxSteps"] = 1
+    return scenario
+
+
+def _computer_type_capsule(tmp_path: Path, scenario: dict[str, Any], name: str) -> Path:
+    manifest = capsule_manifest_template(
+        title="Owned CUA-style fixture",
+        summary="An exact mutation authorization context fixture.",
+        author="SOVA tests",
+    )
+    manifest["license"] = "Apache-2.0"
+    manifest["safety"]["impact"] = "none"
+    manifest["requiredFeatures"] = ["scenario.core/0.1"]
+    capsule = tmp_path / name
+    build_capsule(capsule, manifest, scenario=scenario)
+    return capsule
 
 
 def test_same_capsule_reproduces_same_observation_on_two_backends(
@@ -178,6 +257,73 @@ def test_same_capsule_reproduces_same_observation_on_two_backends(
     _assert_oracle_is_identified_observer(local_path)
     assert TraceReader(scripted_path).playback()
     assert TraceReader(local_path).playback()
+
+
+def test_canonical_runner_supplies_exact_allowed_decision_to_cua_style_executor(
+    tmp_path: Path,
+) -> None:
+    scenario = _computer_type_scenario("authorized fixture text")
+    capsule = _computer_type_capsule(tmp_path, scenario, "cua-authorized.sova")
+    executor = _CuaStyleAuthorizationExecutor()
+    bindings = {
+        "participant_id": "sova:principal:test-agent",
+        "session_id": "sova:session:cua-fixture",
+        "observation_digest": "sha256:" + "5" * 64,
+    }
+    fresh = authorize_synthetic_steps(scenario, executor.capabilities(), **bindings)
+
+    result = run_capsule(
+        capsule,
+        tmp_path / "cua-authorized.sova-trace",
+        executor=executor,
+        workspace=tmp_path,
+        authorization_session=fresh.session,
+        approvals=fresh.approvals,
+        participant_id=bindings["participant_id"],
+        session_id=bindings["session_id"],
+        observation_digest=bindings["observation_digest"],
+    )
+
+    assert result.completion == "completed"
+    assert len(executor.requests) == 1
+    authorization = executor.authorizations[0]
+    assert authorization["decision"] == "allowed"
+    assert authorization["decision"] != "unknown"
+    assert authorization["executionBinding"] == {
+        "contractVersion": "0.1",
+        "requestDigest": authorization["executionBinding"]["requestDigest"],
+        "participantId": "sova:principal:test-agent",
+        "sessionId": "sova:session:cua-fixture",
+        "observationDigest": "sha256:" + "5" * 64,
+        "capabilityGeneration": authorization["executionBinding"]["capabilityGeneration"],
+    }
+    assert authorization["executionBinding"]["requestDigest"].startswith("sha256:")
+    assert authorization["executionBinding"]["capabilityGeneration"].startswith("sha256:")
+
+
+def test_runner_rejects_approved_request_after_input_substitution(
+    tmp_path: Path,
+) -> None:
+    approved = _computer_type_scenario("approved fixture text")
+    altered = _computer_type_scenario("substituted after approval")
+    executor = _CuaStyleAuthorizationExecutor()
+    fresh = authorize_synthetic_steps(approved, executor.capabilities())
+    capsule = _computer_type_capsule(tmp_path, altered, "cua-substituted.sova")
+    trace = tmp_path / "cua-substituted.sova-trace"
+
+    result = run_capsule(
+        capsule,
+        trace,
+        executor=executor,
+        workspace=tmp_path,
+        authorization_session=fresh.session,
+        approvals=fresh.approvals,
+    )
+
+    assert result.completion == "failed"
+    assert executor.requests == []
+    blocked = next(TraceReader(trace).query(kind_prefix="blocked.authorization"))
+    assert "approval-scope-mismatch" in blocked["payload"]["reasons"]
 
 
 def test_runner_blocks_unsupported_capability_and_denied_authorization(

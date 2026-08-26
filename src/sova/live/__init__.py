@@ -14,6 +14,12 @@ from sova.live.adaptive_campaign import (
     adaptive_browser_policy_from_mapping,
     run_adaptive_agent_browser_campaign,
 )
+from sova.live.adversarial_missions import (
+    AdversarialTactic,
+    adversarial_tactic,
+    adversarial_tactic_ids,
+    build_adversarial_mission,
+)
 from sova.live.agent_campaign import (
     AgentBrowserCampaignArtifacts,
     AgentCampaignEventObserver,
@@ -88,6 +94,7 @@ __all__ = [
     "ActionLabArtifacts",
     "AdaptiveBrowserCampaignArtifacts",
     "AdaptiveBrowserPolicy",
+    "AdversarialTactic",
     "AgentBrowserCampaignArtifacts",
     "AgentCampaignEventObserver",
     "BrowserCampaign",
@@ -118,7 +125,10 @@ __all__ = [
     "WebApplicationClass",
     "WebsiteControlChallenge",
     "adaptive_browser_policy_from_mapping",
+    "adversarial_tactic",
+    "adversarial_tactic_ids",
     "browser_campaign_from_mapping",
+    "build_adversarial_mission",
     "build_owned_action_lab_capsule",
     "build_owned_software_capsule",
     "build_owned_web_capsule",

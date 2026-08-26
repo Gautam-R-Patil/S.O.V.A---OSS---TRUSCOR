@@ -65,12 +65,14 @@ Security = "https://github.com/Gautam-R-Patil/S.O.V.A---OSS---TRUSCOR/security/p
 dev = [
   "hypothesis>=6.160,<7",
   "mypy>=2.3,<3",
+  "pip>=26.2,<27",
   "pip-audit>=2.10,<3",
   "pre-commit>=4.5,<5",
   "pytest>=9,<10",
   "pytest-cov>=7,<8",
   "ruff>=0.15,<0.17",
   "types-jsonschema>=4.26,<5",
+  "websocket-client>=1.8,<2",
 ]
 
 [tool.uv]
@@ -193,5 +195,6 @@ source = ["sova"]
 
 [tool.coverage.report]
 fail_under = 95
+precision = 2
 show_missing = true
 skip_covered = true

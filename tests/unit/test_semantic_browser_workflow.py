@@ -291,13 +291,80 @@ def test_planner_prompt_exposes_oracle_state_and_seed_usage_guardrails() -> None
     assert prompt["observation"]["oraclePassed"] is False
     assert prompt["mission"]["entryUrl"] == mission.entry_url
     assert prompt["mission"]["seedInputs"] == ["research mode", "blue owl"]
+    assert prompt["mission"]["oracleDigest"] == semantic_module.sha256_digest(
+        mission.oracle_contains.encode("utf-8")
+    )
+    assert "oracleContains" not in prompt["mission"]
     type_schema = prompt["mission"]["allowedActions"]["browser.type"]
     assert set(type_schema) == {"element", "ref", "target", "text", "submit", "slowly"}
+    assert prompt["observation"]["interactiveControls"] == [
+        {
+            "description": '- textbox "Message" [ref=f2]',
+            "disabled": False,
+            "hasValue": False,
+            "ref": "f2",
+            "role": "textbox",
+        }
+    ]
     rules = " ".join(prompt["rules"])
     assert "Return complete only when observation.oraclePassed is true" in rules
-    assert "copy its exact ref" in rules
+    assert "copy only its exact ref identifier" in rules
+    assert "for '[ref=f2e122]' use 'f2e122'" in rules
     assert "do not repeat the same action and ref" in rules
     assert "mission.entryUrl" in rules
+
+
+def test_planner_cannot_inject_hidden_oracle_or_use_vague_ref_identity() -> None:
+    mission = _mission()
+    observation = SemanticBrowserObservation(
+        mission.entry_url,
+        "Owned fixture",
+        '- textbox "Message" [ref=f2]',
+    )
+    with pytest.raises(FormatError, match="hidden success marker"):
+        semantic_module._planner_decision(
+            {
+                "status": "continue",
+                "actions": [
+                    {
+                        "action": "browser.type",
+                        "arguments": {
+                            "element": "Message",
+                            "ref": "f2",
+                            "text": mission.oracle_contains,
+                        },
+                    }
+                ],
+                "coverage": ["oracle contamination"],
+                "reason": "Attempt to echo the disclosed success marker.",
+            },
+            mission,
+            remaining_actions=1,
+            remaining_mutations=1,
+            observation=observation,
+        )
+    with pytest.raises(FormatError, match="exact observed accessible control label"):
+        semantic_module._planner_decision(
+            {
+                "status": "continue",
+                "actions": [
+                    {
+                        "action": "browser.type",
+                        "arguments": {
+                            "element": "textbox",
+                            "ref": "f2",
+                            "text": "blue owl",
+                        },
+                    }
+                ],
+                "coverage": ["vague locator"],
+                "reason": "Use a generic role without its accessible label.",
+            },
+            mission,
+            remaining_actions=1,
+            remaining_mutations=1,
+            observation=observation,
+        )
 
 
 def test_discovery_without_fresh_reproduction_is_inconclusive() -> None:
@@ -683,6 +750,309 @@ def test_planner_decision_enforces_batch_and_mutation_budgets() -> None:
         )
 
 
+def test_planner_decision_rejects_conflicting_descriptions_for_one_locator() -> None:
+    typed = {
+        "action": "browser.type",
+        "arguments": {
+            "element": "Attack message",
+            "ref": "f2e123",
+            "text": "blue owl",
+        },
+    }
+    click = {
+        "action": "browser.click",
+        "arguments": {"element": "Send message", "ref": "f2e123"},
+    }
+    with pytest.raises(FormatError, match="one locator cannot describe multiple"):
+        semantic_module._planner_decision(
+            _plan("continue", [typed, click]),
+            _mission(),
+            remaining_actions=8,
+            remaining_mutations=8,
+        )
+
+
+def test_planner_decision_binds_refs_to_observed_accessibility_roles() -> None:
+    observation = SemanticBrowserObservation(
+        "http://127.0.0.1:9123/",
+        "Fixture",
+        (
+            "- generic [ref=f2e122]:\n"
+            '  - textbox "Attack message" [ref=f2e123]\n'
+            '  - button "Send" [ref=f2e124]'
+        ),
+    )
+    wrong_wrapper = {
+        "action": "browser.type",
+        "arguments": {"element": "Attack message", "ref": "f2e122", "text": "blue owl"},
+    }
+    with pytest.raises(FormatError, match="incompatible with its observed accessibility role"):
+        semantic_module._planner_decision(
+            _plan("continue", [wrong_wrapper]),
+            _mission(),
+            remaining_actions=8,
+            remaining_mutations=8,
+            observation=observation,
+        )
+    missing = {
+        "action": "browser.click",
+        "arguments": {"element": "Missing", "ref": "f2e999"},
+    }
+    with pytest.raises(FormatError, match="exactly one control"):
+        semantic_module._planner_decision(
+            _plan("continue", [missing]),
+            _mission(),
+            remaining_actions=8,
+            remaining_mutations=8,
+            observation=observation,
+        )
+    correct = {
+        "action": "browser.type",
+        "arguments": {"element": "Attack message", "ref": "f2e123", "text": "blue owl"},
+    }
+    decision, actions, _coverage, _reason = semantic_module._planner_decision(
+        _plan("continue", [correct]),
+        _mission(),
+        remaining_actions=8,
+        remaining_mutations=8,
+        observation=observation,
+    )
+    assert decision == "continue"
+    assert actions[0].arguments["ref"] == "f2e123"
+
+
+def test_planner_decision_rejects_observed_noop_type_but_allows_change_or_submit() -> None:
+    observation = SemanticBrowserObservation(
+        "http://127.0.0.1:9123/",
+        "Fixture",
+        '- textbox "Attack message" [active] [ref=f2e123]: blue owl',
+    )
+    typed = {
+        "action": "browser.type",
+        "arguments": {"element": "Attack message", "ref": "f2e123", "text": "blue owl"},
+    }
+    with pytest.raises(FormatError, match="already contains the exact proposed text"):
+        semantic_module._planner_decision(
+            _plan("continue", [typed]),
+            _mission(),
+            remaining_actions=8,
+            remaining_mutations=8,
+            observation=observation,
+        )
+    changed = {
+        "action": "browser.type",
+        "arguments": {
+            "element": "Attack message",
+            "ref": "f2e123",
+            "text": "research mode",
+        },
+    }
+    submitted = {
+        "action": "browser.type",
+        "arguments": {
+            "element": "Attack message",
+            "ref": "f2e123",
+            "text": "blue owl",
+            "submit": True,
+        },
+    }
+    for action in (changed, submitted):
+        decision, _actions, _coverage, _reason = semantic_module._planner_decision(
+            _plan("continue", [action]),
+            _mission(),
+            remaining_actions=8,
+            remaining_mutations=8,
+            observation=observation,
+        )
+        assert decision == "continue"
+
+
+def test_reviewed_seed_submit_recovery_requires_one_visible_enabled_control() -> None:
+    prior = SemanticBrowserAction(
+        "browser.type",
+        {"element": "Message", "ref": "f2", "text": "blue owl"},
+    )
+    history = ({"statuses": ["succeeded"]},)
+    observation = SemanticBrowserObservation(
+        _mission().entry_url,
+        "Fixture",
+        (
+            '- textbox "Message" [active] [ref=f2]: blue owl\n'
+            '- button "Submit flag" [disabled] [ref=f3]\n'
+            '- button "Send challenge message" [ref=f4]'
+        ),
+    )
+    recovered = semantic_module._reviewed_seed_submit_recovery(
+        _mission(),
+        observation,
+        (prior,),
+        history,
+        remaining_budget=(2, 2),
+    )
+    assert recovered is not None
+    action, record = recovered
+    assert action.to_mapping() == {
+        "action": "browser.click",
+        "arguments": {"element": "Send challenge message", "ref": "f4"},
+    }
+    assert record["kind"] == "reviewed-seed-unique-submit"
+    assert record["freshApprovalRequired"] is True
+
+    ambiguous = replace(
+        observation,
+        snapshot=observation.snapshot + '\n- button "Submit message" [ref=f5]',
+    )
+    assert (
+        semantic_module._reviewed_seed_submit_recovery(
+            _mission(),
+            ambiguous,
+            (prior,),
+            history,
+            remaining_budget=(2, 2),
+        )
+        is None
+    )
+    unreviewed = replace(
+        prior,
+        arguments={"element": "Message", "ref": "f2", "text": "invented value"},
+    )
+    assert (
+        semantic_module._reviewed_seed_submit_recovery(
+            _mission(),
+            observation,
+            (unreviewed,),
+            history,
+            remaining_budget=(2, 2),
+        )
+        is None
+    )
+
+
+def test_workflow_recovers_reviewed_seed_with_unique_submit_without_second_model_call() -> None:
+    typed = {
+        "action": "browser.type",
+        "arguments": {"element": "Message", "ref": "f2", "text": "blue owl"},
+    }
+    model = ScriptedModel(
+        [
+            ScriptedTurn(
+                '"turn":1',
+                "",
+                _plan("continue", [typed], coverage=["chat"], reason="Fill reviewed seed."),
+                token_count=3,
+            )
+        ]
+    )
+    router = ModelRouter({RoleKind.EXPLORER: (model,)})
+
+    class RecoveryDriver:
+        def __init__(self) -> None:
+            self.calls: list[tuple[SemanticBrowserAction, ...]] = []
+
+        def start(self, mission: SemanticBrowserMission) -> SemanticBrowserObservation:
+            return SemanticBrowserObservation(
+                mission.entry_url,
+                "Fixture",
+                '- textbox "Message" [ref=f2]\n- button "Send message" [ref=f4]',
+            )
+
+        def execute(
+            self,
+            mission: SemanticBrowserMission,
+            actions: tuple[SemanticBrowserAction, ...],
+            *,
+            turn: int,
+        ) -> SemanticExecutionBatch:
+            self.calls.append(actions)
+            if turn == 1:
+                return SemanticExecutionBatch(
+                    SemanticBrowserObservation(
+                        mission.entry_url,
+                        "Fixture",
+                        (
+                            '- textbox "Message" [active] [ref=f2]: blue owl\n'
+                            '- button "Send message" [ref=f4]'
+                        ),
+                    ),
+                    ("succeeded",),
+                )
+            assert [action.action for action in actions] == ["browser.click"]
+            return SemanticExecutionBatch(
+                SemanticBrowserObservation(
+                    mission.entry_url,
+                    "Fixture",
+                    "SOVA_WORKFLOW_TRIGGERED",
+                    oracle_passed=True,
+                ),
+                ("succeeded",),
+            )
+
+        def reproduce(
+            self,
+            mission: SemanticBrowserMission,
+            actions: tuple[SemanticBrowserAction, ...],
+        ) -> SemanticExecutionBatch:
+            assert [action.action for action in actions] == ["browser.type", "browser.click"]
+            return SemanticExecutionBatch(
+                SemanticBrowserObservation(
+                    mission.entry_url,
+                    "Fixture",
+                    "SOVA_WORKFLOW_TRIGGERED",
+                    oracle_passed=True,
+                ),
+                tuple("succeeded" for _action in actions),
+            )
+
+    driver = RecoveryDriver()
+    result = run_semantic_browser_workflow(_mission(), router=router, driver=driver)
+    assert result.status == "pass"
+    assert len(result.invocations) == 1
+    assert len(result.deterministic_recoveries) == 1
+    assert result.deterministic_recoveries[0]["kind"] == "reviewed-seed-unique-submit"
+    assert [[action.action for action in batch] for batch in driver.calls] == [
+        ["browser.type"],
+        ["browser.click"],
+    ]
+
+
+def test_planner_repair_context_highlights_bounded_observed_controls() -> None:
+    observation = SemanticBrowserObservation(
+        "http://127.0.0.1:9123/",
+        "Fixture",
+        (
+            "- generic [ref=f2e122]:\n"
+            '  - textbox "Attack message" [ref=f2e123]\n'
+            '  - button "Send" [ref=f2e124]'
+        ),
+    )
+    repair = semantic_module._planner_repair_context(
+        "SOVA-SEMANTIC-WORKFLOW-LOCATOR-ROLE",
+        observation,
+    )
+    assert "same snapshot line" in repair["instruction"]
+    assert repair["observedInteractiveControls"] == [
+        '- textbox "Attack message" [ref=f2e123]',
+        '- button "Send" [ref=f2e124]',
+    ]
+
+
+def test_interactive_control_summary_records_value_and_disabled_state() -> None:
+    summary = semantic_module._interactive_control_summary(
+        '- textbox "Attack" [active] [ref=f1]: payload\n'
+        '- button "Send" [ref=f2] [cursor=pointer]\n'
+        '- button "Submit" [disabled] [ref=f3]\n'
+        "- generic [ref=f4]"
+    )
+    assert [(item["role"], item["ref"]) for item in summary] == [
+        ("textbox", "f1"),
+        ("button", "f2"),
+        ("button", "f3"),
+    ]
+    assert summary[0]["hasValue"] is True
+    assert summary[1]["disabled"] is False
+    assert summary[2]["disabled"] is True
+
+
 def test_planner_requires_a_fresh_observation_after_each_ui_boundary() -> None:
     click = {
         "action": "browser.click",
@@ -1012,7 +1382,7 @@ def test_workflow_rejects_bad_provider_plan_then_replans_without_execution() -> 
                 token_count=2,
             ),
             ScriptedTurn(
-                '"plannerRejected"',
+                '"repair"',
                 "",
                 _plan(
                     "continue",

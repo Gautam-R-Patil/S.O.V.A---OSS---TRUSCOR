@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import io
 import re
+import zipfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -11,13 +13,54 @@ from typing import Any
 from sova.formats import PackageReader, canonical_json_bytes, sha256_digest
 from sova.formats.errors import FormatError
 
-_ALLOWED_SUFFIXES = frozenset({".sova", ".json", ".toml", ".md"})
+_ALLOWED_SUFFIXES = frozenset({".sova", ".sova-trace", ".json", ".toml", ".md"})
+_ARCHIVE_SUFFIXES = frozenset({".sova", ".sova-trace"})
 _SECRET = re.compile(
     rb"(?i)[\"']?(api[_-]?key|authorization|cookie|credential|password|secret|token)"
     rb"[\"']?\s*[:=]\s*[\"']?[^\s,;\"']{8,}"
 )
 _EXECUTABLE_MAGIC = (b"MZ", b"\x7fELF", b"\xfe\xed\xfa", b"\xcf\xfa\xed\xfe")
 _MAX_ITEM_BYTES = 256 * 1024 * 1024
+_MAX_ARCHIVE_MEMBER_BYTES = 64 * 1024 * 1024
+_MAX_ARCHIVE_TOTAL_DECOMPRESSED_BYTES = 256 * 1024 * 1024
+
+
+def _scan_archive_members(data: bytes) -> None:
+    """Scan decompressed zip member content; the top-level raw-byte scan below
+    only ever sees compressed bytes for `.sova`/`.sova-trace` packages, so it
+    cannot detect plaintext secrets or executable payloads on its own."""
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile as error:
+        raise FormatError(
+            "SOVA-CONTRIBUTE-ARCHIVE",
+            "contribution package is not a valid archive",
+        ) from error
+    total_decompressed = 0
+    with archive:
+        for info in archive.infolist():
+            if info.file_size > _MAX_ARCHIVE_MEMBER_BYTES:
+                raise FormatError(
+                    "SOVA-CONTRIBUTE-ARCHIVE-LIMIT",
+                    "contribution package member exceeds the review size limit",
+                )
+            total_decompressed += info.file_size
+            if total_decompressed > _MAX_ARCHIVE_TOTAL_DECOMPRESSED_BYTES:
+                raise FormatError(
+                    "SOVA-CONTRIBUTE-ARCHIVE-LIMIT",
+                    "contribution package expands beyond the review limit",
+                )
+            member_data = archive.read(info)
+            if any(member_data.startswith(magic) for magic in _EXECUTABLE_MAGIC):
+                raise FormatError(
+                    "SOVA-CONTRIBUTE-MALWARE",
+                    "executable payloads are forbidden",
+                )
+            if _SECRET.search(member_data):
+                raise FormatError(
+                    "SOVA-CONTRIBUTE-SECRET",
+                    "credential-shaped content was detected",
+                )
 
 
 def _review_item(path: Path) -> dict[str, Any]:
@@ -30,13 +73,17 @@ def _review_item(path: Path) -> dict[str, Any]:
         raise FormatError("SOVA-CONTRIBUTE-MALWARE", "executable payloads are forbidden")
     if _SECRET.search(data):
         raise FormatError("SOVA-CONTRIBUTE-SECRET", "credential-shaped content was detected")
+    if path.suffix in _ARCHIVE_SUFFIXES:
+        _scan_archive_members(data)
     if path.suffix == ".sova":
         PackageReader(path).verify("sova.capsule")
+    elif path.suffix == ".sova-trace":
+        PackageReader(path).verify("sova.trace")
     return {
         "name": path.name,
         "digest": sha256_digest(data),
         "size": len(data),
-        "schemaValidated": path.suffix == ".sova",
+        "schemaValidated": path.suffix in {".sova", ".sova-trace"},
         "safetyScanClean": True,
         "malwareScan": "bounded-magic-and-type-screen-clean",
         "secretScan": "bounded-pattern-screen-clean",

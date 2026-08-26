@@ -1,0 +1,158 @@
+<!-- status: research -->
+
+# Open-source security architecture adoption ledger — 2026-08-26
+
+This is the refreshed P0 research decision record for the universal-security
+roadmap. It answers a narrow engineering question: what should SOVA adapt, invoke,
+benchmark against, or reject? It is not a claim that every listed project was
+security-audited or that repository popularity proves quality.
+
+No third-party source, payload corpus, playbook prose, template, or dataset was copied
+in P0. Before a later file-level adaptation, record the exact upstream commit/file,
+licence and notice obligations, modifications, tests, and provenance in the change
+that introduces it.
+
+## Decision scale
+
+| Decision | Meaning |
+|---|---|
+| **ADAPT** | Narrow architecture/file candidate; file-level audit required before code enters SOVA |
+| **ADAPTER** | Run as a pinned external tool through SOVA's executor/evidence contracts |
+| **BENCHMARK** | Import/translate licensed tasks and scorers with upstream identity preserved |
+| **REFERENCE** | Use concepts, taxonomy, or methodology; do not copy code/content |
+| **HOLD/REJECT** | Licence, maturity, monolith, duplication, safety, or evidence boundary is unacceptable now |
+
+## Core architectural conclusion
+
+No reviewed repository is a drop-in universal pentest engine. The common useful
+pattern is staged discovery, specialized roles, a task/workflow graph, bounded tool
+execution, resumable state, and structured reporting. The common missing pieces are
+target-bound authority, trustworthy effect receipts, independent oracle calibration,
+fresh reproduction, portable signed evidence, replay, explicit incomplete coverage,
+and production hostile-agent isolation. SOVA therefore keeps its current core and
+imports capabilities through adapters.
+
+## Autonomous pentest and cyber-agent frameworks
+
+| Project | Decision | What is useful | Why not wholesale copy |
+|---|---|---|---|
+| [AutoPentest AI](https://github.com/bhavsec/autopentest-ai) | **ADAPT** after file audit | Apache-2.0 Python modules for hierarchical task trees, endpoint priority, knowledge graph, output parsing/verification, context compression, and phase gates | Claude-driven workflow, bundled third-party guidance, Docker tool image, and its truth model do not replace SOVA authority/evidence; bundled prose needs separate rights review |
+| [PentAGI](https://github.com/vxcontrol/pentagi) | **REFERENCE** | Flow/task/subtask/action hierarchy, specialist agents, memory and multi-provider orchestration | Go/TypeScript microservice stack is heavy and duplicative; product evidence/isolation claims are not SOVA contracts |
+| [PentestGPT](https://github.com/GreyDGL/PentestGPT) | **BENCHMARK/REFERENCE** | Staged autonomous pipeline and published/XBOW-style evaluation route | Do not inherit telemetry/default integrations or a second state/runtime model |
+| [PentestAgent](https://github.com/GH05TCREW/pentestagent) | **REFERENCE**, licence hold | Playbook organization, modular tools/MCP, self-spawn concepts | Exact current licence and all playbook provenance must be resolved; SOVA already owns orchestration/runtime |
+| [CAI](https://github.com/aliasrobotics/cai) | **REFERENCE/HOLD** | Agents, tools, handoffs, patterns, turns, tracing, HITL architecture | Current commercial-use language is incompatible with assuming ordinary open-source reuse; no code adaptation without qualified licence review |
+| [Akira](https://github.com/kalpmodi/akira) | **REFERENCE** | Hypothesis/state bus and technique-manifest concepts | Technique decisions and signals must map into SOVA target generations and traces, not form a parallel evidence model |
+| [HexStrike AI](https://github.com/0x4m4/hexstrike-ai) | **REFERENCE/ADAPTER CATALOG** | Broad security-tool catalog and orchestration examples | Large monolithic server and very broad tool surface create audit and least-privilege problems |
+| [pentest-mcp](https://github.com/openbashok/pentest-mcp) | **REFERENCE** | Small FastMCP wrappers demonstrate common scanner I/O | Thin wrappers do not supply authorization, containment, parser assurance, or vulnerability truth |
+| [JuliusHenke/autopentest](https://github.com/JuliusHenke/autopentest) | **REJECT CORE** | Research baseline | Experimental breadth/performance is insufficient for a production architecture |
+
+**Selected adaptation order:** first study AutoPentest's task tree, endpoint priority,
+parser verification, and context compression as separate files. Reimplement only the
+parts that survive compatibility, security, licence, and test review. PentAGI and CAI
+inform orchestration comparisons; they do not become dependencies.
+
+## Web, API, protocol, and network tools
+
+| Project | Decision | SOVA integration boundary |
+|---|---|---|
+| [OWASP ZAP](https://github.com/zaproxy/zaproxy) | **ADAPTER** | Generate a pinned Automation Framework plan; ingest JSON/XML reports and raw receipts; SOVA owns target scope, authentication references, authority, and confirmation |
+| [Nuclei templates](https://github.com/projectdiscovery/nuclei-templates) / [Nuclei](https://github.com/projectdiscovery/nuclei) | **ADAPTER** | Pin engine plus template commit/digest; template match is an observation until reproduced by a SOVA oracle |
+| [Schemathesis](https://github.com/schemathesis/schemathesis) | **ADAPTER** and possible library integration | Reuse its OpenAPI/GraphQL examples, coverage, fuzzing, and stateful phases; normalize requests/responses/events; do not duplicate its generator |
+| [ffuf](https://github.com/ffuf/ffuf) | **ADAPTER** | Bounded content/vhost/parameter discovery with exact wordlist provenance and rate budgets |
+| [httpx](https://github.com/projectdiscovery/httpx) | **ADAPTER** | Passive/active service observations under explicit destination policy |
+| [testssl.sh](https://github.com/testssl/testssl.sh) | **ADAPTER** | TLS configuration observations with executable/version and target fingerprint |
+| [sqlmap](https://github.com/sqlmapproject/sqlmap) | **ADAPTER after licence/safety review** | Consequential techniques require destructive-level approval, containment, and exact cleanup/evidence rules |
+| [mitmproxy](https://github.com/mitmproxy/mitmproxy) | **ADAPTER** | Operator-authorized traffic capture/transform; certificate and captured data remain secret-scoped and non-public by default |
+| [Nmap](https://github.com/nmap/nmap) | **HOLD** for specific shipped adapter | NPSL broadly addresses software designed to execute/parse Nmap; keep user-installed/generic until qualified review clears distribution/integration |
+| [OWASP API Security Testing Framework](https://github.com/OWASP/www-project-api-security-testing-framework) | **REFERENCE** | Map its API tests into native playbooks only after maturity and CC/licence separation review |
+
+## AI, model, agent, MCP, and A2A security
+
+| Project/standard | Decision | SOVA integration boundary |
+|---|---|---|
+| [PyRIT](https://github.com/microsoft/pyrit) | **ADAPTER** | Targets, converters, scorers, and orchestrators run as a pinned test generator; SOVA calibrates/promotes oracles and packages evidence |
+| [garak](https://github.com/NVIDIA/garak) | **ADAPTER** | Preserve generator/probe/detector/harness/evaluator identity and raw output; detector result is not automatically a finding |
+| [promptfoo](https://github.com/promptfoo/promptfoo) | **ADAPTER** | Use target/plugin/strategy configuration with remote generation and sharing disabled by default; external transfer requires disclosure approval |
+| [AgentDojo](https://github.com/ethz-spylab/agentdojo) | **BENCHMARK** | Dynamic prompt-injection/utility-security evaluation; pin API and task version because the project warns of instability |
+| [Inspect AI](https://github.com/UKGovernmentBEIS/inspect_ai) / [Inspect Evals](https://github.com/UKGovernmentBEIS/inspect_evals) | **BENCHMARK** | Highest-priority evaluation compatibility for CVEBench, CyberGym, Cybench, CyberSecEval, CTF, and agent-security tasks; SOVA evidence remains separate |
+| [ACES](https://github.com/microsoft/ACES) / [ACESEvals](https://github.com/microsoft/ACESEvals) | **BENCHMARK/REFERENCE** | Study YAML-to-Inspect task compilation and scorer separation; do not fork a competing evaluation engine |
+| [NIST CAISI cyber evals](https://github.com/usnistgov/caisi-cyber-evals) | **BENCHMARK** | Government-maintained composition of Inspect cybersecurity evaluations; preserve upstream tasks/scorers |
+| [OASB](https://github.com/opena2a-org/oasb) | **BENCHMARK**, maturity caution | Adapter-based agent security scenarios and ATLAS mapping; early/self-reported project needs independent corpus and scorer audit |
+| [Agent Security Bench](https://github.com/agiresearch/ASB) | **BENCHMARK CANDIDATE** | Scenario/defense coverage after licence, ground-truth, and leakage review |
+| [OpenAgentSafety](https://github.com/Open-Agent-Safety/OpenAgentSafety) | **BENCHMARK CANDIDATE** | Realistic high-risk agent simulations through a maintained upstream runtime |
+| [Damn Vulnerable AI Agent](https://github.com/opena2a-org/damn-vulnerable-ai-agent) | **OWNED/LAB TARGET CANDIDATE** | Agent/MCP/A2A acceptance only after exact version, licence, and deterministic oracle audit |
+
+## Standards and methodology sources
+
+| Source | Decision | Use |
+|---|---|---|
+| [NIST SP 800-115](https://csrc.nist.gov/pubs/sp/800/115/final) | **REFERENCE** | Assessment planning, execution, analysis, limitations, and mitigation reporting |
+| [OWASP WSTG](https://github.com/OWASP/wstg) | **REFERENCE DATA** | Web test taxonomy/procedures; CC BY-SA content stays outside Apache-licensed source code |
+| [OWASP ASVS](https://github.com/OWASP/ASVS) | **REFERENCE DATA** | Requirement-to-test coverage mapping |
+| [OWASP AISVS](https://github.com/OWASP/AISVS) | **REFERENCE DATA** | AI/agent orchestration, MCP, memory, supply-chain, and platform requirements |
+| [OWASP AI Testing Guide](https://github.com/OWASP/www-project-ai-testing-guide) | **REFERENCE DATA** | Application/model/infrastructure/data testing taxonomy |
+| [MITRE ATLAS](https://atlas.mitre.org/) | **REFERENCE DATA** | Versioned AI threat-technique mapping, not a complete methodology |
+| [CWE](https://cwe.mitre.org/) / [CAPEC](https://capec.mitre.org/) | **REFERENCE DATA** | Weakness and attack-pattern interoperability under their terms of use |
+
+The native playbook contract cites and maps these sources. It does not paste their
+full prose into Apache-2.0 code or imply endorsement.
+
+## Supply chain, static analysis, package, image, and binary tooling
+
+| Project | Decision | Boundary |
+|---|---|---|
+| [Trivy](https://github.com/aquasecurity/trivy) | **ADAPTER** | Vulnerability, misconfiguration, secret, licence, and SBOM observations |
+| [Syft](https://github.com/anchore/syft) | **ADAPTER** | Content-addressed SBOM generation |
+| [Grype](https://github.com/anchore/grype) | **ADAPTER** | Vulnerability analysis of images/filesystems/SBOMs |
+| [OSV-Scanner](https://github.com/google/osv-scanner) | **ADAPTER** | Lockfile/SBOM/source dependency vulnerability observations |
+| [Gitleaks](https://github.com/gitleaks/gitleaks) | **ADAPTER** | CLI only; do not assume the separately licensed GitHub Action is reusable |
+| [Semgrep Community Edition](https://github.com/semgrep/semgrep) | **ADAPTER** | External CLI/rule execution; LGPL and documented cross-file limitations prohibit vendoring or overclaiming |
+| [AFL++](https://github.com/AFLplusplus/AFLplusplus) | **ADAPTER** | Isolated fuzzing with exact harness/corpus/build provenance; AGPL tool remains external |
+| [OSS-Fuzz](https://github.com/google/oss-fuzz) | **REFERENCE/BENCHMARK** | Multi-engine fuzzing architecture, sanitizer, corpus, and coverage practice |
+| [angr](https://github.com/angr/angr) | **ADAPTER CANDIDATE** | Bounded binary analysis after platform/performance/licence review |
+| [Ghidra](https://github.com/NationalSecurityAgency/ghidra) | **ADAPTER CANDIDATE** | Headless analysis under isolation; heavyweight and not a core dependency |
+| [Prowler](https://github.com/prowler-cloud/prowler) | **ADAPTER CANDIDATE** | Cloud posture only with scoped read credentials and provider-specific evidence |
+| [Kubescape](https://github.com/kubescape/kubescape) / [kube-bench](https://github.com/aquasecurity/kube-bench) | **ADAPTER CANDIDATE** | Kubernetes posture/CIS observations; cluster access is explicit and read-scoped by default |
+
+## Benchmark and target sources
+
+| Source | Decision | Notes |
+|---|---|---|
+| Inspect Evals cybersecurity registry | **BENCHMARK** | Broadest common evaluation adapter target; reports model capability, not SOVA product completeness |
+| [EthiBench](https://github.com/ethiack/ethibench) | **BENCHMARK CANDIDATE** | Ground-truth penetration-testing cases; verify exact target licences and scoring |
+| [Argus validation benchmarks](https://github.com/pensar-x/argus-validation-benchmarks) | **BENCHMARK CANDIDATE** | Broad containerized challenges; audit each image/task and oracle |
+| PentestGPT/XBOW-compatible benchmark | **BENCHMARK CANDIDATE** | Useful agent comparison lane; equalize budgets/tools and preserve blind split |
+| AI Goat and current SOVA fixtures | **OWNED ACCEPTANCE** | Deterministic engine/evidence proof only; not broad generalization |
+
+Benchmark admission requires source/fixture provenance, licence, ground truth, scorer
+review, contamination/leakage analysis, target safety, deterministic reset, and a
+separate infrastructure-failure state.
+
+## Isolation and hostile-agent execution
+
+| Project | Decision | Boundary |
+|---|---|---|
+| [Firecracker](https://github.com/firecracker-microvm/firecracker) | **PRIMARY WORKER ARCHITECTURE** | Dedicated Linux/KVM host; one microVM/job; production jailer, unique identities, patched host/guest/microcode, cgroups/seccomp, no host mounts, bounded I/O, watchdog |
+| [firecracker-containerd](https://github.com/firecracker-microvm/firecracker-containerd) | **REFERENCE/OPTIONAL ADAPTER** | Useful OCI/containerd lifecycle architecture; added control-plane complexity must earn itself |
+| [Kata Containers](https://github.com/kata-containers/kata-containers) | **OPTIONAL BACKEND/HOLD UNTIL HARDENED** | OCI-compatible VM isolation, but 2026 advisories include escapes and annotation/config-path issues; exact-version pinning and annotation/mount lockdown required |
+| [gVisor](https://github.com/google/gvisor) | **LOWER-ASSURANCE BACKEND** | Stronger container isolation through a userspace kernel; not equivalent to a VM for arbitrary hostile code |
+| Docker Desktop OCI executor | **COMPATIBILITY ONLY** | Current tested backend shares a VM kernel and remains outside the production hostile-agent claim |
+
+Firecracker itself is not a complete worker. SOVA must build the authenticated job
+protocol, image/provenance policy, network and secret brokers, host hardening,
+attestation, evidence extraction, cleanup, monitoring, updates, and independent
+review described by P5.
+
+## Immediate implementation order
+
+1. P1 contracts and workflow/surface graph, with no external runtime dependency.
+2. P2 native playbook contract/compiler and separated standards mappings.
+3. P3 adapters beginning with Schemathesis, ZAP, Nuclei, PyRIT/garak/promptfoo,
+   and supply-chain scanners.
+4. P4 oracle calibration and coverage accounting before claiming scanner breadth.
+5. P5 Linux/KVM hostile-agent worker; do not build a custom VMM.
+6. P6 Inspect/OASB/AgentDojo and blinded multi-provider/target validation.
+
+This order reuses mature projects where they are strongest while keeping SOVA's
+implemented differentiator: authorized execution that ends in reproducible,
+portable, replayable evidence rather than an unverified agent narrative.

@@ -127,6 +127,7 @@ class VisualRecordingSession:
         return {
             "artifactType": "sova.replay-cues",
             "schemaVersion": "0.1.0",
+            "surface": "browser",
             "mediaName": media.name,
             "mediaDigest": sha256_digest(media.read_bytes()),
             "synchronization": {

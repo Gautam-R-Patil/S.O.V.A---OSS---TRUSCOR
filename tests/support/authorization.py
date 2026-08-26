@@ -34,9 +34,14 @@ class TestAuthorization:
     approvals: dict[str, ApprovalToken]
 
 
-def authorize_synthetic_steps(
+def authorize_synthetic_steps(  # noqa: PLR0913 - mirrors explicit runner bindings
     scenario: dict[str, Any],
     capabilities: tuple[Capability, ...],
+    *,
+    participant_id: str | None = None,
+    session_id: str | None = None,
+    observation_digest: str | None = None,
+    capability_generation: str | None = None,
 ) -> TestAuthorization:
     """Authorize exact synthetic test steps with fresh per-effect approvals."""
     now = datetime.now(UTC)
@@ -49,6 +54,10 @@ def authorize_synthetic_steps(
             side_effect=by_action[step["action"]].side_effect,
             evidence=by_action[step["action"]].evidence,
             target=_TARGET,
+            participant_id=participant_id,
+            session_id=session_id,
+            observation_digest=observation_digest,
+            capability_generation=capability_generation,
         )
         for step in steps
     ]

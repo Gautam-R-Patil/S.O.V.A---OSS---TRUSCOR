@@ -524,6 +524,42 @@ def test_playwright_adapter_gracefully_closes_browser_before_transport() -> None
     assert unavailable.closed
 
 
+def test_playwright_adapter_runs_private_finalizer_and_still_closes_on_failure() -> None:
+    events: list[str] = []
+    client = FakeMCPClient(
+        ("browser_close", "browser_navigate"),
+        [MCPToolResult(content=(), structured_content=None, is_error=False)],
+    )
+    adapter = MCPExecutorAdapter(
+        "playwright",
+        client,
+        playwright_mappings(),
+        before_close=lambda: events.append("finalized"),
+    )
+    adapter.close()
+    assert events == ["finalized"]
+    assert client.calls == [("browser_close", {})]
+    assert client.closed
+
+    failed = FakeMCPClient(
+        ("browser_close", "browser_navigate"),
+        [MCPToolResult(content=(), structured_content=None, is_error=False)],
+    )
+
+    def fail() -> None:
+        raise RuntimeError
+
+    with pytest.raises(FormatError, match="lifecycle finalization"):
+        MCPExecutorAdapter(
+            "playwright",
+            failed,
+            playwright_mappings(),
+            before_close=fail,
+        ).close()
+    assert failed.calls == [("browser_close", {})]
+    assert failed.closed
+
+
 def test_playwright_adapter_enforces_exact_navigation_origin(tmp_path: Path) -> None:
     client = FakeMCPClient(
         ("browser_navigate",),
@@ -1077,8 +1113,23 @@ def test_pinned_open_source_launch_specs_are_fail_closed(  # noqa: PLR0915
             "launchOptions": {
                 "args": ["--enable-features=TriggerNetworkDataMigration"],
             }
-        }
+        },
+        "capabilities": ["storage"],
     }
+
+    recorded_profile = playwright_stdio_spec(
+        package_runner=runner,
+        workspace=tmp_path,
+        browser_executable=browser,
+        profile_directory=profile,
+        record_video=True,
+    )
+    assert "--caps" not in recorded_profile.argv
+    recorded_config = Path(recorded_profile.argv[recorded_profile.argv.index("--config") + 1])
+    assert json.loads(recorded_config.read_text(encoding="utf-8"))["capabilities"] == [
+        "storage",
+        "devtools",
+    ]
 
     external_vault = tmp_path.parent / f"{tmp_path.name}-profile-vault"
     external_profile = external_vault / "profile"

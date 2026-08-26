@@ -7,8 +7,45 @@ twice against independent, credential-stripped copies of an operator-supplied
 workspace. `sova detonate owned-software-fixture` exercises the same path with
 an inert bundled program and no network dependency.
 
-This is a bounded local-process workflow. It is not native desktop UI
-automation and it is not a security sandbox.
+Those two `detonate` commands remain bounded process-only workflows and are not
+security sandboxes. The newer `engine run-software`, `engine swarm-software`,
+`arena run-software`, and `arena swarm-software` commands extend the same
+authority and evidence principles to separately launched, measured native
+applications; they do not weaken the process-only capsule contract described
+below.
+
+## Native software executor engine
+
+The software executor engine accepts an exact regular executable, a
+local-process target manifest, a fresh proof bound to that executable and the
+workspace seed, a strict chamber document, and optional explicitly reviewed
+process or computer adapters. Primary and reproduction phases receive separate
+credential-stripped workspaces and separately launched process generations.
+
+On Windows, the built-in native adapter admits only a visible enabled child
+control owned by the exact attested top-level HWND. Each observation regenerates
+the binding and control inventory. A typed request must match the current
+process generation, HWND, binding digest, observation digest, target reference,
+and separately declared `computer.click` or `computer.type` grant. Text is
+bounded Unicode; coordinate targets remain operator-reviewed or dynamically
+discovered inside that HWND. No model receives raw host, credential, approval,
+or unrestricted input authority.
+
+The deterministic oracle evaluates only SOVA-observed projections, including
+exact-window frames and disposable-workspace effects. A finding requires a
+fresh passing reproduction. Optional recording captures only the measured
+application window, packages digest-bound primary and reproduction frame
+archives, and selects the decisive passing-oracle moment for inert replay.
+Software swarms launch a separate target process and workspace for every worker,
+apply both per-worker and aggregate effect budgets, retain signed participant
+and coordinator evidence, and package each reproduced finding as a nested
+capsule.
+
+This establishes a controlled reference path, not universal desktop
+automation. Arbitrary accessibility frameworks, elevated/system windows,
+cross-process dialogs, OS permission prompts, credential entry, undisclosed
+plugins, arbitrary third-party applications, and strong host isolation require
+their own adapters and acceptance evidence.
 
 ## Admission and authority
 
@@ -94,7 +131,10 @@ sova detonate software ./target.json ./scenario.sova ./source-workspace \
 Both commands require an interactive terminal. The generic command is intended
 for trusted local programs with portable argv/file behavior. Native GUI input,
 accessibility-tree automation, persistent profiles, and arbitrary untrusted
-code remain outside this backend's claims.
+code remain outside this process-only backend's claims. Use `engine
+run-software` or its Arena alias for the separately authorized executor-engine
+path; use `engine swarm-software` or its Arena alias only when each isolated
+worker launch and the aggregate effect budget are intended.
 
 ## Validation
 
@@ -105,3 +145,10 @@ offline case workspace. Failure tests cover bad authority, wrong target kind,
 missing capabilities, unsafe paths, executable substitution, disallowed
 actions, secret references, effect escalation, sensor truncation, false local
 proofs, wrong approval phrases, atomic cleanup, and non-interactive CLI use.
+
+On Windows, the actionful engine lane additionally launches fresh owned GUI
+processes and verifies exact-HWND click, changing-control discovery, bounded
+type-and-save, primary/reproduction equivalence, decisive frame replay,
+portable capsule reproduction, two isolated GUI workers, aggregate measured
+coverage, and trusted Registry resolution. This is controlled internal
+acceptance on one Windows configuration, not external application coverage.

@@ -5,16 +5,16 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import http.client
+import importlib
 import json
 import os
-import socket
 import subprocess
 import time
+from contextlib import suppress
 from pathlib import Path
-from typing import Any
-from urllib.parse import quote, urlsplit
+from typing import Any, cast
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -25,7 +25,7 @@ from sova.trace import TraceWriter
 
 
 class _CDPWebSocket:
-    """Tiny test-only RFC 6455 client for Chrome DevTools loopback JSON."""
+    """Maintained WebSocket transport for Chrome DevTools loopback JSON."""
 
     def __init__(self, url: str) -> None:
         parsed = urlsplit(url)
@@ -35,98 +35,42 @@ class _CDPWebSocket:
             or parsed.port is None
         ):
             raise AssertionError("Chrome returned a non-loopback DevTools URL")
-        self._socket = socket.create_connection(("127.0.0.1", parsed.port), timeout=10)
-        self._socket.settimeout(10)
-        self._buffer = b""
-        key = base64.b64encode(os.urandom(16)).decode("ascii")
-        request = (
-            f"GET {parsed.path} HTTP/1.1\r\n"
-            f"Host: {parsed.hostname}:{parsed.port}\r\n"
-            "Upgrade: websocket\r\n"
-            "Connection: Upgrade\r\n"
-            f"Sec-WebSocket-Key: {key}\r\n"
-            "Sec-WebSocket-Version: 13\r\n\r\n"
-        ).encode("ascii")
-        self._socket.sendall(request)
-        response = self._read_headers()
-        assert response.startswith(b"HTTP/1.1 101")
-        expected = base64.b64encode(
-            hashlib.sha1(  # noqa: S324 - required RFC 6455 handshake, not security hashing
-                (key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode("ascii")
-            ).digest()
-        ).decode("ascii")
-        assert (
-            f"sec-websocket-accept: {expected}".casefold() in response.decode("latin-1").casefold()
-        )
+        websocket = cast("Any", importlib.import_module("websocket"))
+        try:
+            self._socket = websocket.create_connection(
+                url,
+                timeout=10,
+                origin=f"http://127.0.0.1:{parsed.port}",
+                enable_multithread=False,
+            )
+        except Exception as error:
+            raise AssertionError("Chrome rejected its loopback DevTools WebSocket") from error
         self._next_id = 1
+        self._session_id: str | None = None
 
-    def _read_headers(self) -> bytes:
-        data = b""
-        while b"\r\n\r\n" not in data:
-            data += self._socket.recv(4096)
-        headers, self._buffer = data.split(b"\r\n\r\n", 1)
-        return headers
-
-    def _read_exact(self, size: int) -> bytes:
-        while len(self._buffer) < size:
-            block = self._socket.recv(max(4096, size - len(self._buffer)))
-            if not block:
-                raise AssertionError("Chrome closed the DevTools WebSocket")
-            self._buffer += block
-        result, self._buffer = self._buffer[:size], self._buffer[size:]
-        return result
-
-    def _send_frame(self, payload: bytes, *, opcode: int = 1) -> None:
-        mask = os.urandom(4)
-        length = len(payload)
-        header = bytes((0x80 | opcode,))
-        if length < 126:
-            header += bytes((0x80 | length,))
-        elif length <= 0xFFFF:
-            header += bytes((0x80 | 126,)) + length.to_bytes(2, "big")
-        else:
-            header += bytes((0x80 | 127,)) + length.to_bytes(8, "big")
-        masked = bytes(byte ^ mask[index % 4] for index, byte in enumerate(payload))
-        self._socket.sendall(header + mask + masked)
-
-    def _receive_message(self) -> bytes:
-        fragments = bytearray()
-        while True:
-            first, second = self._read_exact(2)
-            final = bool(first & 0x80)
-            opcode = first & 0x0F
-            masked = bool(second & 0x80)
-            length = second & 0x7F
-            if length == 126:
-                length = int.from_bytes(self._read_exact(2), "big")
-            elif length == 127:
-                length = int.from_bytes(self._read_exact(8), "big")
-            mask = self._read_exact(4) if masked else b""
-            payload = self._read_exact(length)
-            if masked:
-                payload = bytes(byte ^ mask[index % 4] for index, byte in enumerate(payload))
-            if opcode == 0x9:
-                self._send_frame(payload, opcode=0xA)
-                continue
-            if opcode == 0x8:
-                raise AssertionError("Chrome closed the DevTools WebSocket")
-            if opcode not in {0x0, 0x1}:
-                continue
-            fragments.extend(payload)
-            if final:
-                return bytes(fragments)
+    def bind_session(self, session_id: str) -> None:
+        """Route subsequent commands through one flattened page session."""
+        assert session_id
+        self._session_id = session_id
 
     def command(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         identifier = self._next_id
         self._next_id += 1
-        self._send_frame(
-            json.dumps(
-                {"id": identifier, "method": method, "params": params or {}},
-                separators=(",", ":"),
-            ).encode("utf-8")
-        )
+        envelope: dict[str, Any] = {
+            "id": identifier,
+            "method": method,
+            "params": params or {},
+        }
+        if self._session_id is not None:
+            envelope["sessionId"] = self._session_id
+        self._socket.send(json.dumps(envelope, separators=(",", ":")))
         while True:
-            message = json.loads(self._receive_message())
+            payload = self._socket.recv()
+            if not payload:
+                raise AssertionError("Chrome closed the DevTools WebSocket")
+            if isinstance(payload, bytes):
+                payload = payload.decode("utf-8")
+            message = json.loads(payload)
             if message.get("id") != identifier:
                 continue
             if "error" in message:
@@ -148,9 +92,7 @@ class _CDPWebSocket:
         return result["result"].get("value")
 
     def close(self) -> None:
-        try:
-            self._send_frame(b"", opcode=0x8)
-        finally:
+        with suppress(Exception):
             self._socket.close()
 
 
@@ -159,22 +101,61 @@ def _wait_for_devtools(profile: Path) -> tuple[int, str]:
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
         if marker.is_file():
-            lines = marker.read_text(encoding="utf-8").splitlines()
+            try:
+                lines = marker.read_text(encoding="utf-8").splitlines()
+            except (OSError, UnicodeError):
+                # Chrome creates this marker before releasing its startup
+                # write handle on Windows.  Retry within the existing bound.
+                time.sleep(0.05)
+                continue
             if len(lines) >= 2:
-                return int(lines[0]), lines[1]
+                try:
+                    return int(lines[0]), lines[1]
+                except ValueError:
+                    pass
         time.sleep(0.05)
     raise AssertionError("installed Chrome did not expose its loopback DevTools endpoint")
 
 
 def _new_page(port: int) -> str:
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
-    connection.request("PUT", f"/json/new?{quote('about:blank', safe='')}")
+    connection.request("GET", "/json/list")
     response = connection.getresponse()
     payload = response.read()
     connection.close()
     assert response.status == 200
     value = json.loads(payload)
-    return str(value["webSocketDebuggerUrl"])
+    assert isinstance(value, list)
+    pages = [item for item in value if isinstance(item, dict) and item.get("type") == "page"]
+    assert len(pages) == 1
+    return str(pages[0]["webSocketDebuggerUrl"])
+
+
+def _connect_page(port: int, browser_path: str) -> _CDPWebSocket:
+    """Attach a flattened page session through Chrome's browser endpoint."""
+    last_error: BaseException | None = None
+    for _attempt in range(3):
+        client: _CDPWebSocket | None = None
+        try:
+            client = _CDPWebSocket(f"ws://127.0.0.1:{port}{browser_path}")
+            client.command("Browser.getVersion")
+            target = client.command("Target.createTarget", {"url": "about:blank"})
+            attached = client.command(
+                "Target.attachToTarget",
+                {"targetId": target["targetId"], "flatten": True},
+            )
+            client.bind_session(str(attached["sessionId"]))
+            client.command("Page.enable")
+            client.command("Runtime.enable")
+        except Exception as error:  # noqa: BLE001 - retry Chrome startup/transport races
+            last_error = error
+            if client is not None:
+                with suppress(Exception):
+                    client.close()
+            time.sleep(0.1)
+        else:
+            return client
+    raise AssertionError("Chrome did not keep a fresh DevTools page connected") from last_error
 
 
 def _poll(cdp: _CDPWebSocket, expression: str, *, timeout: float = 10) -> Any:
@@ -246,12 +227,19 @@ def test_optional_installed_chrome_opens_exact_decisive_webm_window(  # noqa: PL
             "--disable-background-networking",
             "--disable-component-update",
             "--disable-default-apps",
+            "--disable-gpu",
+            "--disable-gpu-compositing",
+            "--disable-gpu-sandbox",
             "--disable-sync",
             "--metrics-recording-only",
             "--mute-audio",
             "--no-default-browser-check",
             "--no-first-run",
+            "--remote-allow-origins=*",
+            "--remote-debugging-address=127.0.0.1",
             "--remote-debugging-port=0",
+            "--use-angle=swiftshader",
+            "--use-gl=angle",
             f"--user-data-dir={profile}",
             "about:blank",
         ],
@@ -261,10 +249,8 @@ def test_optional_installed_chrome_opens_exact_decisive_webm_window(  # noqa: PL
     )
     cdp: _CDPWebSocket | None = None
     try:
-        port, _browser_path = _wait_for_devtools(profile)
-        cdp = _CDPWebSocket(_new_page(port))
-        cdp.command("Page.enable")
-        cdp.command("Runtime.enable")
+        port, browser_path = _wait_for_devtools(profile)
+        cdp = _connect_page(port, browser_path)
         media = _record_actual_webm(cdp)
         video = tmp_path / "actual-browser.webm"
         video.write_bytes(media)

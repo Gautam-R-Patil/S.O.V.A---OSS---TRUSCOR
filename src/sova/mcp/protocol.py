@@ -368,14 +368,36 @@ class StdioMCPClient:
             try:
                 self._process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                self._process.terminate()
+                # The server may exit between poll/wait and the signal on
+                # Windows.  Treat that access/process-lookup race as benign,
+                # then verify termination with another bounded wait.
+                with suppress(OSError):
+                    self._process.terminate()
                 try:
                     self._process.wait(timeout=3)
                 except subprocess.TimeoutExpired:
-                    self._process.kill()
-                    self._process.wait(timeout=2)
+                    with suppress(OSError):
+                        self._process.kill()
+                    with suppress(subprocess.TimeoutExpired):
+                        self._process.wait(timeout=2)
+        for stream in (self._process.stdout, self._process.stderr):
+            if stream is not None:
+                with suppress(OSError):
+                    stream.close()
         self._reader.join(timeout=2)
         self._stderr_reader.join(timeout=2)
+        reader_alive = getattr(self._reader, "is_alive", None)
+        stderr_alive = getattr(self._stderr_reader, "is_alive", None)
+        if (
+            self._process.poll() is None
+            or (callable(reader_alive) and reader_alive())
+            or (callable(stderr_alive) and stderr_alive())
+        ):
+            raise FormatError(
+                "SOVA-MCP-CLEANUP",
+                "MCP server process or transport readers did not terminate "
+                "within the cleanup bound",
+            )
 
 
 __all__ = [

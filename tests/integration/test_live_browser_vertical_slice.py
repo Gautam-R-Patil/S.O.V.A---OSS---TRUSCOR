@@ -59,8 +59,11 @@ class _DeterministicBrowserMCP:
 
     def __init__(self, _spec: object) -> None:
         names = (
+            "browser_close",
             "browser_navigate",
+            "browser_set_storage_state",
             "browser_snapshot",
+            "browser_storage_state",
             "browser_wait_for",
             "browser_type",
             "browser_click",
@@ -119,6 +122,13 @@ class _DeterministicBrowserMCP:
             self.armed = False
             self.triggered = False
             self.current = ""
+        elif name == "browser_storage_state":
+            Path(str(arguments["filename"])).write_text(
+                '{"cookies":[],"origins":[]}',
+                encoding="utf-8",
+            )
+        elif name == "browser_set_storage_state":
+            assert Path(str(arguments["filename"])).is_file()
         elif name == "browser_type":
             self.current = str(arguments["text"]).casefold()
         elif name == "browser_click":
