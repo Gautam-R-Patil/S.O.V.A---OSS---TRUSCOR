@@ -337,6 +337,8 @@ P6-07 through P6-11 remain open where
 they require the exact real preregistration, live providers/targets/baselines,
 production operator receipts, final-commit artifacts, independent/legal/security
 review, public results, or an explicitly authorized publication action.
+The recomputed dossier exposes those remaining states as sorted machine-readable
+hold reasons mapped to evaluation, Registry, review, and external-gate summaries.
 
 ## 10. Change-control rule
 

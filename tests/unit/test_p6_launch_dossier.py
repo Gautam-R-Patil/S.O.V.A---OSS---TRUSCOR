@@ -27,9 +27,11 @@ from sova.validation import (
     evaluate_launch_bundle,
     evaluate_registry_beta,
     launch_bundle_from_mapping,
+    operational_receipt_from_mapping,
     protocol_from_mapping,
     read_launch_bundle,
     registry_policy_from_mapping,
+    release_candidate_from_mapping,
     sign_launch_evidence,
     trust_policy_from_mapping,
 )
@@ -278,6 +280,19 @@ def _refresh_trust(document: dict[str, Any]) -> dict[str, Any]:
     return _refresh_bundle(document)
 
 
+def _rebind_registry_candidate(document: dict[str, Any]) -> dict[str, Any]:
+    policy = registry_policy_from_mapping(document["registryPolicy"])
+    receipts = tuple(
+        operational_receipt_from_mapping(_signed_payload(envelope))
+        for envelope in document["operationalReceipts"]
+    )
+    registry = evaluate_registry_beta(policy, receipts)
+    document["candidate"]["registryReadinessDigest"] = registry["contentDigest"]
+    candidate = release_candidate_from_mapping(document["candidate"])
+    document["trustPolicy"]["releaseCandidateDigest"] = candidate.digest
+    return _refresh_trust(document)
+
+
 def test_signed_launch_dossier_can_be_ready_but_never_publishes() -> None:
     document, manifest, claims, commit, _keys = _ready_bundle()
     dossier = evaluate_launch_bundle(
@@ -293,8 +308,29 @@ def test_signed_launch_dossier_can_be_ready_but_never_publishes() -> None:
     assert dossier["automaticPublishPerformed"] is False
     assert dossier["receiptCounts"] == {"operational": 10, "reviews": 5, "launchGates": 3}
     assert len(dossier["trustedSignerKeyIds"]) == 9
+    assert dossier["holdReasons"] == []
+    assert dossier["evaluationSummary"] == {
+        "status": "conclusive",
+        "expectedRuns": 32,
+        "observedRuns": 32,
+        "missingRunCount": 0,
+        "budgetExceedanceCount": 0,
+    }
+    assert dossier["registrySummary"]["liveBetaReady"] is True
+    assert dossier["reviewSummary"] == {
+        "missingReviews": [],
+        "failedReviews": [],
+        "syntheticReviews": [],
+        "independenceFailures": [],
+    }
+    assert all(dossier["externalGates"].values())
     assert dossier["claims"]["reviewerIdentityLegallyVerifiedBySova"] is False
     assert dossier["claims"]["allVulnerabilitiesFound"] is False
+    inconsistent = copy.deepcopy(dossier)
+    inconsistent["status"] = "hold"
+    inconsistent["tagOrPublishAllowed"] = False
+    with pytest.raises(FormatError):
+        validate_document(inconsistent, "sova.launch-dossier")
 
 
 def test_missing_or_synthetic_gate_keeps_dossier_on_hold() -> None:
@@ -313,6 +349,26 @@ def test_missing_or_synthetic_gate_keeps_dossier_on_hold() -> None:
     assert dossier["status"] == "hold"
     assert dossier["tagOrPublishAllowed"] is False
     assert dossier["gateReceipts"]["deterministic-release-checks"]["present"] is False
+    assert dossier["holdReasons"] == ["external-gate-not-passed:deterministicReleaseChecks"]
+
+    missing_review, manifest, claims, commit, _keys = _ready_bundle()
+    missing_review["reviewReceipts"] = missing_review["reviewReceipts"][:-1]
+    missing_review = _refresh_bundle(missing_review)
+    review_dossier = _evaluate_ready_document(missing_review, manifest, claims, commit)
+    assert review_dossier["reviewSummary"]["missingReviews"] == ["security-signoff"]
+    assert review_dossier["holdReasons"] == ["review-missing:security-signoff"]
+
+    missing_operation, manifest, claims, commit, _keys = _ready_bundle()
+    missing_operation["operationalReceipts"] = missing_operation["operationalReceipts"][1:]
+    missing_operation = _rebind_registry_candidate(missing_operation)
+    operation_dossier = _evaluate_ready_document(missing_operation, manifest, claims, commit)
+    assert operation_dossier["registrySummary"]["missingControls"] == [
+        "authentication-authorization"
+    ]
+    assert operation_dossier["holdReasons"] == [
+        "external-gate-not-passed:registryLiveBeta",
+        "registry-missing-control:authentication-authorization",
+    ]
 
 
 def test_launch_bundle_rejects_tampering_drift_and_untrusted_signers() -> None:

@@ -134,6 +134,12 @@ canonical JSON inside single-signature DSSE envelopes. The dossier verifier MUST
   `automaticPublishPerformed=false`; tagging, pushing, deployment, and publication
   remain separate explicitly authorized operations.
 
+The dossier MUST include compact evaluation, Registry-control, review, and external-
+gate summaries derived from the recomputed reports. A hold result MUST include a
+sorted, unique `holdReasons` list that identifies every observed missing, failed,
+synthetic, non-production, unauthorized, non-independent, inconclusive, or false
+gate state. A ready result MUST have an empty hold-reason list.
+
 `sova release assemble-evidence` MAY construct the bundle deterministically from
 separate strict inputs and repeated receipt envelopes. Assembly MUST validate every
 unsigned typed document and envelope shape, MUST NOT assert that signatures were

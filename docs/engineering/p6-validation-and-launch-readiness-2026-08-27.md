@@ -19,7 +19,9 @@ recomputes all three ledgers, binds actual manifest/claims bytes, requires an
 out-of-band trust-policy digest, enforces distinct role keys and independent-review
 separation, and performs no publication action. A deterministic assembler now
 combines separately governed inputs without pretending that assembly verifies
-signatures.
+signatures. Its output now carries exact recomputed evaluation, Registry, review,
+and external-gate summaries with deterministic hold reasons instead of only a
+generic hold flag.
 
 The normative behavior is in the
 [P6 specification](../specifications/blinded-validation-registry-and-launch-0.1.md).
@@ -64,8 +66,8 @@ Supporting deterministic digests:
 
 | Gate | Result |
 |---|---|
-| Focused P6 and Registry-backup tests | `54 passed`; combined validation/backup statement-branch coverage `97.82%` |
-| Full repository suite | `2,549 passed`, `30 skipped`, zero failed in `1,093.52s` |
+| Focused P6 and Registry-backup tests | `54 passed`; combined validation/backup statement-branch coverage `97.72%` |
+| Full repository suite | `2,549 passed`, `30 skipped`, zero failed in `876.47s` |
 | Full combined statement/branch coverage | `95.12%`; mandatory 95% gate passed |
 | Full Ruff format and lint | `712 files already formatted`; all checks passed |
 | Full strict mypy | no issues in `514` source/test files |
@@ -73,11 +75,11 @@ Supporting deterministic digests:
 | Repository policy and public boundary | passed; `861` tracked or unignored files scanned by each gate |
 | Dependency vulnerability audit | strict OSV audit: no known vulnerabilities found |
 | Runtime licence metadata | ten runtime components declare Apache-2.0, BSD-3-Clause, MIT, MIT-0, or PSF-2.0 compatible expressions |
-| Earlier deterministic distributions | two fixed-epoch pre-dossier validation-snapshot builds were byte-identical: wheel `9974acfd4a06b8e16e2936cc4a18a0116330717cb11f5bc2a3af593d49325e3f`; sdist `8f2d58b7dd8e500c0ef65824d6b40ec3d0b1e01a4a6f87b489d6578d794842ce`. They are historical implementation evidence, not hashes for this candidate or a final release |
-| P6 package resources | thirteen P6 and launch schemas are registered; current-candidate distribution verification is recorded separately after rebuilding |
+| Current working-tree distributions | two fixed-epoch builds were byte-identical: wheel `43c00e64ed0aa58e9f3d2933e5e8855f44d792b88118f8562f6e09e5dc26d298`; sdist `37aa86e09e4b9498d4a98cd5e7e3c18add03614402713811495f349aa789f418`. These are not final-release hashes until the release commit and hosted provenance exist |
+| P6 package resources | all thirteen P6 and launch schemas were present in the rebuilt wheel |
 | Isolated-wheel smoke | installed 11 packages and returned `sova 0.1.0a0` |
 | Local SBOM | CycloneDX 1.6 runtime SBOM, 10 components, digest `sha256:7c0b232e416da442d2e09ada04c48632ec55f1ed8afc2396bf4e96d659bf4b3d` |
-| Local checksum verification | four declared files; no missing, undeclared, or mismatched files; manifest digest `sha256:a56cfcf7e35deca38cd812d6bb55d86e2bfd7a64f33779af58f1c08f3d4a7592` |
+| Local checksum verification | four declared files; no missing, undeclared, or mismatched files; manifest digest `sha256:88ada2d378c0f7da3b92b81165e1dda90f5d9369d11a9ac29e02dd2d91d3c934` |
 
 ## Evidence interpretation
 

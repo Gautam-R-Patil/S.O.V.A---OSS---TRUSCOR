@@ -39,6 +39,10 @@ protocol, candidate, signed observation ledger, and repeated operational, review
 and launch-gate receipts. Assembly checks strict structure and emits a deterministic
 bundle but deliberately does not claim signature verification; `release dossier`
 performs cryptographic verification and recomputes the launch decision.
+When the result is `hold`, use `registrySummary`, `reviewSummary`,
+`externalGates`, and sorted `holdReasons` from the dossier as the exact remediation
+queue. A missing or failed control remains visible; it is never collapsed into a
+generic readiness boolean.
 
 ## Local backup and restore rehearsal
 

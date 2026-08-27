@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sova.dev/schemas/launch-dossier-0.1.0.schema.json",
   "type": "object",
-  "required": ["artifactType", "schemaVersion", "releaseCommit", "artifactManifestDigest", "claimsRegisterDigest", "bundleDigest", "trustPolicyDigest", "protocolDigest", "observationLedgerDigest", "evaluationReportDigest", "registryPolicyDigest", "registryReadinessDigest", "releaseCandidateDigest", "releaseGateLedgerDigest", "trustedSignerKeyIds", "receiptCounts", "sourceBindings", "gateReceipts", "status", "tagOrPublishAllowed", "automaticPublishPerformed", "claims", "contentDigest"],
+  "required": ["artifactType", "schemaVersion", "releaseCommit", "artifactManifestDigest", "claimsRegisterDigest", "bundleDigest", "trustPolicyDigest", "protocolDigest", "observationLedgerDigest", "evaluationReportDigest", "registryPolicyDigest", "registryReadinessDigest", "releaseCandidateDigest", "releaseGateLedgerDigest", "trustedSignerKeyIds", "receiptCounts", "sourceBindings", "gateReceipts", "evaluationSummary", "registrySummary", "reviewSummary", "externalGates", "holdReasons", "status", "tagOrPublishAllowed", "automaticPublishPerformed", "claims", "contentDigest"],
   "properties": {
     "artifactType": {"const": "sova.launch-dossier"},
     "schemaVersion": {"const": "0.1.0"},
@@ -58,6 +58,56 @@
       },
       "additionalProperties": false
     },
+    "evaluationSummary": {
+      "type": "object",
+      "required": ["status", "expectedRuns", "observedRuns", "missingRunCount", "budgetExceedanceCount"],
+      "properties": {
+        "status": {"enum": ["conclusive", "incomplete-or-inconclusive"]},
+        "expectedRuns": {"type": "integer", "minimum": 1},
+        "observedRuns": {"type": "integer", "minimum": 0},
+        "missingRunCount": {"type": "integer", "minimum": 0},
+        "budgetExceedanceCount": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "registrySummary": {
+      "type": "object",
+      "required": ["liveBetaReady", "missingControls", "failedControls", "syntheticControls", "nonproductionControls", "unauthorizedIssuerControls"],
+      "properties": {
+        "liveBetaReady": {"type": "boolean"},
+        "missingControls": {"$ref": "#/$defs/stringArray"},
+        "failedControls": {"$ref": "#/$defs/stringArray"},
+        "syntheticControls": {"$ref": "#/$defs/stringArray"},
+        "nonproductionControls": {"$ref": "#/$defs/stringArray"},
+        "unauthorizedIssuerControls": {"$ref": "#/$defs/stringArray"}
+      },
+      "additionalProperties": false
+    },
+    "reviewSummary": {
+      "type": "object",
+      "required": ["missingReviews", "failedReviews", "syntheticReviews", "independenceFailures"],
+      "properties": {
+        "missingReviews": {"$ref": "#/$defs/stringArray"},
+        "failedReviews": {"$ref": "#/$defs/stringArray"},
+        "syntheticReviews": {"$ref": "#/$defs/stringArray"},
+        "independenceFailures": {"$ref": "#/$defs/stringArray"}
+      },
+      "additionalProperties": false
+    },
+    "externalGates": {
+      "type": "object",
+      "required": ["p5ProductionIsolation", "blindedFieldValidation", "registryLiveBeta", "deterministicReleaseChecks", "blindedResultsPublic", "limitationsPublic"],
+      "properties": {
+        "p5ProductionIsolation": {"type": "boolean"},
+        "blindedFieldValidation": {"type": "boolean"},
+        "registryLiveBeta": {"type": "boolean"},
+        "deterministicReleaseChecks": {"type": "boolean"},
+        "blindedResultsPublic": {"type": "boolean"},
+        "limitationsPublic": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "holdReasons": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
     "status": {"enum": ["ready", "hold"]},
     "tagOrPublishAllowed": {"type": "boolean"},
     "automaticPublishPerformed": {"const": false},
@@ -78,6 +128,7 @@
   },
   "$defs": {
     "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "stringArray": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
     "gateReceipt": {
       "type": "object",
       "required": ["present", "passed", "receiptDigest"],
@@ -89,5 +140,12 @@
       "additionalProperties": false
     }
   },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "ready"}}, "required": ["status"]},
+      "then": {"properties": {"holdReasons": {"maxItems": 0}, "tagOrPublishAllowed": {"const": true}}},
+      "else": {"properties": {"holdReasons": {"minItems": 1}, "tagOrPublishAllowed": {"const": false}}}
+    }
+  ],
   "additionalProperties": false
 }

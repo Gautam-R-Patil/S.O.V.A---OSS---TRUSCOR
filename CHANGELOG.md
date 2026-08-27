@@ -31,7 +31,8 @@ have independent version ledgers.
   `release keygen`, `release sign-evidence`, `release assemble-evidence`, and
   `release dossier` commands. Trust policy admission requires one distinct key
   per role and structural separation between internal principals and both
-  independent reviewers.
+  independent reviewers. Dossiers expose deterministic evaluation, Registry,
+  review, and external-gate summaries plus sorted machine-readable hold reasons.
   Missing, synthetic, untrusted, tampered, or drifted evidence cannot authorize
   tagging or publication.
 - A digest-frozen blinded-evaluation protocol spanning eight target classes and

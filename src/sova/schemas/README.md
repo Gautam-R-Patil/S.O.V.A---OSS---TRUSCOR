@@ -56,7 +56,7 @@ evidence-aware capability-map report contract.
 - `launch-trust-policy-0.1.0.schema.json` — pinned signer roles, identities, keys, and candidate binding
 - `launch-gate-receipt-0.1.0.schema.json` — exact-environment isolation, field-study, or deterministic-check receipt
 - `launch-evidence-bundle-0.1.0.schema.json` — signed evidence collection for launch evaluation
-- `launch-dossier-0.1.0.schema.json` — recomputed exact-candidate launch/hold decision
+- `launch-dossier-0.1.0.schema.json` — recomputed exact-candidate decision with actionable hold reasons
 
 Schema files are versioned and immutable after a tagged release. Semantics,
 canonicalization, migrations, threat boundaries, and interoperability rules

@@ -39,7 +39,7 @@ secure, or independently validated beyond the stated boundary.
   external-review, and publication gates remain open.
 - The current public regression collected 2,579 tests: 2,549 passed, 30
   capability-gated lanes skipped, zero failed, and combined statement/branch
-  coverage reached 95.12%. Focused P6 and Registry-backup coverage is 97.82%
+  coverage reached 95.12%. Focused P6 and Registry-backup coverage is 97.72%
   across 54 passing tests.
 - Ruff format/lint passed across 712 files; strict mypy passed across 514 source
   and test files; parser-to-handler execution passed 148/148 commands; repository
@@ -48,13 +48,13 @@ secure, or independently validated beyond the stated boundary.
   dependency components declare Apache-2.0, BSD-3-Clause, MIT, MIT-0, or PSF-2.0
   compatible expressions in installed metadata.
 - Two source/wheel builds with the same source epoch were byte-identical. Wheel
-  SHA-256 is `9974acfd4a06b8e16e2936cc4a18a0116330717cb11f5bc2a3af593d49325e3f`;
+  SHA-256 is `43c00e64ed0aa58e9f3d2933e5e8855f44d792b88118f8562f6e09e5dc26d298`;
   source archive SHA-256 is
-  `8f2d58b7dd8e500c0ef65824d6b40ec3d0b1e01a4a6f87b489d6578d794842ce`.
-  Both contain the five pre-dossier P6 schemas, and an isolated wheel environment installed
-  11 packages and returned `sova 0.1.0a0`. These are validation-snapshot hashes,
-  not current-candidate or final-release hashes; the launch-dossier implementation
-  and receipt documents were updated afterward.
+  `37aa86e09e4b9498d4a98cd5e7e3c18add03614402713811495f349aa789f418`.
+  Both contain all thirteen P6 and launch schemas, and an isolated wheel environment
+  installed 11 packages and returned `sova 0.1.0a0`. These are current working-tree
+  verification hashes, not final-release hashes; a release commit and hosted
+  provenance receipt remain mandatory.
 - Runtime SBOM generation and offline exact-membership checksum verification
   passed. Hosted provenance attestation remains an exact-final-commit release
   gate and is not replaced by these local receipts.

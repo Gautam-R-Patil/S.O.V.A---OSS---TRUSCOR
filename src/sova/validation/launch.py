@@ -1022,6 +1022,43 @@ def _verify_launch_gates(
     return receipts, tuple(keys)
 
 
+def _report_string_list(report: Mapping[str, Any], field: str, role: str) -> list[str]:
+    return [_string(item, role) for item in _array(report.get(field), role)]
+
+
+def _launch_hold_reasons(
+    evaluation: Mapping[str, Any],
+    registry: Mapping[str, Any],
+    release: Mapping[str, Any],
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    evaluation_status = _string(evaluation.get("status"), "evaluation status")
+    if evaluation_status != "conclusive":
+        reasons.append(f"evaluation-status:{evaluation_status}")
+    for field, prefix in (
+        ("missingControls", "registry-missing-control"),
+        ("failedControls", "registry-failed-control"),
+        ("syntheticControls", "registry-synthetic-control"),
+        ("nonproductionControls", "registry-nonproduction-control"),
+        ("unauthorizedIssuerControls", "registry-unauthorized-control"),
+    ):
+        reasons.extend(f"{prefix}:{value}" for value in _report_string_list(registry, field, field))
+    for field, prefix in (
+        ("missingReviews", "review-missing"),
+        ("failedReviews", "review-failed"),
+        ("syntheticReviews", "review-synthetic"),
+        ("independenceFailures", "review-independence-failed"),
+    ):
+        reasons.extend(f"{prefix}:{value}" for value in _report_string_list(release, field, field))
+    external = _object(release.get("externalGates"), "release external gates")
+    reasons.extend(
+        f"external-gate-not-passed:{name}"
+        for name in sorted(external)
+        if not _boolean(external[name], f"external gate {name}")
+    )
+    return tuple(sorted(reasons))
+
+
 def evaluate_launch_bundle(
     bundle: LaunchEvidenceBundle,
     *,
@@ -1081,6 +1118,7 @@ def evaluate_launch_bundle(
     )
     validate_document(release, "sova.release-gate-ledger")
     signer_keys = tuple(sorted({observation_key, *operation_keys, *review_keys, *gate_keys}))
+    hold_reasons = _launch_hold_reasons(evaluation, registry, release)
     dossier: dict[str, Any] = {
         "artifactType": "sova.launch-dossier",
         "schemaVersion": "0.1.0",
@@ -1120,6 +1158,29 @@ def evaluate_launch_bundle(
             }
             for gate in LaunchGate
         },
+        "evaluationSummary": {
+            "status": evaluation["status"],
+            "expectedRuns": evaluation["expectedRuns"],
+            "observedRuns": evaluation["observedRuns"],
+            "missingRunCount": len(evaluation["missing"]),
+            "budgetExceedanceCount": len(evaluation["budgetExceedances"]),
+        },
+        "registrySummary": {
+            "liveBetaReady": registry["liveBetaReady"],
+            "missingControls": registry["missingControls"],
+            "failedControls": registry["failedControls"],
+            "syntheticControls": registry["syntheticControls"],
+            "nonproductionControls": registry["nonproductionControls"],
+            "unauthorizedIssuerControls": registry["unauthorizedIssuerControls"],
+        },
+        "reviewSummary": {
+            "missingReviews": release["missingReviews"],
+            "failedReviews": release["failedReviews"],
+            "syntheticReviews": release["syntheticReviews"],
+            "independenceFailures": release["independenceFailures"],
+        },
+        "externalGates": release["externalGates"],
+        "holdReasons": list(hold_reasons),
         "status": release["status"],
         "tagOrPublishAllowed": release["tagOrPublishAllowed"],
         "automaticPublishPerformed": False,
