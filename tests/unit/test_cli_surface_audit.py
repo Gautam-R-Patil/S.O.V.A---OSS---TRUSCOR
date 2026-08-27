@@ -16,7 +16,7 @@ from sova.command_audit import AuditError, audit, command_handlers, function_bod
 
 def test_every_cli_leaf_has_a_unique_registered_handler() -> None:
     handlers = command_handlers()
-    assert len(handlers) == 144
+    assert len(handlers) == 147
     assert len(set(handlers)) == len(handlers)
     assert all(name.startswith("_") for name in handlers.values())
     assert {
@@ -31,6 +31,9 @@ def test_every_cli_leaf_has_a_unique_registered_handler() -> None:
         "target profile-validate",
         "target intake",
         "release sbom",
+        "release keygen",
+        "release sign-evidence",
+        "release dossier",
         "conformance verify",
         "mcp serve",
         "extension discover",

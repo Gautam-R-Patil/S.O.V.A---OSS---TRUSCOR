@@ -174,6 +174,25 @@ class OperationalReceipt:
         if _RFC3339_UTC.fullmatch(self.issued_at) is None:
             raise FormatError("SOVA-P6-REGISTRY-RECEIPT", "receipt time must be RFC 3339 UTC")
 
+    @property
+    def digest(self) -> str:
+        return sha256_digest(canonical_json_bytes(self.to_mapping()))
+
+    def to_mapping(self) -> dict[str, Any]:
+        return {
+            "artifactType": "sova.registry-operational-receipt",
+            "schemaVersion": "0.1.0",
+            "control": self.control.value,
+            "policyDigest": self.policy_digest,
+            "releaseArtifactDigest": self.release_artifact_digest,
+            "environment": self.environment,
+            "issuer": self.issuer,
+            "issuedAt": self.issued_at,
+            "result": self.result,
+            "evidenceDigest": self.evidence_digest,
+            "synthetic": self.synthetic,
+        }
+
 
 def evaluate_registry_beta(
     policy: RegistryBetaPolicy, receipts: tuple[OperationalReceipt, ...]
@@ -261,6 +280,25 @@ class ReleaseCandidate:
         ):
             _digest(value, role)
 
+    @property
+    def digest(self) -> str:
+        return sha256_digest(canonical_json_bytes(self.to_mapping()))
+
+    def to_mapping(self) -> dict[str, Any]:
+        return {
+            "artifactType": "sova.release-candidate",
+            "schemaVersion": "0.1.0",
+            "releaseCommit": self.release_commit,
+            "artifactManifestDigest": self.artifact_manifest_digest,
+            "evaluationReportDigest": self.evaluation_report_digest,
+            "registryReadinessDigest": self.registry_readiness_digest,
+            "claimsRegisterDigest": self.claims_register_digest,
+            "rollbackTestDigest": self.rollback_test_digest,
+            "incidentTestDigest": self.incident_test_digest,
+            "blindedResultsPublic": self.blinded_results_public,
+            "limitationsPublic": self.limitations_public,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class ReviewReceipt:
@@ -292,6 +330,26 @@ class ReviewReceipt:
             raise FormatError("SOVA-P6-REVIEW", "review receipt identity fields are required")
         if _RFC3339_UTC.fullmatch(self.issued_at) is None:
             raise FormatError("SOVA-P6-REVIEW", "review time must be RFC 3339 UTC")
+
+    @property
+    def digest(self) -> str:
+        return sha256_digest(canonical_json_bytes(self.to_mapping()))
+
+    def to_mapping(self) -> dict[str, Any]:
+        return {
+            "artifactType": "sova.release-review-receipt",
+            "schemaVersion": "0.1.0",
+            "gate": self.gate.value,
+            "releaseCommit": self.release_commit,
+            "artifactManifestDigest": self.artifact_manifest_digest,
+            "reviewer": self.reviewer,
+            "organization": self.organization,
+            "issuedAt": self.issued_at,
+            "result": self.result,
+            "independent": self.independent,
+            "evidenceDigest": self.evidence_digest,
+            "synthetic": self.synthetic,
+        }
 
 
 def evaluate_release_candidate(  # noqa: PLR0913 - release gates remain independently explicit

@@ -37,12 +37,13 @@ secure, or independently validated beyond the stated boundary.
   exact dedicated Linux/KVM Firecracker and independent-review exit gates remain
   open. P6 machinery is locally accepted while all live field, production,
   external-review, and publication gates remain open.
-- The current public regression collected 2,570 tests: 2,540 passed, 30
+- The current public regression collected 2,579 tests: 2,549 passed, 30
   capability-gated lanes skipped, zero failed, and combined statement/branch
-  coverage reached 95.11%. Focused P6 coverage is 97.87% across 45 passing tests.
-- Ruff format/lint passed across 710 files; strict mypy passed across 512 source
-  and test files; parser-to-handler execution passed 144/144 commands; repository
-  policy and public-boundary checks each passed across 851 files.
+  coverage reached 95.12%. Focused P6 and Registry-backup coverage is 97.78%
+  across 54 passing tests.
+- Ruff format/lint passed across 712 files; strict mypy passed across 514 source
+  and test files; parser-to-handler execution passed 147/147 commands; repository
+  policy and public-boundary checks each passed across 861 files.
 - The strict OSV dependency audit found no known vulnerabilities. The ten runtime
   dependency components declare Apache-2.0, BSD-3-Clause, MIT, MIT-0, or PSF-2.0
   compatible expressions in installed metadata.
@@ -50,9 +51,10 @@ secure, or independently validated beyond the stated boundary.
   SHA-256 is `9974acfd4a06b8e16e2936cc4a18a0116330717cb11f5bc2a3af593d49325e3f`;
   source archive SHA-256 is
   `8f2d58b7dd8e500c0ef65824d6b40ec3d0b1e01a4a6f87b489d6578d794842ce`.
-  Both contain all five P6 schemas, and an isolated wheel environment installed
+  Both contain the five pre-dossier P6 schemas, and an isolated wheel environment installed
   11 packages and returned `sova 0.1.0a0`. These are validation-snapshot hashes,
-  not final-release hashes; the receipt documents were updated afterward.
+  not current-candidate or final-release hashes; the launch-dossier implementation
+  and receipt documents were updated afterward.
 - Runtime SBOM generation and offline exact-membership checksum verification
   passed. Hosted provenance attestation remains an exact-final-commit release
   gate and is not replaced by these local receipts.

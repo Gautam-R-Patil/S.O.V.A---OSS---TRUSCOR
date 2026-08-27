@@ -49,6 +49,14 @@ evidence-aware capability-map report contract.
 - `external-benchmark-case-0.1.0.schema.json` — provenance-bound loss-reporting benchmark import
 - `registry-beta-readiness-0.1.0.schema.json` — ten-control operational deployment gate
 - `release-gate-ledger-0.1.0.schema.json` — exact-commit review and publication hold/ready decision
+- `evaluation-observation-ledger-0.1.0.schema.json` — signed complete observation set for one frozen evaluation protocol
+- `registry-operational-receipt-0.1.0.schema.json` — exact-candidate production Registry control receipt
+- `release-candidate-0.1.0.schema.json` — release commit and artifact/claims digest binding
+- `release-review-receipt-0.1.0.schema.json` — role-scoped exact-candidate review decision
+- `launch-trust-policy-0.1.0.schema.json` — pinned signer roles, identities, keys, and candidate binding
+- `launch-gate-receipt-0.1.0.schema.json` — exact-environment isolation, field-study, or deterministic-check receipt
+- `launch-evidence-bundle-0.1.0.schema.json` — signed evidence collection for launch evaluation
+- `launch-dossier-0.1.0.schema.json` — recomputed exact-candidate launch/hold decision
 
 Schema files are versioned and immutable after a tagged release. Semantics,
 canonicalization, migrations, threat boundaries, and interoperability rules

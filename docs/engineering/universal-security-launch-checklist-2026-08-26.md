@@ -302,7 +302,9 @@ configuration; a WSL development probe is not that receipt.
   response; contribution remains disclosed and operator-controlled.
 - [ ] **P6-08** Rerun full tests, static checks, dependency/licence/secret audits,
   deterministic builds, isolated-wheel smoke, SBOM, checksums, provenance, and
-  staged public-boundary review from the final release commit.
+  staged public-boundary review from the final release commit. Bind the exact
+  outputs through a signed `deterministic-release-checks` receipt and recompute the
+  candidate with `sova release dossier` using an out-of-band trust-policy pin.
 - [ ] **P6-09** Obtain founder acceptance, independent technical validation,
   independent isolation review, legal/licence/public-disclosure review, and security
   sign-off as separate named gates.
@@ -323,7 +325,10 @@ and [P6 validation record](./p6-validation-and-launch-readiness-2026-08-27.md)
 cover the frozen-protocol machinery, five provenance/loss-reporting adapter
 boundaries, complete metric ledger, ten-control Registry readiness policy, local
 backup/restore rehearsal, and five-review release ledger. P6-04 and P6-06 are
-implemented. Repository README, release-note, claims-register, and founder-matrix
+implemented. Signed role-scoped receipt ingestion and the exact-candidate launch
+dossier are also implemented; they close the local aggregation/trust-verification
+gap but create no external receipt. Repository README, release-note,
+claims-register, and founder-matrix
 language has been reconciled, but P6-10 remains open because the separately hosted
 TRUSCOR website contains broader SOVA Engine claims and no release-controlled paper
 or public Registry surface exists in this checkout. P6-01 through P6-03, P6-05, and

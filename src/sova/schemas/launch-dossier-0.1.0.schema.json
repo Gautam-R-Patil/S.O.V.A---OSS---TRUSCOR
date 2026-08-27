@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/launch-dossier-0.1.0.schema.json",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "releaseCommit", "artifactManifestDigest", "claimsRegisterDigest", "bundleDigest", "trustPolicyDigest", "protocolDigest", "observationLedgerDigest", "evaluationReportDigest", "registryPolicyDigest", "registryReadinessDigest", "releaseCandidateDigest", "releaseGateLedgerDigest", "trustedSignerKeyIds", "receiptCounts", "sourceBindings", "gateReceipts", "status", "tagOrPublishAllowed", "automaticPublishPerformed", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.launch-dossier"},
+    "schemaVersion": {"const": "0.1.0"},
+    "releaseCommit": {"type": "string", "minLength": 1},
+    "artifactManifestDigest": {"$ref": "#/$defs/digest"},
+    "claimsRegisterDigest": {"$ref": "#/$defs/digest"},
+    "bundleDigest": {"$ref": "#/$defs/digest"},
+    "trustPolicyDigest": {"$ref": "#/$defs/digest"},
+    "protocolDigest": {"$ref": "#/$defs/digest"},
+    "observationLedgerDigest": {"$ref": "#/$defs/digest"},
+    "evaluationReportDigest": {"$ref": "#/$defs/digest"},
+    "registryPolicyDigest": {"$ref": "#/$defs/digest"},
+    "registryReadinessDigest": {"$ref": "#/$defs/digest"},
+    "releaseCandidateDigest": {"$ref": "#/$defs/digest"},
+    "releaseGateLedgerDigest": {"$ref": "#/$defs/digest"},
+    "trustedSignerKeyIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/digest"}
+    },
+    "receiptCounts": {
+      "type": "object",
+      "required": ["operational", "reviews", "launchGates"],
+      "properties": {
+        "operational": {"type": "integer", "minimum": 0, "maximum": 10},
+        "reviews": {"type": "integer", "minimum": 0, "maximum": 5},
+        "launchGates": {"type": "integer", "minimum": 0, "maximum": 3}
+      },
+      "additionalProperties": false
+    },
+    "sourceBindings": {
+      "type": "object",
+      "required": ["expectedCommit", "artifactManifest", "claimsRegister", "trustPolicyPinned", "protocol", "evaluationReport", "registryReadiness", "signedEvidence"],
+      "properties": {
+        "expectedCommit": {"const": true},
+        "artifactManifest": {"const": true},
+        "claimsRegister": {"const": true},
+        "trustPolicyPinned": {"const": true},
+        "protocol": {"const": true},
+        "evaluationReport": {"const": true},
+        "registryReadiness": {"const": true},
+        "signedEvidence": {"const": true}
+      },
+      "additionalProperties": false
+    },
+    "gateReceipts": {
+      "type": "object",
+      "required": ["p5-production-isolation", "blinded-field-validation", "deterministic-release-checks"],
+      "properties": {
+        "p5-production-isolation": {"$ref": "#/$defs/gateReceipt"},
+        "blinded-field-validation": {"$ref": "#/$defs/gateReceipt"},
+        "deterministic-release-checks": {"$ref": "#/$defs/gateReceipt"}
+      },
+      "additionalProperties": false
+    },
+    "status": {"enum": ["ready", "hold"]},
+    "tagOrPublishAllowed": {"type": "boolean"},
+    "automaticPublishPerformed": {"const": false},
+    "claims": {
+      "type": "object",
+      "required": ["allEvidenceRecomputed", "signaturesProveTrustedKeyPossession", "reviewerIdentityLegallyVerifiedBySova", "universalSecurityEstablished", "allVulnerabilitiesFound", "perfectIsolationEstablished"],
+      "properties": {
+        "allEvidenceRecomputed": {"const": true},
+        "signaturesProveTrustedKeyPossession": {"const": true},
+        "reviewerIdentityLegallyVerifiedBySova": {"const": false},
+        "universalSecurityEstablished": {"const": false},
+        "allVulnerabilitiesFound": {"const": false},
+        "perfectIsolationEstablished": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "gateReceipt": {
+      "type": "object",
+      "required": ["present", "passed", "receiptDigest"],
+      "properties": {
+        "present": {"type": "boolean"},
+        "passed": {"type": "boolean"},
+        "receiptDigest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

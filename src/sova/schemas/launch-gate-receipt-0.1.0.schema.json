@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/launch-gate-receipt-0.1.0.schema.json",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "gate", "releaseCommit", "artifactManifestDigest", "subjectDigest", "environment", "issuer", "organization", "issuedAt", "result", "checks", "evidenceDigest", "synthetic"],
+  "properties": {
+    "artifactType": {"const": "sova.launch-gate-receipt"},
+    "schemaVersion": {"const": "0.1.0"},
+    "gate": {"enum": ["p5-production-isolation", "blinded-field-validation", "deterministic-release-checks"]},
+    "releaseCommit": {"type": "string", "minLength": 1},
+    "artifactManifestDigest": {"$ref": "#/$defs/digest"},
+    "subjectDigest": {"$ref": "#/$defs/digest"},
+    "environment": {"enum": ["dedicated-linux-kvm-worker", "blinded-owned-or-licensed-field-study", "exact-final-commit-ci"]},
+    "issuer": {"type": "string", "minLength": 1},
+    "organization": {"type": "string", "minLength": 1},
+    "issuedAt": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "result": {"enum": ["pass", "fail"]},
+    "checks": {"type": "array", "minItems": 5, "maxItems": 13, "uniqueItems": true, "items": {"enum": ["dedicated-patched-linux-kvm-host", "live-firecracker-microvm", "malicious-guest-exact-host-matrix", "independent-isolation-review-bound", "cleanup-and-evidence-extraction", "preregistered-before-results", "independent-answer-key-custody", "all-eight-target-classes", "owned-or-licensed-targets", "multiple-provider-families", "matched-baseline-execution", "complete-run-ledger", "negative-results-retained", "full-test-suite", "static-analysis", "dependency-audit", "license-audit", "secret-audit", "deterministic-build", "ci-provenance", "package-resource-check", "isolated-wheel-smoke", "sbom", "checksums", "public-boundary", "staged-path-review"]}},
+    "evidenceDigest": {"$ref": "#/$defs/digest"},
+    "synthetic": {"type": "boolean"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+  "additionalProperties": false
+}

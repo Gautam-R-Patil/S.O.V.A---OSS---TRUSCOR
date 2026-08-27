@@ -96,3 +96,40 @@ P5 production isolation, blinded field validation, live Registry readiness,
 deterministic release checks, public blinded results, and public limitations MUST
 all pass. Otherwise status is `hold` and tagging/publishing is forbidden. The gate
 evaluator MUST NOT itself push, tag, deploy, or publish.
+
+### 7.1 Signed launch dossier
+
+The operator-facing release path is `sova release dossier`. It MUST consume one
+strict, digest-bound launch bundle; the exact artifact-manifest bytes; the exact
+claims-register bytes; the expected release commit; and a launch-trust-policy
+digest obtained out of band. A trust policy carried only inside the evidence
+bundle is not a trust root.
+
+The trust policy MUST bind the release commit, artifact-manifest digest, release-
+candidate digest, raw Ed25519 public keys, named principals, organizations, and
+all nine roles: evaluation custodian, Registry operator, P5 isolation operator,
+release operator, founder, independent technical reviewer, independent isolation
+reviewer, legal/licence/public-disclosure reviewer, and security reviewer.
+
+Observation-ledger, Registry-operation, launch-gate, and review documents MUST be
+canonical JSON inside single-signature DSSE envelopes. The dossier verifier MUST:
+
+- reject an unpinned policy, unknown key, invalid signature, role mismatch,
+  signer/receipt identity mismatch, duplicate receipt, or non-canonical payload;
+- reconstruct the typed protocol, observations, Registry policy and receipts,
+  release candidate, reviews, and P5/field-validation/final-check gate receipts;
+- recompute evaluation, Registry-readiness, and release-gate reports instead of
+  trusting nested `ready`, `pass`, or content-digest claims;
+- bind the candidate to the actual manifest and claims-register bytes and require
+  exact commit/digest agreement across the protocol, policy, candidate, reviews,
+  and launch gates;
+- require the complete gate-specific control set and exact environment label for
+  dedicated Linux/KVM isolation, blinded owned/licensed field validation, and
+  exact-final-commit CI; and
+- emit an inert `sova.launch-dossier`. Even a `ready` dossier MUST set
+  `automaticPublishPerformed=false`; tagging, pushing, deployment, and publication
+  remain separate explicitly authorized operations.
+
+Key possession and policy pinning do not legally verify a person's identity,
+organization, independence, licence opinion, or evidence truth. The dossier states
+that limitation explicitly.

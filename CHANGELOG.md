@@ -24,6 +24,13 @@ have independent version ledgers.
 
 ### Added
 
+- A signed exact-candidate launch dossier workflow with strict input/output
+  schemas, Ed25519/DSSE receipt verification, nine role-scoped trust roots, an
+  out-of-band trust-policy pin, recomputed evaluation/Registry/release ledgers,
+  exact artifact-manifest and claims-register byte binding, and inert
+  `release keygen`, `release sign-evidence`, and `release dossier` commands.
+  Missing, synthetic, untrusted, tampered, or drifted evidence cannot authorize
+  tagging or publication.
 - A digest-frozen blinded-evaluation protocol spanning eight target classes and
   four lane kinds, provenance/loss-reporting adapters for five external benchmark
   families, exact expected-run accounting, and explicit coverage, finding,

@@ -59,6 +59,14 @@ _SCHEMA_FILES = {
     "sova.external-benchmark-case": "external-benchmark-case-0.1.0.schema.json",
     "sova.registry-beta-readiness": "registry-beta-readiness-0.1.0.schema.json",
     "sova.release-gate-ledger": "release-gate-ledger-0.1.0.schema.json",
+    "sova.release-candidate": "release-candidate-0.1.0.schema.json",
+    "sova.registry-operational-receipt": "registry-operational-receipt-0.1.0.schema.json",
+    "sova.release-review-receipt": "release-review-receipt-0.1.0.schema.json",
+    "sova.launch-trust-policy": "launch-trust-policy-0.1.0.schema.json",
+    "sova.launch-gate-receipt": "launch-gate-receipt-0.1.0.schema.json",
+    "sova.evaluation-observation-ledger": "evaluation-observation-ledger-0.1.0.schema.json",
+    "sova.launch-evidence-bundle": "launch-evidence-bundle-0.1.0.schema.json",
+    "sova.launch-dossier": "launch-dossier-0.1.0.schema.json",
 }
 
 

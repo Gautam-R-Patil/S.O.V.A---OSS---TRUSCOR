@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/release-candidate-0.1.0.schema.json",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "releaseCommit", "artifactManifestDigest", "evaluationReportDigest", "registryReadinessDigest", "claimsRegisterDigest", "rollbackTestDigest", "incidentTestDigest", "blindedResultsPublic", "limitationsPublic"],
+  "properties": {
+    "artifactType": {"const": "sova.release-candidate"},
+    "schemaVersion": {"const": "0.1.0"},
+    "releaseCommit": {"type": "string", "minLength": 1},
+    "artifactManifestDigest": {"$ref": "#/$defs/digest"},
+    "evaluationReportDigest": {"$ref": "#/$defs/digest"},
+    "registryReadinessDigest": {"$ref": "#/$defs/digest"},
+    "claimsRegisterDigest": {"$ref": "#/$defs/digest"},
+    "rollbackTestDigest": {"$ref": "#/$defs/digest"},
+    "incidentTestDigest": {"$ref": "#/$defs/digest"},
+    "blindedResultsPublic": {"type": "boolean"},
+    "limitationsPublic": {"type": "boolean"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+  "additionalProperties": false
+}

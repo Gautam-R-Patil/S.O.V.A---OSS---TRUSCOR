@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/evaluation-observation-ledger-0.1.0.schema.json",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "protocolDigest", "observations", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.evaluation-observation-ledger"},
+    "schemaVersion": {"const": "0.1.0"},
+    "protocolDigest": {"$ref": "#/$defs/digest"},
+    "observations": {"type": "array", "maxItems": 100000, "items": {"$ref": "#/$defs/observation"}},
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "counterPair": {"type": "object", "required": ["observed", "total"], "properties": {"observed": {"type": "integer", "minimum": 0}, "total": {"type": "integer", "minimum": 0}}, "additionalProperties": false},
+    "surfacePair": {"type": "object", "required": ["exercised", "total"], "properties": {"exercised": {"type": "integer", "minimum": 0}, "total": {"type": "integer", "minimum": 0}}, "additionalProperties": false},
+    "findings": {"type": "object", "required": ["reported", "confirmed", "reproduced", "falsePositives"], "properties": {"reported": {"type": "integer", "minimum": 0}, "confirmed": {"type": "integer", "minimum": 0}, "reproduced": {"type": "integer", "minimum": 0}, "falsePositives": {"type": "integer", "minimum": 0}}, "additionalProperties": false},
+    "observation": {
+      "type": "object",
+      "required": ["laneId", "targetId", "repetition", "status", "workflowCoverage", "surfaceCoverage", "findings", "infrastructureFailures", "actionsUsed", "inputBytes", "outputBytes", "durationMilliseconds", "costMicrousd", "containmentPassed", "evidenceDigest", "limitations"],
+      "properties": {
+        "laneId": {"type": "string", "minLength": 1},
+        "targetId": {"type": "string", "minLength": 1},
+        "repetition": {"type": "integer", "minimum": 0},
+        "status": {"enum": ["confirmed", "not-observed", "false-positive", "inconclusive", "infrastructure-failure", "blocked", "unsupported"]},
+        "workflowCoverage": {"$ref": "#/$defs/counterPair"},
+        "surfaceCoverage": {"$ref": "#/$defs/surfacePair"},
+        "findings": {"$ref": "#/$defs/findings"},
+        "infrastructureFailures": {"type": "integer", "minimum": 0},
+        "actionsUsed": {"type": "integer", "minimum": 0},
+        "inputBytes": {"type": "integer", "minimum": 0},
+        "outputBytes": {"type": "integer", "minimum": 0},
+        "durationMilliseconds": {"type": "integer", "minimum": 0},
+        "costMicrousd": {"type": "integer", "minimum": 0},
+        "containmentPassed": {"type": ["boolean", "null"]},
+        "evidenceDigest": {"$ref": "#/$defs/digest"},
+        "limitations": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

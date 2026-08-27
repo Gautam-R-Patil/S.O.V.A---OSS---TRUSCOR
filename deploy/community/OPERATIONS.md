@@ -27,6 +27,13 @@ missing, duplicated, failed, synthetic, non-production, wrong-policy, and
 wrong-artifact or unauthorized-issuer receipts. Only all ten exact production receipts permit the beta
 readiness result to become true.
 
+Each production receipt is serialized as `sova.registry-operational-receipt`,
+signed with `sova release sign-evidence`, and admitted only when the signer key is
+assigned the `registry-operator` role in the separately reviewed launch trust
+policy. Keep that policy digest outside the assembled bundle and pass it explicitly
+to `sova release dossier`; an included key or included policy alone establishes no
+operator identity.
+
 ## Local backup and restore rehearsal
 
 Create a deterministic snapshot outside the Registry data root:

@@ -276,6 +276,7 @@ from sova.search import run_trigger_search_demo
 from sova.targets import TargetKind, target_manifest_from_mapping, validate_target_manifest
 from sova.trace import Redactor, TraceReader, generate_ed25519_keypair, recover_trace
 from sova.trace.otel import export_event
+from sova.validation import evaluate_launch_bundle, read_launch_bundle, sign_launch_evidence
 from sova.workflows import build_case_workspace, run_browser_check, run_check, run_complete_demo
 
 if TYPE_CHECKING:
@@ -384,6 +385,30 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     release_verify.add_argument("root", type=_path)
     release_verify.add_argument("manifest", type=_path)
     release_verify.set_defaults(handler=_release_verify_checksums)
+    release_keygen = release_commands.add_parser(
+        "keygen", help="create a raw Ed25519 keypair for signed launch evidence"
+    )
+    release_keygen.add_argument("private_key", type=_path)
+    release_keygen.add_argument("public_key", type=_path)
+    release_keygen.set_defaults(handler=_release_keygen)
+    release_sign = release_commands.add_parser(
+        "sign-evidence", help="validate and sign one canonical P6 launch-evidence document"
+    )
+    release_sign.add_argument("document", type=_path)
+    release_sign.add_argument("private_key", type=_path)
+    release_sign.add_argument("public_key", type=_path)
+    release_sign.add_argument("destination", type=_path)
+    release_sign.set_defaults(handler=_release_sign_evidence)
+    release_dossier = release_commands.add_parser(
+        "dossier", help="recompute an exact-candidate launch verdict from signed P6 evidence"
+    )
+    release_dossier.add_argument("bundle", type=_path)
+    release_dossier.add_argument("artifact_manifest", type=_path)
+    release_dossier.add_argument("claims_register", type=_path)
+    release_dossier.add_argument("destination", type=_path)
+    release_dossier.add_argument("--expected-commit", required=True)
+    release_dossier.add_argument("--expected-trust-policy-digest", required=True)
+    release_dossier.set_defaults(handler=_release_dossier)
 
     acceptance_parser = commands.add_parser(
         "acceptance", help="run core acceptance and evaluate stable-release evidence gates"
@@ -2700,6 +2725,77 @@ def _release_verify_checksums(args: argparse.Namespace) -> int:
     report = verify_checksums(args.root, args.manifest)
     sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
     return 0 if report["accepted"] else 1
+
+
+def _release_keygen(args: argparse.Namespace) -> int:
+    if args.private_key.resolve() == args.public_key.resolve():
+        raise FormatError("SOVA-P6-LAUNCH-KEY", "private and public key paths must differ")
+    keypair = generate_ed25519_keypair()
+    _write_new_bytes(args.private_key, keypair.private_key, mode=0o600)
+    try:
+        _write_new_bytes(args.public_key, keypair.public_key, mode=0o644)
+    except BaseException:
+        args.private_key.unlink(missing_ok=True)
+        raise
+    report = {
+        "artifactType": "sova.launch-evidence-keypair",
+        "schemaVersion": "0.1.0",
+        "keyId": keypair.key_id,
+        "privateKeyPrinted": False,
+        "identityEstablished": False,
+    }
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _release_sign_evidence(args: argparse.Namespace) -> int:
+    envelope = sign_launch_evidence(
+        _load_object(args.document),
+        args.private_key.read_bytes(),
+        args.public_key.read_bytes(),
+    )
+    _write_new_document(args.destination, envelope)
+    sys.stdout.buffer.write(
+        canonical_json_bytes(
+            {
+                "artifactType": "sova.launch-evidence-signed",
+                "schemaVersion": "0.1.0",
+                "keyId": envelope["signatures"][0]["keyid"],
+                "destination": str(args.destination.resolve()),
+                "identityEstablished": False,
+            }
+        )
+        + b"\n"
+    )
+    return 0
+
+
+def _release_dossier_input(path: Path, role: str, *, maximum_bytes: int) -> bytes:
+    if path.is_symlink() or not path.is_file():
+        raise FormatError("SOVA-P6-LAUNCH-FILE", f"{role} must be a regular non-symlink file")
+    if path.stat().st_size > maximum_bytes:
+        raise FormatError("SOVA-P6-LAUNCH-FILE", f"{role} exceeds its byte limit")
+    return path.read_bytes()
+
+
+def _release_dossier(args: argparse.Namespace) -> int:
+    bundle = read_launch_bundle(
+        _release_dossier_input(args.bundle, "launch bundle", maximum_bytes=32 * 1024 * 1024)
+    )
+    dossier = evaluate_launch_bundle(
+        bundle,
+        artifact_manifest=_release_dossier_input(
+            args.artifact_manifest, "artifact manifest", maximum_bytes=16 * 1024 * 1024
+        ),
+        claims_register=_release_dossier_input(
+            args.claims_register, "claims register", maximum_bytes=16 * 1024 * 1024
+        ),
+        expected_commit=str(args.expected_commit),
+        expected_trust_policy_digest=str(args.expected_trust_policy_digest),
+    )
+    _write_new_document(args.destination, dossier)
+    sys.stdout.buffer.write(canonical_json_bytes(dossier) + b"\n")
+    return 0 if dossier["tagOrPublishAllowed"] else 3
 
 
 def _acceptance_run(args: argparse.Namespace) -> int:

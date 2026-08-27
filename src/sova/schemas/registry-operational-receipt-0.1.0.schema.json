@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/registry-operational-receipt-0.1.0.schema.json",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "control", "policyDigest", "releaseArtifactDigest", "environment", "issuer", "issuedAt", "result", "evidenceDigest", "synthetic"],
+  "properties": {
+    "artifactType": {"const": "sova.registry-operational-receipt"},
+    "schemaVersion": {"const": "0.1.0"},
+    "control": {"enum": ["authentication-authorization", "moderation-abuse-handling", "malware-screening", "secret-screening", "rate-and-ddos-controls", "encrypted-backup", "restore-test", "rollback-test", "incident-response", "monitoring-alert-escalation"]},
+    "policyDigest": {"$ref": "#/$defs/digest"},
+    "releaseArtifactDigest": {"$ref": "#/$defs/digest"},
+    "environment": {"type": "string", "minLength": 1},
+    "issuer": {"type": "string", "minLength": 1},
+    "issuedAt": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "result": {"enum": ["pass", "fail"]},
+    "evidenceDigest": {"$ref": "#/$defs/digest"},
+    "synthetic": {"type": "boolean"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+  "additionalProperties": false
+}
