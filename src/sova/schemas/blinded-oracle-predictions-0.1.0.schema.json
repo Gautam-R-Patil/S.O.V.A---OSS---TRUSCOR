@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/blinded-oracle-predictions-0.1.0.schema.json",
+  "title": "SOVA Blinded Oracle Predictions 0.1.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["artifactType", "schemaVersion", "taskDigest", "predictions", "answerKeyLoaded"],
+  "properties": {
+    "artifactType": {"const": "sova.blinded-oracle-predictions"}, "schemaVersion": {"const": "0.1.0"}, "taskDigest": {"$ref": "#/$defs/digest"},
+    "predictions": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"type": "object", "additionalProperties": false, "required": ["id", "verdict"], "properties": {"id": {"type": "string", "minLength": 1}, "verdict": {"enum": ["positive", "negative", "abstain", "not-observed", "unsupported", "blocked", "inconclusive", "infrastructure-failure"]}}}},
+    "answerKeyLoaded": {"const": false}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}
+}

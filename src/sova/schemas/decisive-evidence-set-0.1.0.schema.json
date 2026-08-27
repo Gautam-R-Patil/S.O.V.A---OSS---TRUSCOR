@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/decisive-evidence-set-0.1.0.schema.json",
+  "title": "SOVA Decisive Evidence Set 0.1.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["artifactType", "schemaVersion", "bindings", "complete", "allDigestsVerified", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.decisive-evidence-set"}, "schemaVersion": {"const": "0.1.0"},
+    "bindings": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"type": "object", "additionalProperties": false, "required": ["role", "uri", "digest", "mediaType", "verified", "redacted"], "properties": {"role": {"enum": ["decisive-cue", "raw-evidence", "replay-media", "trace", "capsule"]}, "uri": {"type": "string", "minLength": 1, "maxLength": 4096}, "digest": {"$ref": "#/$defs/digest"}, "mediaType": {"type": "string", "pattern": "^[a-z0-9][a-z0-9.+-]*/[a-z0-9][a-z0-9.+-]*$"}, "verified": {"const": true}, "redacted": {"type": "boolean"}}}},
+    "complete": {"const": true}, "allDigestsVerified": {"const": true},
+    "claims": {"type": "object", "additionalProperties": false, "required": ["findingConfirmed", "recorderHonestyEstablished"], "properties": {"findingConfirmed": {"const": false}, "recorderHonestyEstablished": {"const": false}}},
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}
+}

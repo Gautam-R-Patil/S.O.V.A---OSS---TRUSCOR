@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/oracle-comparison-0.1.0.schema.json",
+  "title": "SOVA Oracle Comparison 0.1.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["artifactType", "schemaVersion", "id", "kind", "axis", "relation", "labels", "valueDigests", "targetGenerations", "evidenceDigests", "evidenceComplete", "verdict", "relationSatisfied", "method", "limitations", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.oracle-comparison"}, "schemaVersion": {"const": "0.1.0"},
+    "id": {"$ref": "#/$defs/text"}, "kind": {"enum": ["differential", "metamorphic"]},
+    "axis": {"enum": ["identity", "role", "state", "provider", "version", "configuration", "intervention-pair"]},
+    "relation": {"enum": ["equal", "not-equal", "subset", "superset", "nondecreasing", "nonincreasing"]},
+    "labels": {"$ref": "#/$defs/pairText"}, "valueDigests": {"$ref": "#/$defs/pairDigest"},
+    "targetGenerations": {"$ref": "#/$defs/pairText"},
+    "evidenceDigests": {"type": "array", "minItems": 1, "maxItems": 1000, "uniqueItems": true, "items": {"$ref": "#/$defs/digest"}},
+    "evidenceComplete": {"type": "boolean"},
+    "verdict": {"enum": ["positive", "negative", "unsupported", "inconclusive", "infrastructure-failure"]},
+    "relationSatisfied": {"type": ["boolean", "null"]}, "method": {"$ref": "#/$defs/text"},
+    "limitations": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"$ref": "#/$defs/text"}},
+    "claims": {"type": "object", "additionalProperties": false, "required": ["causalityEstablished", "universalInvariant"], "properties": {"causalityEstablished": {"const": false}, "universalInvariant": {"const": false}}},
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {"text": {"type": "string", "minLength": 1, "maxLength": 4096}, "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "pairText": {"type": "object", "additionalProperties": false, "required": ["left", "right"], "properties": {"left": {"$ref": "#/$defs/text"}, "right": {"$ref": "#/$defs/text"}}}, "pairDigest": {"type": "object", "additionalProperties": false, "required": ["left", "right"], "properties": {"left": {"$ref": "#/$defs/digest"}, "right": {"$ref": "#/$defs/digest"}}}}
+}

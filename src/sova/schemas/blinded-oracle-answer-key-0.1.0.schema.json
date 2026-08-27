@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/blinded-oracle-answer-key-0.1.0.schema.json",
+  "title": "SOVA Blinded Oracle Answer Key 0.1.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["artifactType", "schemaVersion", "taskDigest", "answers", "predictionDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.blinded-oracle-answer-key"}, "schemaVersion": {"const": "0.1.0"}, "taskDigest": {"$ref": "#/$defs/digest"},
+    "answers": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"type": "object", "additionalProperties": false, "required": ["id", "expectedClass"], "properties": {"id": {"type": "string", "minLength": 1}, "expectedClass": {"enum": ["known-positive", "known-negative", "ambiguous", "infrastructure-failure"]}}}},
+    "predictionDigest": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/digest"}]}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}
+}

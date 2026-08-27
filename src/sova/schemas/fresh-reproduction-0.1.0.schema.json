@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/fresh-reproduction-0.1.0.schema.json",
+  "title": "SOVA Fresh Reproduction 0.1.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["artifactType", "schemaVersion", "findingDigest", "promotedOracleDigest", "targetGenerations", "environmentFingerprints", "runnerIdentities", "traceDigests", "resetReceiptDigest", "causalEvidenceDigests", "evidenceSetDigest", "oracleVerdict", "evaluatedAt", "state", "reasons", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.fresh-reproduction"}, "schemaVersion": {"const": "0.1.0"},
+    "findingDigest": {"$ref": "#/$defs/digest"}, "promotedOracleDigest": {"$ref": "#/$defs/digest"},
+    "targetGenerations": {"$ref": "#/$defs/pairText"}, "environmentFingerprints": {"$ref": "#/$defs/pairDigest"}, "runnerIdentities": {"$ref": "#/$defs/pairText"}, "traceDigests": {"$ref": "#/$defs/pairDigest"},
+    "resetReceiptDigest": {"$ref": "#/$defs/digest"}, "causalEvidenceDigests": {"type": "array", "minItems": 1, "maxItems": 1000, "items": {"$ref": "#/$defs/digest"}}, "evidenceSetDigest": {"$ref": "#/$defs/digest"},
+    "oracleVerdict": {"enum": ["positive", "negative", "abstain", "not-observed", "unsupported", "blocked", "inconclusive", "infrastructure-failure"]},
+    "evaluatedAt": {"type": "string", "format": "date-time"},
+    "state": {"enum": ["confirmed", "not-reproduced", "inconclusive", "blocked", "unsupported", "infrastructure-failure"]},
+    "reasons": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "claims": {"type": "object", "additionalProperties": false, "required": ["freshState", "independentRunnerDeclared", "allConditionsReproduced", "allVulnerabilitiesFound"], "properties": {"freshState": {"type": "boolean"}, "independentRunnerDeclared": {"type": "boolean"}, "allConditionsReproduced": {"const": false}, "allVulnerabilitiesFound": {"const": false}}},
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "text": {"type": "string", "minLength": 1, "maxLength": 4096}, "pairText": {"type": "object", "additionalProperties": false, "required": ["primary", "reproduction"], "properties": {"primary": {"$ref": "#/$defs/text"}, "reproduction": {"$ref": "#/$defs/text"}}}, "pairDigest": {"type": "object", "additionalProperties": false, "required": ["primary", "reproduction"], "properties": {"primary": {"$ref": "#/$defs/digest"}, "reproduction": {"$ref": "#/$defs/digest"}}}}
+}

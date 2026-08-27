@@ -33,7 +33,7 @@ infrastructure-failure states instead of translating them into success.
 | P1 | Universal intake and workflow/surface model | **COMPLETE** | [P1 validation](./p1-universal-intake-validation-2026-08-26.md), target-profile fixtures, measured discovery reports, compatibility tests |
 | P2 | Methodology compiler and native playbook library | **COMPLETE** | [P2 validation](./p2-methodology-compiler-validation-2026-08-26.md), 74 versioned playbooks, deterministic compiler and replanning conformance, signed contribution tests |
 | P3 | Tool adapters and evidence normalization | **COMPLETE** | [P3 validation](./p3-security-adapter-validation-2026-08-27.md), 21-entry admission catalog, 12 promoted normalizers, authority-routed runner and failure matrix |
-| P4 | Oracle laboratory, reproduction, and coverage accounting | NOT STARTED | Calibrated oracle records, false-positive study, coverage contract |
+| P4 | Oracle laboratory, reproduction, and coverage accounting | **COMPLETE** | [P4 validation](./p4-oracle-laboratory-validation-2026-08-27.md), blinded positive/adverse study, fresh reproduction, eight-dimensional coverage contract |
 | P5 | Production isolation and untrusted-agent worker | NOT STARTED | Linux/KVM worker, containment tests, attestation, independent review |
 | P6 | Blinded validation, Registry beta, and public launch | NOT STARTED | Multi-provider/target benchmark, release receipts, claim review |
 
@@ -209,29 +209,36 @@ not inferred from synthetic fixtures.
 
 ## 7. P4 — oracle laboratory, reproduction, and coverage accounting
 
-- [ ] **P4-01** Add typed oracle proposals derived from target contracts,
+- [x] **P4-01** Add typed oracle proposals derived from target contracts,
   specifications, invariants, differentials, metamorphic relations, state effects,
   logs, and human-supplied acceptance criteria.
-- [ ] **P4-02** Calibrate proposals on known-positive, known-negative, ambiguous,
+- [x] **P4-02** Calibrate proposals on known-positive, known-negative, ambiguous,
   and infrastructure-failure cases before promotion.
-- [ ] **P4-03** Require independent fresh reproduction for confirmed findings,
+- [x] **P4-03** Require independent fresh reproduction for confirmed findings,
   including new target generation, environment fingerprint, and causal evidence.
-- [ ] **P4-04** Add differential and metamorphic comparisons across identities,
+- [x] **P4-04** Add differential and metamorphic comparisons across identities,
   roles, states, providers, versions, configurations, and intervention pairs.
-- [ ] **P4-05** Record sensitivity, specificity/false-positive evidence, known blind
+- [x] **P4-05** Record sensitivity, specificity/false-positive evidence, known blind
   spots, confidence, and validity window for promoted oracles.
-- [ ] **P4-06** Permit `no-reliable-oracle` and `human-review-required`; never force
+- [x] **P4-06** Permit `no-reliable-oracle` and `human-review-required`; never force
   a verdict for every target.
-- [ ] **P4-07** Produce a coverage report over workflow, surface, playbook, state,
+- [x] **P4-07** Produce a coverage report over workflow, surface, playbook, state,
   identity/role, adapter, oracle, and reproduction dimensions.
-- [ ] **P4-08** Keep `not observed`, `unsupported`, `blocked`, `inconclusive`, and
+- [x] **P4-08** Keep `not observed`, `unsupported`, `blocked`, `inconclusive`, and
   `infrastructure failure` distinct from `passed` or `safe`.
-- [ ] **P4-09** Bind decisive cues, raw evidence, replay media, traces, and capsules
+- [x] **P4-09** Bind decisive cues, raw evidence, replay media, traces, and capsules
   by digest using the existing evidence/replay contracts.
 
 **P4 exit gate:** a blinded seeded study measures false positives and misses;
 confirmed findings reproduce from fresh state; coverage reports cannot claim an
 exhaustive absence of vulnerabilities.
+
+**P4 exit evidence:** the [P4 validation record](./p4-oracle-laboratory-validation-2026-08-27.md)
+records typed proposals, task/prediction/key commitments, injected false-positive
+and miss rejection, promoted-oracle metrics and validity, fresh independent
+reproduction, digest-bound decisive evidence, eight-dimensional coverage, package
+resources, and the repository-wide 95% quality gate. The seeded fixture validates
+the machinery; it is not presented as arbitrary-target field accuracy.
 
 ## 8. P5 — production isolation and untrusted-agent worker
 

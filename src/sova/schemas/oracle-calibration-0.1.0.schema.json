@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/oracle-calibration-0.1.0.schema.json",
+  "title": "SOVA Oracle Calibration 0.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["artifactType", "schemaVersion", "proposalDigest", "policy", "cases", "disposition", "metrics", "validity", "knownBlindSpots", "decisionReasons", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.oracle-calibration"},
+    "schemaVersion": {"const": "0.1.0"},
+    "proposalDigest": {"$ref": "#/$defs/digest"},
+    "policy": {"$ref": "#/$defs/policy"},
+    "cases": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"$ref": "#/$defs/case"}},
+    "disposition": {"enum": ["promoted", "rejected", "no-reliable-oracle", "human-review-required"]},
+    "metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["counts", "sensitivity", "specificity", "jointWilson95"],
+      "properties": {
+        "counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+        "sensitivity": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ratio"}]},
+        "specificity": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ratio"}]},
+        "jointWilson95": {"type": "object", "additionalProperties": false, "required": ["low", "high"], "properties": {"low": {"$ref": "#/$defs/ratio"}, "high": {"$ref": "#/$defs/ratio"}}}
+      }
+    },
+    "validity": {"type": "object", "additionalProperties": false, "required": ["from", "until"], "properties": {"from": {"type": "string", "format": "date-time"}, "until": {"type": "string", "format": "date-time"}}},
+    "knownBlindSpots": {"$ref": "#/$defs/textArray"},
+    "decisionReasons": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"$ref": "#/$defs/text"}},
+    "claims": {"type": "object", "additionalProperties": false, "required": ["findingConfirmed", "allFutureInputsCovered", "universallyReliable"], "properties": {"findingConfirmed": {"const": false}, "allFutureInputsCovered": {"const": false}, "universallyReliable": {"const": false}}},
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "ratio": {"type": "string", "pattern": "^(?:0(?:\\.[0-9]+)?|1(?:\\.0+)?)$"},
+    "text": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "textArray": {"type": "array", "minItems": 1, "maxItems": 1000, "uniqueItems": true, "items": {"$ref": "#/$defs/text"}},
+    "policy": {"type": "object", "additionalProperties": false, "required": ["minimumPositiveCases", "minimumNegativeCases", "maximumFalsePositives", "maximumMisses", "requireAmbiguousAbstention", "requireInfrastructureSeparation"], "properties": {"minimumPositiveCases": {"type": "integer", "minimum": 1}, "minimumNegativeCases": {"type": "integer", "minimum": 1}, "maximumFalsePositives": {"type": "integer", "minimum": 0}, "maximumMisses": {"type": "integer", "minimum": 0}, "requireAmbiguousAbstention": {"type": "boolean"}, "requireInfrastructureSeparation": {"type": "boolean"}}},
+    "case": {"type": "object", "additionalProperties": false, "required": ["id", "expectedClass", "verdict", "targetGeneration", "environmentFingerprint", "predictionDigest", "evidenceDigests", "labelRevealedAfterPrediction"], "properties": {"id": {"$ref": "#/$defs/text"}, "expectedClass": {"enum": ["known-positive", "known-negative", "ambiguous", "infrastructure-failure"]}, "verdict": {"enum": ["positive", "negative", "abstain", "not-observed", "unsupported", "blocked", "inconclusive", "infrastructure-failure"]}, "targetGeneration": {"$ref": "#/$defs/text"}, "environmentFingerprint": {"$ref": "#/$defs/digest"}, "predictionDigest": {"$ref": "#/$defs/digest"}, "evidenceDigests": {"type": "array", "minItems": 1, "maxItems": 1000, "uniqueItems": true, "items": {"$ref": "#/$defs/digest"}}, "labelRevealedAfterPrediction": {"const": true}}}
+  }
+}
