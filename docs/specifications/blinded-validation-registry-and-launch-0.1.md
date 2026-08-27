@@ -110,6 +110,10 @@ candidate digest, raw Ed25519 public keys, named principals, organizations, and
 all nine roles: evaluation custodian, Registry operator, P5 isolation operator,
 release operator, founder, independent technical reviewer, independent isolation
 reviewer, legal/licence/public-disclosure reviewer, and security reviewer.
+Each role MUST have a distinct trusted principal and key. The independent technical
+and isolation principals MUST be separate from every internal principal by name
+and organization and MUST be separate from one another. This is a structural
+conflict check, not legal identity verification.
 
 Observation-ledger, Registry-operation, launch-gate, and review documents MUST be
 canonical JSON inside single-signature DSSE envelopes. The dossier verifier MUST:
@@ -129,6 +133,12 @@ canonical JSON inside single-signature DSSE envelopes. The dossier verifier MUST
 - emit an inert `sova.launch-dossier`. Even a `ready` dossier MUST set
   `automaticPublishPerformed=false`; tagging, pushing, deployment, and publication
   remain separate explicitly authorized operations.
+
+`sova release assemble-evidence` MAY construct the bundle deterministically from
+separate strict inputs and repeated receipt envelopes. Assembly MUST validate every
+unsigned typed document and envelope shape, MUST NOT assert that signatures were
+verified, and MUST perform no network, tag, push, deploy, or publication action.
+Only `release dossier` evaluates the signatures and release gates.
 
 Key possession and policy pinning do not legally verify a person's identity,
 organization, independence, licence opinion, or evidence truth. The dossier states

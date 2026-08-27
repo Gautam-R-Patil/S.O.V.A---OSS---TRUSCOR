@@ -16,7 +16,10 @@ bounded deterministic local Registry backup, verification, and empty-root restor
 and a five-review exact-release hold ledger. The subsequent operator integration
 adds strict signed evidence ingestion and one exact-candidate launch dossier that
 recomputes all three ledgers, binds actual manifest/claims bytes, requires an
-out-of-band trust-policy digest, and performs no publication action.
+out-of-band trust-policy digest, enforces distinct role keys and independent-review
+separation, and performs no publication action. A deterministic assembler now
+combines separately governed inputs without pretending that assembly verifies
+signatures.
 
 The normative behavior is in the
 [P6 specification](../specifications/blinded-validation-registry-and-launch-0.1.md).
@@ -35,7 +38,7 @@ Source selection, licences, safety limits, and non-adoptions are in the
 | P6-06 | Implemented | The ledger reports workflow/surface coverage, confirmed/not-observed/false-positive/inconclusive/infrastructure/blocked/unsupported outcomes, reproductions, precision, cost, latency, containment, missing/duplicate/out-of-scope runs, and provider/model/harness contrasts without a causal superiority claim. |
 | P6-07 | Partially implemented | The readiness gate covers identity, moderation, malware and secret screening, rate/DDoS control, encrypted backup, restore, rollback, incident response, and monitoring. The included local snapshot/restore is bounded and deterministic but deliberately unencrypted and never qualifies as a production receipt. No public Registry is deployed. |
 | P6-08 | Partially satisfied | Current-tree tests, static checks, dependency audit, declared runtime-licence review, deterministic builds, package-resource checks, isolated-wheel smoke, SBOM, checksums, and public-boundary checks pass. `release dossier` now requires a signed exact-final-commit check receipt and independently recomputes its candidate bindings. Exact-final-commit CI/provenance and staged review still must run after the release commit exists. |
-| P6-09 | Open; verifier implemented | Role-scoped DSSE ingestion now rejects unknown keys, identity/role drift, synthetic receipts, and founder/independent-review conflicts. No real founder, independent technical, independent isolation, legal/licence/disclosure, or security review receipt exists for the candidate. |
+| P6-09 | Open; verifier implemented | Role-scoped DSSE ingestion rejects unknown keys, identity/role drift, shared role keys, synthetic receipts, internal/independent overlap, and overlap between the two independent reviewers. No real founder, independent technical, independent isolation, legal/licence/disclosure, or security review receipt exists for the candidate. |
 | P6-10 | Partially satisfied | Repository README, changelog, claims register, founder matrix, Registry operations docs, and launch checklist distinguish machinery from evidence. The separately hosted [TRUSCOR website](https://truscor.org/) contains broader SOVA Engine/autonomous rating language and requires separate founder/publication/legal evidence review. No release-controlled website or paper source is tracked here. |
 | P6-11 | Open | The release ledger correctly remains on hold. No tag, push, package publication, public Registry launch, or release announcement was performed. |
 
@@ -61,12 +64,12 @@ Supporting deterministic digests:
 
 | Gate | Result |
 |---|---|
-| Focused P6 and Registry-backup tests | `54 passed`; combined validation/backup statement-branch coverage `97.78%` |
+| Focused P6 and Registry-backup tests | `54 passed`; combined validation/backup statement-branch coverage `97.82%` |
 | Full repository suite | `2,549 passed`, `30 skipped`, zero failed in `1,093.52s` |
 | Full combined statement/branch coverage | `95.12%`; mandatory 95% gate passed |
 | Full Ruff format and lint | `712 files already formatted`; all checks passed |
 | Full strict mypy | no issues in `514` source/test files |
-| CLI parser-to-handler execution audit | `147/147`; no unexecuted command |
+| CLI parser-to-handler execution audit | `148/148`; no unexecuted command |
 | Repository policy and public boundary | passed; `861` tracked or unignored files scanned by each gate |
 | Dependency vulnerability audit | strict OSV audit: no known vulnerabilities found |
 | Runtime licence metadata | ten runtime components declare Apache-2.0, BSD-3-Clause, MIT, MIT-0, or PSF-2.0 compatible expressions |

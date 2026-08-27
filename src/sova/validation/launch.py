@@ -235,6 +235,36 @@ class LaunchTrustPolicy:
         represented = {role for item in self.principals for role in item.roles}
         if represented != set(LaunchRole):
             raise FormatError("SOVA-P6-LAUNCH-TRUST", "every launch trust role is required")
+        if len(self.principals) != len(LaunchRole) or any(
+            len(item.roles) != 1 for item in self.principals
+        ):
+            raise FormatError(
+                "SOVA-P6-LAUNCH-TRUST",
+                "each launch role requires one distinct trusted principal and key",
+            )
+        by_role = {item.roles[0]: item for item in self.principals}
+        internal_roles = {
+            LaunchRole.EVALUATION_CUSTODIAN,
+            LaunchRole.REGISTRY_OPERATOR,
+            LaunchRole.P5_OPERATOR,
+            LaunchRole.RELEASE_OPERATOR,
+            LaunchRole.FOUNDER,
+        }
+        internal_names = {by_role[role].name for role in internal_roles}
+        internal_organizations = {by_role[role].organization for role in internal_roles}
+        technical = by_role[LaunchRole.INDEPENDENT_TECHNICAL]
+        isolation = by_role[LaunchRole.INDEPENDENT_ISOLATION]
+        for reviewer in (technical, isolation):
+            if reviewer.name in internal_names or reviewer.organization in internal_organizations:
+                raise FormatError(
+                    "SOVA-P6-LAUNCH-TRUST",
+                    "independent reviewer identity must be separate from internal principals",
+                )
+        if technical.name == isolation.name or technical.organization == isolation.organization:
+            raise FormatError(
+                "SOVA-P6-LAUNCH-TRUST",
+                "independent technical and isolation reviewers must be separate",
+            )
 
     @property
     def digest(self) -> str:
@@ -809,6 +839,35 @@ def launch_bundle_from_mapping(document: Mapping[str, Any]) -> LaunchEvidenceBun
     )
 
 
+def assemble_launch_bundle(  # noqa: PLR0913 - each evidence class remains explicit
+    *,
+    trust_policy: Mapping[str, Any],
+    protocol: Mapping[str, Any],
+    observation_envelope: Mapping[str, Any],
+    registry_policy: Mapping[str, Any],
+    operational_envelopes: tuple[Mapping[str, Any], ...],
+    candidate: Mapping[str, Any],
+    review_envelopes: tuple[Mapping[str, Any], ...],
+    gate_envelopes: tuple[Mapping[str, Any], ...],
+) -> dict[str, Any]:
+    """Assemble and strictly validate one deterministic launch-evidence bundle."""
+    document: dict[str, Any] = {
+        "artifactType": "sova.launch-evidence-bundle",
+        "schemaVersion": "0.1.0",
+        "trustPolicy": dict(trust_policy),
+        "protocol": dict(protocol),
+        "observationLedger": dict(observation_envelope),
+        "registryPolicy": dict(registry_policy),
+        "operationalReceipts": [dict(item) for item in operational_envelopes],
+        "candidate": dict(candidate),
+        "reviewReceipts": [dict(item) for item in review_envelopes],
+        "gateReceipts": [dict(item) for item in gate_envelopes],
+    }
+    document["contentDigest"] = sha256_digest(canonical_json_bytes(document))
+    launch_bundle_from_mapping(document)
+    return document
+
+
 def read_launch_bundle(raw: bytes) -> LaunchEvidenceBundle:
     document = strict_json_loads(
         raw,
@@ -1086,6 +1145,7 @@ __all__ = [
     "LaunchRole",
     "LaunchTrustPolicy",
     "TrustedLaunchPrincipal",
+    "assemble_launch_bundle",
     "evaluate_launch_bundle",
     "launch_bundle_from_mapping",
     "launch_gate_receipt_from_mapping",

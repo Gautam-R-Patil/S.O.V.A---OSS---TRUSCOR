@@ -276,7 +276,12 @@ from sova.search import run_trigger_search_demo
 from sova.targets import TargetKind, target_manifest_from_mapping, validate_target_manifest
 from sova.trace import Redactor, TraceReader, generate_ed25519_keypair, recover_trace
 from sova.trace.otel import export_event
-from sova.validation import evaluate_launch_bundle, read_launch_bundle, sign_launch_evidence
+from sova.validation import (
+    assemble_launch_bundle,
+    evaluate_launch_bundle,
+    read_launch_bundle,
+    sign_launch_evidence,
+)
 from sova.workflows import build_case_workspace, run_browser_check, run_check, run_complete_demo
 
 if TYPE_CHECKING:
@@ -399,6 +404,20 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     release_sign.add_argument("public_key", type=_path)
     release_sign.add_argument("destination", type=_path)
     release_sign.set_defaults(handler=_release_sign_evidence)
+    release_assemble = release_commands.add_parser(
+        "assemble-evidence",
+        help="assemble strict signed P6 evidence into one deterministic launch bundle",
+    )
+    release_assemble.add_argument("trust_policy", type=_path)
+    release_assemble.add_argument("protocol", type=_path)
+    release_assemble.add_argument("observation_ledger", type=_path)
+    release_assemble.add_argument("registry_policy", type=_path)
+    release_assemble.add_argument("candidate", type=_path)
+    release_assemble.add_argument("destination", type=_path)
+    release_assemble.add_argument("--operational-receipt", type=_path, action="append", default=[])
+    release_assemble.add_argument("--review-receipt", type=_path, action="append", default=[])
+    release_assemble.add_argument("--gate-receipt", type=_path, action="append", default=[])
+    release_assemble.set_defaults(handler=_release_assemble_evidence)
     release_dossier = release_commands.add_parser(
         "dossier", help="recompute an exact-candidate launch verdict from signed P6 evidence"
     )
@@ -2776,6 +2795,59 @@ def _release_dossier_input(path: Path, role: str, *, maximum_bytes: int) -> byte
     if path.stat().st_size > maximum_bytes:
         raise FormatError("SOVA-P6-LAUNCH-FILE", f"{role} exceeds its byte limit")
     return path.read_bytes()
+
+
+def _release_evidence_object(path: Path, role: str) -> dict[str, Any]:
+    value = strict_json_loads(
+        _release_dossier_input(path, role, maximum_bytes=8 * 1024 * 1024),
+        max_bytes=8 * 1024 * 1024,
+        max_items=100_000,
+        max_depth=64,
+    )
+    if not isinstance(value, dict):
+        raise FormatError("SOVA-P6-LAUNCH-FILE", f"{role} root must be an object")
+    return value
+
+
+def _release_assemble_evidence(args: argparse.Namespace) -> int:
+    document = assemble_launch_bundle(
+        trust_policy=_release_evidence_object(args.trust_policy, "trust policy"),
+        protocol=_release_evidence_object(args.protocol, "evaluation protocol"),
+        observation_envelope=_release_evidence_object(
+            args.observation_ledger, "signed observation ledger"
+        ),
+        registry_policy=_release_evidence_object(args.registry_policy, "Registry policy"),
+        operational_envelopes=tuple(
+            _release_evidence_object(path, "signed operational receipt")
+            for path in args.operational_receipt
+        ),
+        candidate=_release_evidence_object(args.candidate, "release candidate"),
+        review_envelopes=tuple(
+            _release_evidence_object(path, "signed review receipt") for path in args.review_receipt
+        ),
+        gate_envelopes=tuple(
+            _release_evidence_object(path, "signed launch-gate receipt")
+            for path in args.gate_receipt
+        ),
+    )
+    _write_new_document(args.destination, document)
+    sys.stdout.buffer.write(
+        canonical_json_bytes(
+            {
+                "artifactType": "sova.launch-evidence-assembled",
+                "schemaVersion": "0.1.0",
+                "bundleDigest": document["contentDigest"],
+                "operationalReceiptCount": len(args.operational_receipt),
+                "reviewReceiptCount": len(args.review_receipt),
+                "launchGateReceiptCount": len(args.gate_receipt),
+                "destination": str(args.destination.resolve()),
+                "signaturesVerified": False,
+                "publicationPerformed": False,
+            }
+        )
+        + b"\n"
+    )
+    return 0
 
 
 def _release_dossier(args: argparse.Namespace) -> int:

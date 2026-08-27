@@ -326,8 +326,9 @@ cover the frozen-protocol machinery, five provenance/loss-reporting adapter
 boundaries, complete metric ledger, ten-control Registry readiness policy, local
 backup/restore rehearsal, and five-review release ledger. P6-04 and P6-06 are
 implemented. Signed role-scoped receipt ingestion and the exact-candidate launch
-dossier are also implemented; they close the local aggregation/trust-verification
-gap but create no external receipt. Repository README, release-note,
+dossier are also implemented, together with distinct-role/independent-review trust
+separation and deterministic bundle assembly; they close the local
+aggregation/trust-verification gap but create no external receipt. Repository README, release-note,
 claims-register, and founder-matrix
 language has been reconciled, but P6-10 remains open because the separately hosted
 TRUSCOR website contains broader SOVA Engine claims and no release-controlled paper

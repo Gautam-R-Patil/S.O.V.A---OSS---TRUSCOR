@@ -18,13 +18,11 @@ from sova.validation import (
     LaunchGate,
     LaunchGateReceipt,
     LaunchRole,
-    LaunchTrustPolicy,
     OperationalReceipt,
     RegistryControl,
     ReleaseCandidate,
     ReviewGate,
     ReviewReceipt,
-    TrustedLaunchPrincipal,
     evaluate_blinded_protocol,
     evaluate_launch_bundle,
     evaluate_registry_beta,
@@ -410,11 +408,51 @@ def test_launch_signing_and_cli_operator_path(
     assert envelope_path.is_file()
 
     bundle, manifest, claims, commit, _keys = _ready_bundle()
+    trust_path = tmp_path / "trust-policy.json"
+    protocol_path = tmp_path / "protocol.json"
+    observation_path = tmp_path / "observations.dsse.json"
+    registry_path = tmp_path / "registry-policy.json"
+    candidate_path = tmp_path / "candidate.json"
+    operational_paths = [tmp_path / f"operation-{index}.dsse.json" for index in range(10)]
+    review_paths = [tmp_path / f"review-{index}.dsse.json" for index in range(5)]
+    gate_paths = [tmp_path / f"gate-{index}.dsse.json" for index in range(3)]
+    for path, value in (
+        (trust_path, bundle["trustPolicy"]),
+        (protocol_path, bundle["protocol"]),
+        (observation_path, bundle["observationLedger"]),
+        (registry_path, bundle["registryPolicy"]),
+        (candidate_path, bundle["candidate"]),
+        *zip(operational_paths, bundle["operationalReceipts"], strict=True),
+        *zip(review_paths, bundle["reviewReceipts"], strict=True),
+        *zip(gate_paths, bundle["gateReceipts"], strict=True),
+    ):
+        path.write_bytes(canonical_json_bytes(value))
     bundle_path = tmp_path / "bundle.json"
+    assemble_args = [
+        "release",
+        "assemble-evidence",
+        str(trust_path),
+        str(protocol_path),
+        str(observation_path),
+        str(registry_path),
+        str(candidate_path),
+        str(bundle_path),
+    ]
+    for path in operational_paths:
+        assemble_args.extend(("--operational-receipt", str(path)))
+    for path in review_paths:
+        assemble_args.extend(("--review-receipt", str(path)))
+    for path in gate_paths:
+        assemble_args.extend(("--gate-receipt", str(path)))
+    assert main(assemble_args) == 0
+    assembled_report = json.loads(capfd.readouterr().out)
+    assert assembled_report["signaturesVerified"] is False
+    assert assembled_report["publicationPerformed"] is False
+    assert json.loads(bundle_path.read_bytes()) == bundle
+
     manifest_path = tmp_path / "SHA256SUMS"
     claims_path = tmp_path / "claims.md"
     dossier_path = tmp_path / "dossier.json"
-    bundle_path.write_bytes(canonical_json_bytes(bundle))
     manifest_path.write_bytes(manifest)
     claims_path.write_bytes(claims)
     assert (
@@ -478,22 +516,10 @@ def test_gate_receipt_contract_rejects_missing_checks_and_synthetic_pass() -> No
 
 
 def test_launch_trust_and_registry_input_types_fail_closed() -> None:  # noqa: PLR0915
-    key = generate_ed25519_keypair()
-    principal = TrustedLaunchPrincipal(
-        key.key_id,
-        key.public_key,
-        "reviewer",
-        "review organization",
-        tuple(LaunchRole),
-    )
-    policy = LaunchTrustPolicy(
-        "commit",
-        digest("manifest"),
-        digest("candidate"),
-        (principal,),
-        digest("policy"),
-    )
-    assert policy.principal(key.key_id) is principal
+    document, _manifest, _claims, _commit, _keys = _ready_bundle()
+    policy = trust_policy_from_mapping(document["trustPolicy"])
+    principal = policy.principals[0]
+    assert policy.principal(principal.key_id) is principal
     with pytest.raises(FormatError, match="does not match"):
         replace(principal, key_id=digest("wrong-key"))
     with pytest.raises(FormatError, match="identity"):
@@ -506,10 +532,39 @@ def test_launch_trust_and_registry_input_types_fail_closed() -> None:  # noqa: P
         replace(policy, principals=(principal, principal))
     with pytest.raises(FormatError, match="every launch trust role"):
         replace(policy, principals=(replace(principal, roles=(LaunchRole.FOUNDER,)),))
+    coalesced = (
+        replace(
+            policy.principals[0],
+            roles=(policy.principals[0].roles[0], policy.principals[1].roles[0]),
+        ),
+        *policy.principals[2:],
+    )
+    with pytest.raises(FormatError, match="distinct trusted principal"):
+        replace(policy, principals=coalesced)
+    by_role = {item.roles[0]: item for item in policy.principals}
+    internal_identity = tuple(
+        replace(
+            item,
+            name=by_role[LaunchRole.FOUNDER].name,
+            organization=by_role[LaunchRole.FOUNDER].organization,
+        )
+        if item.roles == (LaunchRole.INDEPENDENT_TECHNICAL,)
+        else item
+        for item in policy.principals
+    )
+    with pytest.raises(FormatError, match="separate from internal"):
+        replace(policy, principals=internal_identity)
+    shared_independent_organization = tuple(
+        replace(item, organization=by_role[LaunchRole.INDEPENDENT_TECHNICAL].organization)
+        if item.roles == (LaunchRole.INDEPENDENT_ISOLATION,)
+        else item
+        for item in policy.principals
+    )
+    with pytest.raises(FormatError, match="must be separate"):
+        replace(policy, principals=shared_independent_organization)
     with pytest.raises(FormatError, match="not trusted"):
         policy.principal(digest("unknown"))
 
-    document, _manifest, _claims, _commit, _keys = _ready_bundle()
     trust = copy.deepcopy(document["trustPolicy"])
     trust["principals"][0]["publicKey"] = "%%%%"
     trust = _with_digest({key: value for key, value in trust.items() if key != "contentDigest"})

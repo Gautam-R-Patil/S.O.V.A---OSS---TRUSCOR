@@ -28,7 +28,10 @@ have independent version ledgers.
   schemas, Ed25519/DSSE receipt verification, nine role-scoped trust roots, an
   out-of-band trust-policy pin, recomputed evaluation/Registry/release ledgers,
   exact artifact-manifest and claims-register byte binding, and inert
-  `release keygen`, `release sign-evidence`, and `release dossier` commands.
+  `release keygen`, `release sign-evidence`, `release assemble-evidence`, and
+  `release dossier` commands. Trust policy admission requires one distinct key
+  per role and structural separation between internal principals and both
+  independent reviewers.
   Missing, synthetic, untrusted, tampered, or drifted evidence cannot authorize
   tagging or publication.
 - A digest-frozen blinded-evaluation protocol spanning eight target classes and

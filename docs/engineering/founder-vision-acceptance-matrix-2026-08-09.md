@@ -39,10 +39,10 @@ secure, or independently validated beyond the stated boundary.
   external-review, and publication gates remain open.
 - The current public regression collected 2,579 tests: 2,549 passed, 30
   capability-gated lanes skipped, zero failed, and combined statement/branch
-  coverage reached 95.12%. Focused P6 and Registry-backup coverage is 97.78%
+  coverage reached 95.12%. Focused P6 and Registry-backup coverage is 97.82%
   across 54 passing tests.
 - Ruff format/lint passed across 712 files; strict mypy passed across 514 source
-  and test files; parser-to-handler execution passed 147/147 commands; repository
+  and test files; parser-to-handler execution passed 148/148 commands; repository
   policy and public-boundary checks each passed across 861 files.
 - The strict OSV dependency audit found no known vulnerabilities. The ten runtime
   dependency components declare Apache-2.0, BSD-3-Clause, MIT, MIT-0, or PSF-2.0

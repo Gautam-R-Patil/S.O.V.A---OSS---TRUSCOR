@@ -34,6 +34,12 @@ policy. Keep that policy digest outside the assembled bundle and pass it explici
 to `sova release dossier`; an included key or included policy alone establishes no
 operator identity.
 
+Use `sova release assemble-evidence` to combine the separately reviewed policy,
+protocol, candidate, signed observation ledger, and repeated operational, review,
+and launch-gate receipts. Assembly checks strict structure and emits a deterministic
+bundle but deliberately does not claim signature verification; `release dossier`
+performs cryptographic verification and recomputes the launch decision.
+
 ## Local backup and restore rehearsal
 
 Create a deterministic snapshot outside the Registry data root:
