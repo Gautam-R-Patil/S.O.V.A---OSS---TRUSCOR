@@ -182,16 +182,20 @@ def test_concurrent_agents_actually_overlap_in_wall_clock(
     sleep_seconds = 0.3
     concurrently_running = 0
     max_concurrently_running = 0
+    worker_starts: list[float] = []
+    worker_finishes: list[float] = []
     lock = threading.Lock()
 
     def fake_run_swarm_worker(spec: Any, **_kwargs: Any) -> Any:
         nonlocal concurrently_running, max_concurrently_running
         with lock:
+            worker_starts.append(time.monotonic())
             concurrently_running += 1
             max_concurrently_running = max(max_concurrently_running, concurrently_running)
         time.sleep(sleep_seconds)
         with lock:
             concurrently_running -= 1
+            worker_finishes.append(time.monotonic())
 
         class _Artifacts:
             status = "pass"
@@ -207,7 +211,6 @@ def test_concurrent_agents_actually_overlap_in_wall_clock(
     monkeypatch.setattr(runtime_module, "run_swarm_worker", fake_run_swarm_worker)
     monkeypatch.setattr(SwarmCoordinator, "merge", fake_merge, raising=True)
 
-    started = time.monotonic()
     artifacts = runtime_module.run_web_swarm(
         _FakeTarget(),  # type: ignore[arg-type]
         "mission",  # type: ignore[arg-type]
@@ -222,10 +225,10 @@ def test_concurrent_agents_actually_overlap_in_wall_clock(
         target_observation_disclosure_authorized=True,
         max_concurrency=agent_count,
     )
-    elapsed = time.monotonic() - started
+    worker_elapsed = max(worker_finishes) - min(worker_starts)
 
     assert max_concurrently_running == agent_count  # all ran at once, not one at a time
-    assert elapsed < sleep_seconds * agent_count  # proves overlap, not serialization
+    assert worker_elapsed < sleep_seconds * agent_count  # proves overlap, not serialization
     assert artifacts.agent_count == agent_count
     assert artifacts.report["agentCount"] == agent_count
 

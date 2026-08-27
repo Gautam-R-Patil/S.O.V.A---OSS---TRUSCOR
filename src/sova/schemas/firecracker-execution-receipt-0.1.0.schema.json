@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/firecracker-execution-receipt-0.1.0.schema.json",
+  "title": "SOVA Firecracker execution receipt 0.1.0",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "jobId", "vmId", "manifestDigest", "launchPlanDigest", "executionMode", "startedAt", "completedAt", "jailerExitCode", "processId", "apiCalls", "instanceStarted", "watchdogTriggered", "executionStatus", "cleanupReceiptDigest", "cleanupComplete", "failureCode", "status", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.firecracker-execution-receipt"},
+    "schemaVersion": {"const": "0.1.0"},
+    "jobId": {"type": "string", "minLength": 1},
+    "vmId": {"type": "string", "minLength": 1},
+    "manifestDigest": {"$ref": "#/$defs/digest"},
+    "launchPlanDigest": {"$ref": "#/$defs/digest"},
+    "executionMode": {"enum": ["simulated", "live"]},
+    "startedAt": {"type": "string", "format": "date-time"},
+    "completedAt": {"type": "string", "format": "date-time"},
+    "jailerExitCode": {"type": ["integer", "null"]},
+    "processId": {"type": ["integer", "null"], "minimum": 2},
+    "apiCalls": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "required": ["path", "requestDigest", "statusCode"],
+        "properties": {
+          "path": {"type": "string", "pattern": "^/"},
+          "requestDigest": {"$ref": "#/$defs/digest"},
+          "statusCode": {"type": "integer", "minimum": 100, "maximum": 599}
+        },
+        "additionalProperties": false
+      }
+    },
+    "instanceStarted": {"type": "boolean"},
+    "watchdogTriggered": {"type": "boolean"},
+    "executionStatus": {"enum": ["process-exited", "failed", "timed-out"]},
+    "cleanupReceiptDigest": {"$ref": "#/$defs/digest"},
+    "cleanupComplete": {"type": "boolean"},
+    "failureCode": {"type": ["string", "null"], "minLength": 1},
+    "status": {"enum": ["process-exited", "failed", "timed-out", "cleanup-failed"]},
+    "claims": {
+      "type": "object",
+      "required": ["liveFirecrackerExecuted", "productionIsolationClaimAllowed", "exactHostMatrixPassed", "independentlyReviewed", "escapeImpossible"],
+      "properties": {
+        "liveFirecrackerExecuted": {"type": "boolean"},
+        "productionIsolationClaimAllowed": {"const": false},
+        "exactHostMatrixPassed": {"const": false},
+        "independentlyReviewed": {"const": false},
+        "escapeImpossible": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"cleanupComplete": {"const": false}}, "required": ["cleanupComplete"]},
+      "then": {"properties": {"status": {"const": "cleanup-failed"}}}
+    },
+    {
+      "if": {"properties": {"executionMode": {"const": "simulated"}}, "required": ["executionMode"]},
+      "then": {"properties": {"claims": {"properties": {"liveFirecrackerExecuted": {"const": false}}}}}
+    },
+    {
+      "if": {"properties": {"instanceStarted": {"const": false}}, "required": ["instanceStarted"]},
+      "then": {"properties": {"claims": {"properties": {"liveFirecrackerExecuted": {"const": false}}}}}
+    },
+    {
+      "if": {"properties": {"executionStatus": {"const": "process-exited"}}, "required": ["executionStatus"]},
+      "then": {"properties": {"failureCode": {"const": null}, "watchdogTriggered": {"const": false}, "instanceStarted": {"const": true}}}
+    },
+    {
+      "if": {"properties": {"executionStatus": {"const": "timed-out"}}, "required": ["executionStatus"]},
+      "then": {"properties": {"failureCode": {"type": "string"}, "watchdogTriggered": {"const": true}, "instanceStarted": {"const": true}}}
+    },
+    {
+      "if": {"properties": {"executionStatus": {"const": "failed"}}, "required": ["executionStatus"]},
+      "then": {"properties": {"failureCode": {"type": "string"}}}
+    },
+    {
+      "if": {"properties": {"cleanupComplete": {"const": true}, "executionStatus": {"const": "process-exited"}}, "required": ["cleanupComplete", "executionStatus"]},
+      "then": {"properties": {"status": {"const": "process-exited"}}}
+    },
+    {
+      "if": {"properties": {"cleanupComplete": {"const": true}, "executionStatus": {"const": "timed-out"}}, "required": ["cleanupComplete", "executionStatus"]},
+      "then": {"properties": {"status": {"const": "timed-out"}}}
+    },
+    {
+      "if": {"properties": {"cleanupComplete": {"const": true}, "executionStatus": {"const": "failed"}}, "required": ["cleanupComplete", "executionStatus"]},
+      "then": {"properties": {"status": {"const": "failed"}}}
+    }
+  ],
+  "additionalProperties": false
+}

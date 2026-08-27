@@ -44,6 +44,7 @@ evidence-aware capability-map report contract.
 - `worker-evidence-report-0.1.0.schema.json` — controller-validated hostile-output report
 - `worker-cleanup-receipt-0.1.0.schema.json` — exact-job teardown verification
 - `firecracker-launch-plan-0.1.0.schema.json` — jailer, cgroup, drive, device, and watchdog plan
+- `firecracker-execution-receipt-0.1.0.schema.json` — observed jailer/API/watchdog/process/cleanup lifecycle
 - `blinded-evaluation-protocol-0.1.0.schema.json` — frozen multi-provider, target, budget, and failure contract
 - `blinded-evaluation-report-0.1.0.schema.json` — complete-run P6 metric and limitation ledger
 - `external-benchmark-case-0.1.0.schema.json` — provenance-bound loss-reporting benchmark import

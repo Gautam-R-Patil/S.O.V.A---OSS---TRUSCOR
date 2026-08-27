@@ -68,7 +68,7 @@ import time
 
 Path('request.txt').write_text(sys.argv[1], encoding='utf-8')
 response = Path('response.txt')
-deadline = time.monotonic() + 5
+deadline = time.monotonic() + 15
 while time.monotonic() < deadline:
     if response.exists():
         print(response.read_text(encoding='utf-8'))

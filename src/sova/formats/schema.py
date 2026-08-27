@@ -54,6 +54,7 @@ _SCHEMA_FILES = {
     "sova.worker-evidence-report": "worker-evidence-report-0.1.0.schema.json",
     "sova.worker-cleanup-receipt": "worker-cleanup-receipt-0.1.0.schema.json",
     "sova.firecracker-launch-plan": "firecracker-launch-plan-0.1.0.schema.json",
+    "sova.firecracker-execution-receipt": "firecracker-execution-receipt-0.1.0.schema.json",
     "sova.blinded-evaluation-protocol": "blinded-evaluation-protocol-0.1.0.schema.json",
     "sova.blinded-evaluation-report": "blinded-evaluation-report-0.1.0.schema.json",
     "sova.external-benchmark-case": "external-benchmark-case-0.1.0.schema.json",

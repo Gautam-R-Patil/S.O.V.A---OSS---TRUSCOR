@@ -13,6 +13,7 @@ from sova.worker.firecracker import (
     build_firecracker_launch_plan,
 )
 from sova.worker.io import read_worker_job_manifest
+from sova.worker.lifecycle import FirecrackerLifecycleRunner
 from sova.worker.protocol import (
     ProtocolMessage,
     ProtocolMessageType,
@@ -24,9 +25,11 @@ from sova.worker.protocol import (
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from sova.worker.brokers import SecretBroker
     from sova.worker.cas import ContentAddressedStore
     from sova.worker.contracts import WorkerAdmission, WorkerJobManifest
     from sova.worker.firecracker import FirecrackerHostPolicy, FirecrackerLaunchPlan
+    from sova.worker.lifecycle import FirecrackerLifecycleBackend, FirecrackerLifecycleResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +119,43 @@ class WorkerAdmissionService:
             identity_slot=identity_slot,
         )
         return AdmittedWorkerJob(message, manifest, plan)
+
+    def execute_admitted_job(
+        self,
+        admitted: AdmittedWorkerJob,
+        *,
+        backend: FirecrackerLifecycleBackend,
+        secret_broker: SecretBroker,
+    ) -> FirecrackerLifecycleResult:
+        """Run only the exact plan this service can independently reconstruct."""
+        if secret_broker.manifest.digest != admitted.manifest.digest:
+            raise FormatError(
+                "SOVA-WORKER-SERVICE-SECRET",
+                "secret broker is not bound to the admitted manifest",
+            )
+        expected = build_firecracker_launch_plan(
+            admitted.manifest,
+            self.worker_admission,
+            self.host_policy,
+            identity_slot=admitted.launch_plan.identity_slot,
+        )
+        if (
+            expected.to_mapping()["contentDigest"]
+            != admitted.launch_plan.to_mapping()["contentDigest"]
+        ):
+            raise FormatError(
+                "SOVA-WORKER-SERVICE-PLAN",
+                "admitted launch plan no longer matches worker policy",
+            )
+
+        def revoke() -> bool:
+            secret_broker.revoke_all()
+            return True
+
+        return FirecrackerLifecycleRunner(backend).run(
+            admitted.launch_plan,
+            revoke_secrets=revoke,
+        )
 
 
 __all__ = ["AdmittedWorkerJob", "WorkerAdmissionService"]

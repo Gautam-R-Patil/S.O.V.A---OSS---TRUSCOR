@@ -21,6 +21,14 @@ mTLS plus DSSE protocol, CAS, endpoint/secret brokers, controller-side evidence
 validation, and receipt model. Host egress is deny-by-default because Firecracker
 does not itself supply the destination policy SOVA needs.
 
+The implementation follows the jailer's documented details rather than a generic
+VM wrapper: the jail root is `<base>/<exec-name>/<id>/root`; the jailer forwards
+the VM ID and writes `<exec-name>.pid`; cgroup-v2 values are repeated
+`--cgroup key=value` arguments; and Firecracker is configured and started with
+`204`-checked PUT requests over a Unix-domain API socket. The resulting lifecycle
+receipt remains non-authorizing until the exact-host matrix and independent review
+exist.
+
 The protocol pins `1.16.1`, the current supported v1.16 patch at research time.
 The release policy supports the v1.16 line through at least 2026-12-03. Two recent
 advisories materially influenced the design:
@@ -38,6 +46,8 @@ Primary sources:
 - [Firecracker jailer documentation](https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md)
 - [Firecracker release policy](https://github.com/firecracker-microvm/firecracker/blob/main/docs/RELEASE_POLICY.md)
 - [Firecracker releases](https://github.com/firecracker-microvm/firecracker/releases)
+- [Firecracker API actions](https://github.com/firecracker-microvm/firecracker/blob/main/docs/api_requests/actions.md)
+- [Firecracker OpenAPI contract](https://github.com/firecracker-microvm/firecracker/blob/main/src/firecracker/swagger/firecracker.yaml)
 - [GHSA-36j2-f825-qvgc](https://github.com/firecracker-microvm/firecracker/security/advisories/GHSA-36j2-f825-qvgc)
 - [GHSA-776c-mpj7-jm3r](https://github.com/firecracker-microvm/firecracker/security/advisories/GHSA-776c-mpj7-jm3r)
 

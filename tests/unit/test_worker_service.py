@@ -6,13 +6,15 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from unittest.mock import Mock
 
 import pytest
 
 from sova.formats import FormatError, canonical_json_bytes, sha256_digest
+from sova.worker.brokers import SecretBroker
 from sova.worker.cas import ContentAddressedStore
 from sova.worker.contracts import assess_worker_attestation
-from sova.worker.firecracker import FirecrackerHostPolicy
+from sova.worker.firecracker import FirecrackerHostPolicy, WorkerCleanupReceipt
 from sova.worker.protocol import (
     ProtocolMessage,
     ProtocolMessageType,
@@ -69,6 +71,7 @@ def _context(tmp_path: Path, *, allow_nonproduction: bool = True) -> _Context:
         chroot_base=tmp_path / "jailer",
         network_namespace_base=tmp_path / "netns",
         content_store=store.root,
+        cgroup_base=tmp_path / "cgroup",
         approved_firecracker_digest=digest("firecracker"),
         approved_jailer_digest=digest("jailer"),
     )
@@ -190,3 +193,57 @@ def test_service_rejects_unbound_content_and_mismatched_store(tmp_path: Path) ->
             identity_slot=1,
         )
     assert context.store.root == context.policy.content_store
+
+
+def test_service_reconstructs_plan_before_lifecycle_execution(tmp_path: Path) -> None:
+    context = _context(tmp_path)
+    admitted = context.service.admit_signed_job(
+        envelope=sign_protocol_message(_message(context.raw), context.controller),
+        peer_certificate_der=CERTIFICATE,
+        raw_manifest=context.raw,
+        now=NOW,
+        identity_slot=4,
+    )
+    backend = Mock()
+    backend.live_execution = False
+    backend.launch.return_value = 0
+    backend.wait_for_api_socket.return_value = True
+    backend.wait_for_process_id.return_value = 4242
+    backend.put_api.return_value = 204
+    backend.wait_for_process.return_value = 0
+    backend.cleanup.side_effect = lambda plan, completed_at, secret_broker_revoked: (
+        WorkerCleanupReceipt(
+            job_id=plan.job_id,
+            vm_id=plan.vm_id,
+            completed_at=completed_at,
+            process_terminated=True,
+            api_socket_removed=True,
+            cgroup_removed=True,
+            network_namespace_removed=True,
+            chroot_removed=True,
+            writable_layer_removed=True,
+            secret_broker_revoked=secret_broker_revoked,
+        )
+    )
+    result = context.service.execute_admitted_job(
+        admitted,
+        backend=backend,
+        secret_broker=SecretBroker(admitted.manifest),
+    )
+    assert result.execution.execution_status == "process-exited"
+    assert result.cleanup.complete is True
+    backend.prepare.assert_called_once_with(admitted.launch_plan)
+
+    with pytest.raises(FormatError, match="secret broker"):
+        context.service.execute_admitted_job(
+            admitted,
+            backend=backend,
+            secret_broker=SecretBroker(replace(admitted.manifest, job_id="job:other")),
+        )
+    drifted = replace(admitted, launch_plan=replace(admitted.launch_plan, watchdog_seconds=1))
+    with pytest.raises(FormatError, match="launch plan"):
+        context.service.execute_admitted_job(
+            drifted,
+            backend=backend,
+            secret_broker=SecretBroker(admitted.manifest),
+        )

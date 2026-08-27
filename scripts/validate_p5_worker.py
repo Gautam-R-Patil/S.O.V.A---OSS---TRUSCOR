@@ -10,6 +10,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -35,7 +36,12 @@ from sova.worker.contracts import (
     assess_worker_attestation,
 )
 from sova.worker.evidence import GUEST_OUTPUT_MEDIA_TYPE, validate_and_sign_guest_evidence
-from sova.worker.firecracker import FirecrackerHostPolicy, WorkerCleanupReceipt
+from sova.worker.firecracker import (
+    FirecrackerHostPolicy,
+    FirecrackerLaunchPlan,
+    WorkerCleanupReceipt,
+)
+from sova.worker.lifecycle import FirecrackerLifecycleRunner
 from sova.worker.malicious import malicious_guest_matrix
 from sova.worker.protocol import (
     ProtocolMessage,
@@ -45,6 +51,61 @@ from sova.worker.protocol import (
     sign_protocol_message,
 )
 from sova.worker.service import WorkerAdmissionService
+
+
+class _AcceptanceLifecycleBackend:
+    """Deterministic non-live backend for exercising the lifecycle state machine."""
+
+    live_execution = False
+
+    def prepare(self, _plan: FirecrackerLaunchPlan) -> None:
+        return None
+
+    def launch(self, _plan: FirecrackerLaunchPlan) -> int:
+        return 0
+
+    def wait_for_api_socket(self, _plan: FirecrackerLaunchPlan, _timeout: float) -> bool:
+        return True
+
+    def read_process_id(self, _plan: FirecrackerLaunchPlan) -> int:
+        return 4242
+
+    def wait_for_process_id(self, _plan: FirecrackerLaunchPlan, _timeout: float) -> int:
+        return 4242
+
+    def put_api(
+        self,
+        _plan: FirecrackerLaunchPlan,
+        _path: str,
+        _payload: dict[str, Any],
+    ) -> int:
+        return 204
+
+    def wait_for_process(self, _process_id: int, _timeout: float) -> int:
+        return 0
+
+    def terminate_process(self, _process_id: int) -> bool:
+        return True
+
+    def cleanup(
+        self,
+        plan: FirecrackerLaunchPlan,
+        *,
+        completed_at: str,
+        secret_broker_revoked: bool,
+    ) -> WorkerCleanupReceipt:
+        return WorkerCleanupReceipt(
+            job_id=plan.job_id,
+            vm_id=plan.vm_id,
+            completed_at=completed_at,
+            process_terminated=True,
+            api_socket_removed=True,
+            cgroup_removed=True,
+            network_namespace_removed=True,
+            chroot_removed=True,
+            writable_layer_removed=True,
+            secret_broker_revoked=secret_broker_revoked,
+        )
 
 
 def _digest(value: str) -> str:
@@ -141,9 +202,16 @@ def _guest_bundle(guest_key: Ed25519Keypair, receipt: NetworkFlowReceipt) -> byt
     )
     stream = BytesIO()
     with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("manifest.json", canonical_json_bytes(manifest))
-        archive.writestr("manifest.dsse.json", canonical_json_bytes(envelope))
-        archive.writestr("artifacts/network.json", raw)
+        for name, payload in (
+            ("manifest.json", canonical_json_bytes(manifest)),
+            ("manifest.dsse.json", canonical_json_bytes(envelope)),
+            ("artifacts/network.json", raw),
+        ):
+            member = zipfile.ZipInfo(name, date_time=(2026, 8, 27, 10, 1, 0))
+            member.compress_type = zipfile.ZIP_DEFLATED
+            member.create_system = 3
+            member.external_attr = 0o100644 << 16
+            archive.writestr(member, payload)
     return stream.getvalue()
 
 
@@ -200,6 +268,7 @@ def main() -> int:
                 chroot_base=root / "jailer",
                 network_namespace_base=root / "netns",
                 content_store=store.root,
+                cgroup_base=root / "cgroup",
                 approved_firecracker_digest=_digest("firecracker"),
                 approved_jailer_digest=_digest("jailer"),
             ),
@@ -247,18 +316,17 @@ def main() -> int:
             redaction_values=(b"acceptance-secret",),
         )
         validate_document(evidence.report)
-        cleanup = WorkerCleanupReceipt(
-            job_id=manifest.job_id,
-            vm_id=accepted.launch_plan.vm_id,
-            completed_at="2026-08-27T10:12:00Z",
-            process_terminated=True,
-            api_socket_removed=True,
-            cgroup_removed=True,
-            network_namespace_removed=True,
-            chroot_removed=True,
-            writable_layer_removed=True,
-            secret_broker_revoked=True,
-        )
+
+        def revoke_secrets() -> bool:
+            secret.revoke_all()
+            return True
+
+        lifecycle = FirecrackerLifecycleRunner(
+            _AcceptanceLifecycleBackend(),
+            clock=lambda: datetime(2026, 8, 27, 10, 12, tzinfo=UTC),
+        ).run(accepted.launch_plan, revoke_secrets=revoke_secrets)
+        cleanup = lifecycle.cleanup
+        validate_document(lifecycle.execution.to_mapping())
         validate_document(cleanup.to_mapping())
     kata = assess_kata_backend(
         KataAdmissionEvidence(
@@ -283,6 +351,8 @@ def main() -> int:
             allowed_secret == b"acceptance-secret",
             allowed_secret_receipt.decision == "allowed",
             cleanup.complete,
+            lifecycle.execution.execution_status == "process-exited",
+            lifecycle.execution.execution_mode == "simulated",
             kata.status == "disabled",
             gvisor.status == "disabled",
         )
@@ -310,6 +380,7 @@ def main() -> int:
         "launchPlanFirecrackerVersion": accepted.launch_plan.firecracker_version,
         "evidenceReportDigest": evidence.report["contentDigest"],
         "cleanupReceiptDigest": cleanup.to_mapping()["contentDigest"],
+        "lifecycleStateMachinePassed": lifecycle.execution.execution_status == "process-exited",
         "maliciousGuestMatrix": [item.to_mapping() for item in malicious_guest_matrix()],
         "claims": {
             "productionIsolationClaimAllowed": False,

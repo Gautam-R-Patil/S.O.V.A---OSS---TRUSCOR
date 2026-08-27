@@ -23,6 +23,7 @@ def _policy(root: Path) -> FirecrackerHostPolicy:
         chroot_base=root / "jailer-root",
         network_namespace_base=root / "netns",
         content_store=root / "cas",
+        cgroup_base=root / "cgroup",
         approved_firecracker_digest=digest("firecracker"),
         approved_jailer_digest=digest("jailer"),
     )

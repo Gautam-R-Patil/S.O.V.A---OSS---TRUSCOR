@@ -73,6 +73,7 @@ def test_signed_job_is_peer_bound_cas_verified_and_compiled(tmp_path: Path) -> N
             chroot_base=Path("C:/sova-worker/jailer"),
             network_namespace_base=Path("C:/sova-worker/netns"),
             content_store=store.root,
+            cgroup_base=Path("C:/sova-worker/cgroup"),
             approved_firecracker_digest=digest("firecracker"),
             approved_jailer_digest=digest("jailer"),
         ),

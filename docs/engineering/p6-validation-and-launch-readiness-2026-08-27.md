@@ -67,19 +67,19 @@ Supporting deterministic digests:
 | Gate | Result |
 |---|---|
 | Focused P6 and Registry-backup tests | `54 passed`; combined validation/backup statement-branch coverage `97.72%` |
-| Full repository suite | `2,549 passed`, `30 skipped`, zero failed in `876.47s` |
-| Full combined statement/branch coverage | `95.12%`; mandatory 95% gate passed |
-| Full Ruff format and lint | `712 files already formatted`; all checks passed |
-| Full strict mypy | no issues in `514` source/test files |
+| Full repository suite | `2,574 passed`, `30 skipped`, zero failed in `936.72s` |
+| Full combined statement/branch coverage | `95.14%`; mandatory 95% gate passed |
+| Full Ruff format and lint | `714 files already formatted`; all checks passed |
+| Full strict mypy | no issues in `516` source/test files |
 | CLI parser-to-handler execution audit | `148/148`; no unexecuted command |
-| Repository policy and public boundary | passed; `861` tracked or unignored files scanned by each gate |
+| Repository policy and public boundary | passed; `864` tracked or unignored files scanned by each gate |
 | Dependency vulnerability audit | strict OSV audit: no known vulnerabilities found |
 | Runtime licence metadata | ten runtime components declare Apache-2.0, BSD-3-Clause, MIT, MIT-0, or PSF-2.0 compatible expressions |
-| Current working-tree distributions | two fixed-epoch builds were byte-identical: wheel `43c00e64ed0aa58e9f3d2933e5e8855f44d792b88118f8562f6e09e5dc26d298`; sdist `37aa86e09e4b9498d4a98cd5e7e3c18add03614402713811495f349aa789f418`. These are not final-release hashes until the release commit and hosted provenance exist |
-| P6 package resources | all thirteen P6 and launch schemas were present in the rebuilt wheel |
+| Current working-tree distributions | two fixed-epoch builds were byte-identical. Exact artifact digests are kept in the external candidate checksum/provenance record because this validation document is included in the sdist. They are not final-release artifacts until the release commit and hosted provenance exist |
+| Package resources | all thirteen P6 and launch schemas plus both P5 Firecracker schemas were present in the rebuilt wheel and sdist |
 | Isolated-wheel smoke | installed 11 packages and returned `sova 0.1.0a0` |
 | Local SBOM | CycloneDX 1.6 runtime SBOM, 10 components, digest `sha256:7c0b232e416da442d2e09ada04c48632ec55f1ed8afc2396bf4e96d659bf4b3d` |
-| Local checksum verification | four declared files; no missing, undeclared, or mismatched files; manifest digest `sha256:88ada2d378c0f7da3b92b81165e1dda90f5d9369d11a9ac29e02dd2d91d3c934` |
+| Local checksum verification | three declared files; no missing, undeclared, or mismatched files. The external candidate manifest carries the non-circular artifact and manifest digests |
 
 ## Evidence interpretation
 

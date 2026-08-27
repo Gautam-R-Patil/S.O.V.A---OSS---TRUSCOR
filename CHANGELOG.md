@@ -48,8 +48,9 @@ have independent version ledgers.
 - An immutable controller/worker protocol with mutually authenticated signed
   messages, content-addressed jobs, exact network and secret brokers, hostile
   evidence validation, cleanup/attestation receipts, and a Firecracker 1.16.1
-  jailer launch-plan compiler. Live dedicated-host isolation and independent
-  review are explicitly not claimed.
+  jailer launch compiler plus root-only Unix-API, pidfd watchdog, exact cleanup,
+  and lifecycle receipt path. Live dedicated-host isolation and independent review
+  are explicitly not claimed.
 - An oracle laboratory with proposal/calibration/promotion separation,
   differential and metamorphic checks, independent reproduction, explicit
   abstention and failure states, and eight-dimensional measured coverage.

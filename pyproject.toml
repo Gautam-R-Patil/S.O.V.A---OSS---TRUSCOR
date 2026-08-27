@@ -191,6 +191,7 @@ markers = [
   "compat: schema, migration, or adapter compatibility contract",
   "failure: deterministic fault-injection and crash-recovery contract",
   "integration: boundary-spanning or installed-entry-point test",
+  "no_cover: disable coverage instrumentation for timing-sensitive performance tests",
   "performance: performance or resource-budget contract",
 ]
 

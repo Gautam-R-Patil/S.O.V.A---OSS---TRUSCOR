@@ -45,7 +45,7 @@ to the guest identity.
 ## Firecracker boundary
 
 Protocol 0.1 pins Firecracker `1.16.1`. One exclusive host-allocated UID/GID slot
-and one microVM are used per hostile job. The declarative plan requires:
+and one microVM are used per hostile job. The compiler and lifecycle runner require:
 
 - launch through `jailer`, cgroup v2, default seccomp level 2, a private network
   namespace, root-controlled chroot/CAS paths, and no host mounts;
@@ -58,10 +58,30 @@ and one microVM are used per hostile job. The declarative plan requires:
 - a cleanup receipt covering the process, API socket, cgroup, namespace, chroot,
   writable layer, and secret broker.
 
-The checked-in launch compiler has not executed Firecracker on an exact dedicated
-host. Its launch contract is therefore implementation-ready, not production-
-validated. The exact jailer/VMM invocation and API sequence must pass the P5-10
-host suite before use.
+The lifecycle implementation reconstructs the admitted plan before execution and
+accepts no manifest-supplied host command. It validates the exact jailer argument
+set, uses the official `<chroot-base>/firecracker/<vm-id>/root` layout, passes
+cgroup values through repeated jailer `--cgroup` arguments, and forwards only the
+jailed `/api.socket` path to Firecracker. The jailer supplies `--id` itself and
+writes `/firecracker.pid`; SOVA does not invent or duplicate those arguments.
+Kernel and disk copies are digest-verified and owned by the exclusive guest UID,
+with read-only mode for the kernel/base disk and write permission only on the
+disposable layer.
+
+The root-only POSIX backend communicates through bounded HTTP/1.1 requests on the
+exact Unix socket, requires `204` for every configuration call and final
+`InstanceStart`, binds process control to a Linux pidfd, and invokes
+`SendCtrlAltDel` before pidfd termination when the watchdog expires. Cleanup uses
+the policy-pinned cgroup base and exact VM paths. Its versioned execution receipt
+records the jailer start result, API request digests/statuses, observed PID,
+watchdog state, process exit observation, and cleanup-receipt digest.
+`process-exited` means only that the controller observed the VMM process exit; it
+is not a guest-workload verdict or finding.
+
+The checked-in lifecycle has not executed Firecracker on an exact dedicated host.
+Its contract is therefore implementation-ready, not production-validated. The
+exact jailer/VMM invocation, TAP/broker data plane, kernel behavior, containment,
+and cleanup sequence must pass the P5-10 host suite before use.
 
 ## Network broker
 

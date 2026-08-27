@@ -40,7 +40,7 @@ def _ebml(identifier: bytes, payload: bytes) -> bytes:
 
 def _bounded_synthetic_webm() -> bytes:
     info = _ebml(b"\x2a\xd7\xb1", (1_000_000).to_bytes(3, "big")) + _ebml(
-        b"\x44\x89", struct.pack(">d", 12_000.0)
+        b"\x44\x89", struct.pack(">d", 120_000.0)
     )
     segment = b"".join(
         (

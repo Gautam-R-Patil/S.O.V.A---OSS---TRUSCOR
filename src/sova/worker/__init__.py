@@ -34,6 +34,15 @@ from sova.worker.firecracker import (
     validate_cleanup_receipt,
 )
 from sova.worker.io import job_manifest_from_mapping, read_worker_job_manifest
+from sova.worker.lifecycle import (
+    FirecrackerApiReceipt,
+    FirecrackerExecutionReceipt,
+    FirecrackerLifecycleBackend,
+    FirecrackerLifecycleResult,
+    FirecrackerLifecycleRunner,
+    FirecrackerUnixApiClient,
+    PosixFirecrackerBackend,
+)
 from sova.worker.malicious import MaliciousGuestCase, malicious_guest_matrix
 from sova.worker.protocol import (
     ProtocolMessage,
@@ -53,13 +62,20 @@ __all__ = [
     "ContentAddressedStore",
     "ContentReference",
     "ControllerEvidencePackage",
+    "FirecrackerApiReceipt",
+    "FirecrackerExecutionReceipt",
     "FirecrackerHostPolicy",
     "FirecrackerLaunchPlan",
+    "FirecrackerLifecycleBackend",
+    "FirecrackerLifecycleResult",
+    "FirecrackerLifecycleRunner",
+    "FirecrackerUnixApiClient",
     "KataAdmissionEvidence",
     "MaliciousGuestCase",
     "NetworkBroker",
     "NetworkFlowReceipt",
     "NetworkRule",
+    "PosixFirecrackerBackend",
     "ProtocolMessage",
     "ProtocolMessageType",
     "ProtocolRole",

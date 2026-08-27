@@ -277,8 +277,9 @@ for completely untrusted agents on the Windows host.
 and [P5 research record](../research/p5-production-isolation-research-2026-08-27.md)
 and [P5 validation record](./p5-production-isolation-validation-2026-08-27.md)
 cover the completed P5-02 and P5-04 through P5-08 controls. The local acceptance
-suite also exercises the policy side of P5-03 and all P5-09 classes. P5-01,
-P5-03, P5-09, and P5-10 remain open until the exact dedicated Linux/KVM worker
+suite also exercises the executable lifecycle side of P5-03 and all P5-09 classes,
+including exact jailer arguments, Unix-socket API sequencing, pidfd watchdog
+control, and cleanup receipts. P5-01, P5-03, P5-09, and P5-10 remain open until the exact dedicated Linux/KVM worker
 executes the live matrix and an independent reviewer signs the same measured
 configuration; a WSL development probe is not that receipt.
 

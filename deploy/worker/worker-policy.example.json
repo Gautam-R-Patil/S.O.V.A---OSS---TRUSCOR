@@ -4,6 +4,14 @@
   "status": "template-not-admitted",
   "workerId": "REPLACE_WITH_WORKER_ID",
   "firecrackerVersion": "1.16.1",
+  "hostPaths": {
+    "firecrackerBinary": "/usr/local/lib/sova-worker/firecracker",
+    "jailerBinary": "/usr/local/lib/sova-worker/jailer",
+    "chrootBase": "/srv/sova-worker/jailer",
+    "networkNamespaceBase": "/run/netns",
+    "contentStore": "/srv/sova-worker/cas",
+    "cgroupBase": "/sys/fs/cgroup"
+  },
   "pins": {
     "firecrackerDigest": "REPLACE_WITH_SHA256",
     "jailerDigest": "REPLACE_WITH_SHA256",

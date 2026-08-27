@@ -41,7 +41,7 @@ def _root_owned(path: Path) -> bool:
             stat_result = current.lstat()
         except OSError:
             return False
-        if current.is_symlink() or stat_result.st_uid != 0:
+        if current.is_symlink() or stat_result.st_uid != 0 or stat_result.st_mode & 0o022:
             return False
         if current.parent == current:
             return True
@@ -114,6 +114,7 @@ def collect_worker_attestation(  # noqa: PLR0913 - exact measurements stay expli
         policy.chroot_base,
         policy.network_namespace_base,
         policy.content_store,
+        policy.cgroup_base,
         host_kernel_image,
         microcode_image,
         guest_kernel_image,
@@ -126,7 +127,7 @@ def collect_worker_attestation(  # noqa: PLR0913 - exact measurements stay expli
         dedicated_linux_host=dedicated_linux_host,
         wsl_environment=wsl_environment,
         kvm_available=os.access("/dev/kvm", os.R_OK | os.W_OK),
-        cgroup_v2=Path("/sys/fs/cgroup/cgroup.controllers").is_file(),
+        cgroup_v2=(policy.cgroup_base / "cgroup.controllers").is_file(),
         swap_disabled=_swap_disabled(),
         default_seccomp=default_seccomp_enforced,
         unique_uid_gid_per_job=unique_uid_gid_enforced,

@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -23,6 +23,11 @@ DEFAULT_SECCOMP_LEVEL = 2
 SHA256_HEX_LENGTH = 64
 
 
+def _default_cgroup_base() -> Path:
+    """Keep the former policy constructor compatible on each supported host."""
+    return Path("/sys/fs/cgroup").resolve()
+
+
 @dataclass(frozen=True, slots=True)
 class FirecrackerHostPolicy:
     """Root-controlled host pins; manifest content can never supply host paths."""
@@ -34,6 +39,7 @@ class FirecrackerHostPolicy:
     content_store: Path
     approved_firecracker_digest: str
     approved_jailer_digest: str
+    cgroup_base: Path = field(default_factory=_default_cgroup_base)
     uid_base: int = MINIMUM_JOB_IDENTITY
     gid_base: int = MINIMUM_JOB_IDENTITY
     seccomp_level: int = DEFAULT_SECCOMP_LEVEL
@@ -45,6 +51,7 @@ class FirecrackerHostPolicy:
             ("chroot base", self.chroot_base),
             ("network namespace base", self.network_namespace_base),
             ("content store", self.content_store),
+            ("cgroup base", self.cgroup_base),
         ):
             if not value.is_absolute():
                 raise FormatError("SOVA-WORKER-HOST-PATH", f"{role} path must be absolute")
@@ -71,6 +78,7 @@ class FirecrackerLaunchPlan:
     network_namespace: str
     api_socket: str
     pid_file: str
+    cgroup_directory: str
     staged_content: tuple[tuple[str, str, str], ...]
     cgroup_values: tuple[tuple[str, str], ...]
     firecracker_api_requests: tuple[tuple[str, dict[str, Any]], ...]
@@ -96,6 +104,7 @@ class FirecrackerLaunchPlan:
                 "networkNamespace": self.network_namespace,
                 "apiSocket": self.api_socket,
                 "pidFile": self.pid_file,
+                "cgroupDirectory": self.cgroup_directory,
                 "seccompLevel": 2,
             },
             "stagedContent": [
@@ -199,12 +208,32 @@ def build_firecracker_launch_plan(
     gid = policy.gid_base + identity_slot
     if uid > MAXIMUM_JOB_IDENTITY or gid > MAXIMUM_JOB_IDENTITY:
         raise FormatError("SOVA-WORKER-IDENTITY", "identity slot exceeds the isolated range")
-    safe_job_id = re.sub(r"[^a-zA-Z0-9_-]", "-", manifest.job_id)[:48]
+    if manifest.writable_layer_seed.size > manifest.limits.writable_disk_bytes:
+        raise FormatError(
+            "SOVA-WORKER-DISK-LIMIT",
+            "writable layer seed exceeds the declared disk budget",
+        )
+    safe_job_id = re.sub(r"[^a-zA-Z0-9-]", "-", manifest.job_id)[:46]
     vm_id = f"sova-{safe_job_id}-{manifest.digest[7:19]}"
-    chroot = policy.chroot_base / vm_id
+    # The jailer owns <base>/<exec-file-name>/<vm-id>/root. Keeping this exact
+    # layout matters because the host-visible API socket and pid file are resolved
+    # through it after the process has pivoted into the jail.
+    chroot = policy.chroot_base / policy.firecracker_binary.name / vm_id
     netns = policy.network_namespace_base / vm_id
-    api_socket = PurePosixPath("/run") / f"{vm_id}.socket"
-    pid_file = PurePosixPath("/run") / f"{vm_id}.pid"
+    cgroup_directory = policy.cgroup_base / "sova" / vm_id
+    # The jailer forwards --id itself and writes the child PID to
+    # <jail-root>/<exec-file-name>.pid. Keep the API socket at the jail root,
+    # which the jailer chowns to the per-job UID before Firecracker starts.
+    api_socket = PurePosixPath("/api.socket")
+    pid_file = PurePosixPath(f"/{policy.firecracker_binary.name}.pid")
+    cgroups = (
+        ("cpu.max", f"{manifest.limits.vcpu_count * 100000} 100000"),
+        ("memory.max", str(manifest.limits.memory_mib * 1024 * 1024)),
+        ("pids.max", str(manifest.limits.process_limit)),
+    )
+    cgroup_arguments = tuple(
+        value for key, setting in cgroups for value in ("--cgroup", f"{key}={setting}")
+    )
     jailer_command = (
         str(policy.jailer_binary),
         "--id",
@@ -221,23 +250,18 @@ def build_firecracker_launch_plan(
         str(netns),
         "--cgroup-version",
         "2",
+        "--parent-cgroup",
+        "sova",
+        *cgroup_arguments,
         "--resource-limit",
         f"no-file={manifest.limits.open_file_limit}",
         "--resource-limit",
         f"fsize={manifest.limits.output_bytes}",
+        "--new-pid-ns",
         "--daemonize",
         "--",
         "--api-sock",
         str(api_socket),
-        "--id",
-        vm_id,
-        "--pid-file",
-        str(pid_file),
-    )
-    cgroups = (
-        ("cpu.max", f"{manifest.limits.vcpu_count * 100000} 100000"),
-        ("memory.max", str(manifest.limits.memory_mib * 1024 * 1024)),
-        ("pids.max", str(manifest.limits.process_limit)),
     )
     staged_content = (
         (
@@ -256,6 +280,30 @@ def build_firecracker_launch_plan(
             "copy-disposable-writable",
         ),
     )
+    network_requests: tuple[tuple[str, dict[str, Any]], ...] = ()
+    if manifest.limits.network_connection_limit > 0 and manifest.limits.network_bytes > 0:
+        network_requests = (
+            (
+                "/network-interfaces/eth0",
+                {
+                    "iface_id": "eth0",
+                    "guest_mac": "06:00:00:00:00:01",
+                    "host_dev_name": f"tap-{manifest.digest[7:18]}",
+                    "rx_rate_limiter": {
+                        "bandwidth": {
+                            "size": manifest.limits.network_bytes,
+                            "refill_time": manifest.limits.timeout_seconds * 1000,
+                        }
+                    },
+                    "tx_rate_limiter": {
+                        "bandwidth": {
+                            "size": manifest.limits.network_bytes,
+                            "refill_time": manifest.limits.timeout_seconds * 1000,
+                        }
+                    },
+                },
+            ),
+        )
     requests: tuple[tuple[str, dict[str, Any]], ...] = (
         (
             "/boot-source",
@@ -296,26 +344,7 @@ def build_firecracker_launch_plan(
                 "io_engine": "Sync",
             },
         ),
-        (
-            "/network-interfaces/eth0",
-            {
-                "iface_id": "eth0",
-                "guest_mac": "06:00:00:00:00:01",
-                "host_dev_name": f"tap-{manifest.digest[7:18]}",
-                "rx_rate_limiter": {
-                    "bandwidth": {
-                        "size": manifest.limits.network_bytes,
-                        "refill_time": manifest.limits.timeout_seconds * 1000,
-                    }
-                },
-                "tx_rate_limiter": {
-                    "bandwidth": {
-                        "size": manifest.limits.network_bytes,
-                        "refill_time": manifest.limits.timeout_seconds * 1000,
-                    }
-                },
-            },
-        ),
+        *network_requests,
         ("/actions", {"action_type": "InstanceStart"}),
     )
     return FirecrackerLaunchPlan(
@@ -328,6 +357,7 @@ def build_firecracker_launch_plan(
         network_namespace=str(netns),
         api_socket=str(api_socket),
         pid_file=str(pid_file),
+        cgroup_directory=str(cgroup_directory),
         staged_content=staged_content,
         cgroup_values=cgroups,
         firecracker_api_requests=requests,
