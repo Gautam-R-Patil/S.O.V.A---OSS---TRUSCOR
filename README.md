@@ -49,7 +49,12 @@
 > fail-closed extensions/providers, evidence-first local community surfaces,
 > replay, bounded trigger search, evidence-linked causal forensics, onboarding,
 > release integrity, neutral conformance vectors, authorized-target planning,
-> and shared domain primitives. The built-in loopback fixture now exercises a
+> shared domain primitives, bounded universal-target intake, a deterministic
+> methodology compiler, security-tool normalization, an oracle laboratory,
+> production-worker control contracts, and blinded-launch evidence gates. The
+> worker and launch machinery is implemented locally; live Firecracker isolation,
+> blinded multi-provider field results, a public Registry deployment, independent
+> review, and publication remain open gates. The built-in loopback fixture now exercises a
 > real browser through the pinned Playwright MCP adapter. Operator-owned HTTPS
 > targets can use the short-lived well-known control-proof workflow plus exact
 > interactive authorization; target-specific procedures, accounts, privacy
@@ -129,6 +134,18 @@ It provides:
   constrained high-risk/protocol descriptors, an enforced Nmap legal hold,
   authority-routed execution, digest-bound raw observations, and failure states
   that cannot silently become findings.
+- an oracle laboratory that separates proposals from promoted deterministic
+  checks, requires calibration and independent reproduction, records differential
+  and metamorphic evidence, and reports eight measured coverage dimensions without
+  converting unobserved or unsupported states into success.
+- immutable controller/worker, network-broker, secret-broker, hostile-evidence,
+  cleanup, and attestation contracts plus an exact Firecracker launch-plan compiler;
+  these locally tested controls do not establish live production isolation.
+- a digest-frozen blinded-evaluation contract spanning eight target classes, four
+  required lane kinds, provenance-bound external benchmark adapters, complete
+  failure/cost/latency accounting, a ten-control Registry readiness policy, and a
+  five-review release hold ledger. No live comparative result or launch approval is
+  implied by the deterministic synthetic acceptance fixture.
 - an authorization-gated real-browser vertical slice that launches a self-owned
   loopback website, drives Chrome through pinned Playwright MCP, records signed
   primary and reproduction traces, compares observable outcomes, and packages
@@ -1009,6 +1026,10 @@ The current comparative result is **NOT RUN - UNPROVEN**. SOVA therefore makes n
 | `sova map` | Air-gapped typed inventory, provenance-separated reach closures, map schema, and tool-definition drift implemented in [ADR-0013](./docs/decisions/0013-provenance-separated-capability-map.md) |
 | SOVA Runtime | Provider-neutral isolated roles, standard/custom profiles, evidence firewall, local minimized experience, opaque sessions, and verified executor fallback implemented in [ADR-0014](./docs/decisions/0014-evidence-firewalled-runtime.md) |
 | External security-tool adapters | Twelve promoted version-pinned normalizers (ZAP, Nuclei, Schemathesis, PyRIT, garak, promptfoo, Trivy, Syft, Grype, OSV-Scanner, Gitleaks, Semgrep), constrained ffuf/httpx/testssl/sqlmap/mitmproxy/zgrab2 and generic MCP/HTTP descriptors, and an enforced Nmap legal hold. Runtime execution requires operator-supplied SHA-256-bound bytes, exact version evidence, target authority, containment, config/rules pins, and disclosure approval for external transfer. Owned fixtures validate routing, normalization, trace binding, failure separation, reproduction comparison, and cleanup; live compatibility with every upstream binary and production isolation remain deployment evidence, not repository claims |
+| Universal target intake and methodology | Eight-class target profiles, workflow/surface graphs, explicit discovery gaps, bounded collectors, deterministic methodology compilation, 74 native playbooks, and non-authorizing execution plans are implemented. Intake is evidence about supplied and observed surfaces, not proof that every workflow or attack surface was discovered |
+| Oracle laboratory and coverage | Proposal, calibration, promotion, differential/metamorphic, independent-reproduction, and eight-dimensional measured-coverage contracts are implemented. The deterministic local study validates the machinery only; target-specific oracle reliability and exhaustive vulnerability discovery remain unproven |
+| Production worker control plane | Immutable controller/worker messages, content-addressed inputs, network and secret brokers, hostile-evidence extraction, cleanup/attestation receipts, and an exact Firecracker launch-plan compiler are implemented. No Firecracker workload has run on an attested dedicated Linux/KVM worker in this release evidence, so production-grade hostile-agent isolation is not claimed |
+| Blinded validation and launch gates | An eight-target-class/four-lane evaluation protocol, provenance-bound candidate benchmark adapters, exact run accounting, Registry readiness policy, local backup/recovery utility, and five-review release ledger are implemented. Live providers, blinded licensed targets, matched baselines, public Registry operations, independent/legal/security reviews, and publication remain open |
 | `sova check` | Bundled synthetic and authorized live-browser checks with finite candidate sets, exact human approval, signed traces, controlled reproduction, and honest confirmed/not-observed/inconclusive states |
 | `sova detonate` | Real Playwright/Chrome website execution plus bounded trusted local-process execution on two credential-stripped copies; both require exact human approval and produce signed primary/reproduction traces plus evidence capsules. Browser detonation supports explicit opt-in headed WebM recording packaged as typed visual replay and rendered directly from the capsule. A four-class static/SPA/authenticated/popup owned-site matrix passed real Chrome. The contained action lab adds real disposable file, loopback SMTP email, loopback message, and settings effects with independent ground-truth receipts and a registry-ready module; this proves the controlled vertical, not arbitrary third-party agents. Windows/macOS Appium and Linux AT-SPI application-bound adapters exist at the executor API, but general native-desktop detonation still requires platform drivers, owned fixtures, and CLI integration |
 | `sova hunt` | Bounded operator-authored or provider-assisted candidate search executes in real Playwright/Chrome, records snapshot/console/network observations, detects near misses, reproduces the winning recipe under fresh approval, and emits signed traces plus an offline-verifiable discovery capsule. Deterministic tests verify isolated roles; one founder-authorized OpenRouter free-model run against loopback AI Goat Challenge 1 passed with controlled reproduction and digest-bound exact-moment video evidence on 2026-08-20. The expanded nine-mission semantic AI Goat lane—including Knowledge Base workflows—is implemented and statically preflighted, but the final OpenRouter availability probe returned `SOVA-PROVIDER-RATE-LIMIT`, so the all-nine campaign was not launched and is not claimed as passed. This is not general target coverage or provider-quality evidence; see the [bounded acceptance record](./docs/engineering/aigoat-loopback-acceptance-2026-08-20.md) |
@@ -1047,7 +1068,9 @@ planted sleeper component
 
 ## Open-source and commercial boundary
 
-SOVA OSS is the complete local instrument for users to test and understand systems they are authorized to assess. It is not a crippled edition of a paid product:
+SOVA OSS is a standalone experimental local instrument for users to test and
+understand systems they are authorized to assess. It is not a crippled edition
+of a paid product:
 
 - every defined SOVA OSS command and generic security workflow belongs in the public repository;
 - no SOVA OSS feature depends on a TRUSCOR account, service, private plugin, or feature flag;

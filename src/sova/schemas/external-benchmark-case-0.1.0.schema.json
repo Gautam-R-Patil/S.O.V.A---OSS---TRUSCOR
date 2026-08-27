@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/external-benchmark-case-0.1.0.schema.json",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "id", "source", "targetClass", "sourceRevisionDigest", "authorizationReceiptDigest", "inputDigest", "answerKeyCommitment", "licenseIdentifier", "losses", "rawInputEmbedded", "rawAnswerKeyEmbedded", "upstreamScoreImportedAsTruth"],
+  "properties": {
+    "artifactType": {"const": "sova.external-benchmark-case"},
+    "schemaVersion": {"const": "0.1.0"},
+    "id": {"type": "string", "minLength": 1},
+    "source": {"enum": ["inspect-ai", "agentdojo", "oasb", "xben", "ethibench"]},
+    "targetClass": {"enum": ["web", "api", "package", "oci", "network", "desktop", "ai-model-agent", "mcp-a2a"]},
+    "sourceRevisionDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "authorizationReceiptDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "inputDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "answerKeyCommitment": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "licenseIdentifier": {"enum": ["MIT", "Apache-2.0"]},
+    "losses": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "rawInputEmbedded": {"const": false},
+    "rawAnswerKeyEmbedded": {"const": false},
+    "upstreamScoreImportedAsTruth": {"const": false}
+  },
+  "additionalProperties": false
+}

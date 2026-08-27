@@ -120,6 +120,11 @@ image entrypoint is already `sova`.
 
 ## External production gates
 
+The exact operational receipt contract, backup/restore rehearsal, rollback, and
+incident checklist are in [OPERATIONS.md](./OPERATIONS.md). Start from
+`beta-policy.example.json`, replace every placeholder outside the public checkout,
+and bind every receipt to that policy's digest and the exact artifact manifest.
+
 Before an Internet deployment, an operator must add independently reviewed
 identity and authorization, moderation, abuse handling, backups and restore
 tests, monitoring, alert escalation, DDoS controls, key rotation, revocation,

@@ -1,0 +1,30 @@
+{
+  "releaseCommit": "REPLACE_WITH_EXACT_COMMIT",
+  "releaseArtifactDigest": "sha256:REPLACE_WITH_64_LOWERCASE_HEX",
+  "images": {
+    "sova": "ghcr.io/OWNER/sova@sha256:REPLACE_WITH_64_LOWERCASE_HEX",
+    "edge": "docker.io/library/caddy@sha256:REPLACE_WITH_64_LOWERCASE_HEX"
+  },
+  "identity": {
+    "issuer": "https://REPLACE_IDENTITY_ISSUER",
+    "audience": "sova-registry",
+    "receiptIssuers": ["REPLACE_AUTHORIZED_OPERATIONAL_RECEIPT_ISSUER"]
+  },
+  "moderatorRoles": ["triage", "publisher"],
+  "malware": {
+    "engine": "REPLACE_ENGINE",
+    "version": "REPLACE_PINNED_VERSION",
+    "signaturesDigest": "sha256:REPLACE_WITH_64_LOWERCASE_HEX"
+  },
+  "backup": {
+    "destination": "REPLACE_ENCRYPTED_OFF_HOST_DESTINATION",
+    "encrypted": true,
+    "retentionDays": 30,
+    "rpoMinutes": 60,
+    "rtoMinutes": 240
+  },
+  "rollbackImageDigest": "sha256:REPLACE_WITH_64_LOWERCASE_HEX",
+  "incidentRunbookDigest": "sha256:REPLACE_WITH_64_LOWERCASE_HEX",
+  "incidentOwner": "REPLACE_NAMED_OWNER",
+  "requestsPerMinute": 60
+}

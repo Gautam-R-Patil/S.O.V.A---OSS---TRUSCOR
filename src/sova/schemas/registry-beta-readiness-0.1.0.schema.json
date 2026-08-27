@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/registry-beta-readiness-0.1.0.schema.json",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "policyDigest", "releaseCommit", "releaseArtifactDigest", "requiredControls", "receivedControls", "missingControls", "failedControls", "syntheticControls", "nonproductionControls", "unauthorizedIssuerControls", "liveBetaReady", "publicDeploymentClaimAllowed", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.registry-beta-readiness"},
+    "schemaVersion": {"const": "0.1.0"},
+    "policyDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "releaseCommit": {"type": "string", "minLength": 1},
+    "releaseArtifactDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "requiredControls": {"type": "array", "minItems": 10, "maxItems": 10, "items": {"$ref": "#/$defs/control"}, "uniqueItems": true},
+    "receivedControls": {"type": "array", "items": {"$ref": "#/$defs/control"}, "uniqueItems": true},
+    "missingControls": {"type": "array", "items": {"$ref": "#/$defs/control"}, "uniqueItems": true},
+    "failedControls": {"type": "array", "items": {"$ref": "#/$defs/control"}, "uniqueItems": true},
+    "syntheticControls": {"type": "array", "items": {"$ref": "#/$defs/control"}, "uniqueItems": true},
+    "nonproductionControls": {"type": "array", "items": {"$ref": "#/$defs/control"}, "uniqueItems": true},
+    "unauthorizedIssuerControls": {"type": "array", "items": {"$ref": "#/$defs/control"}, "uniqueItems": true},
+    "liveBetaReady": {"type": "boolean"},
+    "publicDeploymentClaimAllowed": {"type": "boolean"},
+    "claims": {"$ref": "#/$defs/claims"},
+    "contentDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "control": {"enum": ["authentication-authorization", "moderation-abuse-handling", "malware-screening", "secret-screening", "rate-and-ddos-controls", "encrypted-backup", "restore-test", "rollback-test", "incident-response", "monitoring-alert-escalation"]},
+    "claims": {
+      "type": "object",
+      "required": ["policyStructurallyComplete", "liveDeploymentObserved", "backupRestoreProven", "incidentResponseProven"],
+      "properties": {
+        "policyStructurallyComplete": {"const": true},
+        "liveDeploymentObserved": {"type": "boolean"},
+        "backupRestoreProven": {"type": "boolean"},
+        "incidentResponseProven": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

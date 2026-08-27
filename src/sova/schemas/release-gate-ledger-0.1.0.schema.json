@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/release-gate-ledger-0.1.0.schema.json",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "releaseCommit", "artifactManifestDigest", "status", "missingReviews", "failedReviews", "syntheticReviews", "independenceFailures", "externalGates", "tagOrPublishAllowed", "automaticPublishPerformed", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.release-gate-ledger"},
+    "schemaVersion": {"const": "0.1.0"},
+    "releaseCommit": {"type": "string", "minLength": 1},
+    "artifactManifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "status": {"enum": ["ready", "hold"]},
+    "missingReviews": {"type": "array", "items": {"type": "string"}},
+    "failedReviews": {"type": "array", "items": {"type": "string"}},
+    "syntheticReviews": {"type": "array", "items": {"type": "string"}},
+    "independenceFailures": {"type": "array", "items": {"type": "string"}},
+    "externalGates": {"$ref": "#/$defs/externalGates"},
+    "tagOrPublishAllowed": {"type": "boolean"},
+    "automaticPublishPerformed": {"const": false},
+    "claims": {"$ref": "#/$defs/claims"},
+    "contentDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "externalGates": {
+      "type": "object",
+      "required": ["p5ProductionIsolation", "blindedFieldValidation", "registryLiveBeta", "deterministicReleaseChecks", "blindedResultsPublic", "limitationsPublic"],
+      "properties": {
+        "p5ProductionIsolation": {"type": "boolean"},
+        "blindedFieldValidation": {"type": "boolean"},
+        "registryLiveBeta": {"type": "boolean"},
+        "deterministicReleaseChecks": {"type": "boolean"},
+        "blindedResultsPublic": {"type": "boolean"},
+        "limitationsPublic": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "claims": {
+      "type": "object",
+      "required": ["allMandatoryReceiptsBound", "universalSecurityEstablished", "allVulnerabilitiesFound", "perfectIsolationEstablished"],
+      "properties": {
+        "allMandatoryReceiptsBound": {"type": "boolean"},
+        "universalSecurityEstablished": {"const": false},
+        "allVulnerabilitiesFound": {"const": false},
+        "perfectIsolationEstablished": {"const": false}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

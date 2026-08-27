@@ -8,6 +8,12 @@ from sova.registry.adapters import (
     map_external_taxonomy,
 )
 from sova.registry.auto_contribute import auto_contribute_after_run
+from sova.registry.backup import (
+    RegistryBackupLimits,
+    create_registry_backup,
+    restore_registry_backup,
+    verify_registry_backup,
+)
 from sova.registry.client import RegistryClient, RegistryEndpoint
 from sova.registry.contribution import prepare_contribution, preview_contribution
 from sova.registry.index import build_registry, resolve_registry_capsule, verify_registry
@@ -31,6 +37,7 @@ __all__ = [
     "CommunityRegistryStore",
     "CommunityServiceConfig",
     "CommunityServiceLimits",
+    "RegistryBackupLimits",
     "RegistryClient",
     "RegistryEndpoint",
     "RegistryEntry",
@@ -40,6 +47,7 @@ __all__ = [
     "build_registry",
     "check_community_service_health",
     "create_community_service_token",
+    "create_registry_backup",
     "import_benchmark_scenario",
     "import_passive_trace",
     "import_sarif_findings",
@@ -49,8 +57,10 @@ __all__ = [
     "prepare_pr_contribution",
     "preview_contribution",
     "resolve_registry_capsule",
+    "restore_registry_backup",
     "serialize_community_submission",
     "sync_registry",
     "verify_community_service_index",
     "verify_registry",
+    "verify_registry_backup",
 ]

@@ -1,4 +1,4 @@
-<!-- status: implemented-with-external-gates-open -->
+<!-- status: implemented -->
 
 # P5 production-isolation worker validation
 

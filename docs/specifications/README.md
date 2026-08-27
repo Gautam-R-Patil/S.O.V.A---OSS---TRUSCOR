@@ -65,6 +65,7 @@ claiming that the field set is ready for `1.0`.
 - [cross-provider and cross-model experiment matrix](./provider-experiment-matrix-0.1.md)
 - [matched comparative benchmark protocol](./comparative-benchmark-protocol-0.1.md)
 - [managed services and hosting boundary](./managed-services-and-hosting-0.1.md)
+- [blinded validation, Registry beta, and launch gates](./blinded-validation-registry-and-launch-0.1.md)
 
 The implementation and bounded validation result for the final three surfaces
 is recorded in [Topics 21-23 validation](../engineering/topics-21-23-validation.md).

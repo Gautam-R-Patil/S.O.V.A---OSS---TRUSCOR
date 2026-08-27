@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova.dev/schemas/blinded-evaluation-report-0.1.0.schema.json",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "protocolDigest", "releaseCommit", "status", "expectedRuns", "observedRuns", "missing", "budgetExceedances", "observations", "aggregateByLane", "aggregateByTargetClass", "harnessContrasts", "claims", "limitations", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.blinded-evaluation-report"},
+    "schemaVersion": {"const": "0.1.0"},
+    "protocolDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "releaseCommit": {"type": "string", "minLength": 1},
+    "status": {"enum": ["conclusive", "incomplete-or-inconclusive"]},
+    "expectedRuns": {"type": "integer", "minimum": 1},
+    "observedRuns": {"type": "integer", "minimum": 0},
+    "missing": {"type": "array", "items": {"$ref": "#/$defs/runKey"}},
+    "budgetExceedances": {"type": "array", "items": {"$ref": "#/$defs/budgetExceedance"}},
+    "observations": {"type": "array", "items": {"$ref": "#/$defs/observation"}},
+    "aggregateByLane": {"type": "array", "items": {"$ref": "#/$defs/laneAggregate"}},
+    "aggregateByTargetClass": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"$ref": "#/$defs/classAggregate"}},
+    "harnessContrasts": {"type": "array", "items": {"$ref": "#/$defs/harnessContrast"}},
+    "claims": {"$ref": "#/$defs/claims"},
+    "limitations": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "contentDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "nonnegative": {"type": "integer", "minimum": 0},
+    "runKey": {
+      "type": "object",
+      "required": ["laneId", "targetId", "repetition"],
+      "properties": {
+        "laneId": {"type": "string", "minLength": 1},
+        "targetId": {"type": "string", "minLength": 1},
+        "repetition": {"$ref": "#/$defs/nonnegative"}
+      },
+      "additionalProperties": false
+    },
+    "budgetExceedance": {
+      "type": "object",
+      "required": ["laneId", "targetId", "repetition", "exceeded"],
+      "properties": {
+        "laneId": {"type": "string", "minLength": 1},
+        "targetId": {"type": "string", "minLength": 1},
+        "repetition": {"$ref": "#/$defs/nonnegative"},
+        "exceeded": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["actions", "wall-time", "input-bytes", "output-bytes", "cost"]}}
+      },
+      "additionalProperties": false
+    },
+    "countPair": {
+      "type": "object",
+      "required": ["observed", "total"],
+      "properties": {"observed": {"$ref": "#/$defs/nonnegative"}, "total": {"$ref": "#/$defs/nonnegative"}},
+      "additionalProperties": false
+    },
+    "surfacePair": {
+      "type": "object",
+      "required": ["exercised", "total"],
+      "properties": {"exercised": {"$ref": "#/$defs/nonnegative"}, "total": {"$ref": "#/$defs/nonnegative"}},
+      "additionalProperties": false
+    },
+    "findings": {
+      "type": "object",
+      "required": ["reported", "confirmed", "reproduced", "falsePositives"],
+      "properties": {
+        "reported": {"$ref": "#/$defs/nonnegative"},
+        "confirmed": {"$ref": "#/$defs/nonnegative"},
+        "reproduced": {"$ref": "#/$defs/nonnegative"},
+        "falsePositives": {"$ref": "#/$defs/nonnegative"}
+      },
+      "additionalProperties": false
+    },
+    "observation": {
+      "type": "object",
+      "required": ["laneId", "targetId", "repetition", "status", "workflowCoverage", "surfaceCoverage", "findings", "infrastructureFailures", "actionsUsed", "inputBytes", "outputBytes", "durationMilliseconds", "costMicrousd", "containmentPassed", "evidenceDigest", "limitations"],
+      "properties": {
+        "laneId": {"type": "string", "minLength": 1},
+        "targetId": {"type": "string", "minLength": 1},
+        "repetition": {"$ref": "#/$defs/nonnegative"},
+        "status": {"enum": ["confirmed", "not-observed", "false-positive", "inconclusive", "infrastructure-failure", "blocked", "unsupported"]},
+        "workflowCoverage": {"$ref": "#/$defs/countPair"},
+        "surfaceCoverage": {"$ref": "#/$defs/surfacePair"},
+        "findings": {"$ref": "#/$defs/findings"},
+        "infrastructureFailures": {"$ref": "#/$defs/nonnegative"},
+        "actionsUsed": {"$ref": "#/$defs/nonnegative"},
+        "inputBytes": {"$ref": "#/$defs/nonnegative"},
+        "outputBytes": {"$ref": "#/$defs/nonnegative"},
+        "durationMilliseconds": {"$ref": "#/$defs/nonnegative"},
+        "costMicrousd": {"$ref": "#/$defs/nonnegative"},
+        "containmentPassed": {"type": ["boolean", "null"]},
+        "evidenceDigest": {"$ref": "#/$defs/digest"},
+        "limitations": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    "ratio": {"type": ["string", "null"], "pattern": "^[0-9]+/[0-9]+$"},
+    "statusCounts": {
+      "type": "object",
+      "required": ["confirmed", "not-observed", "false-positive", "inconclusive", "infrastructure-failure", "blocked", "unsupported"],
+      "properties": {
+        "confirmed": {"$ref": "#/$defs/nonnegative"},
+        "not-observed": {"$ref": "#/$defs/nonnegative"},
+        "false-positive": {"$ref": "#/$defs/nonnegative"},
+        "inconclusive": {"$ref": "#/$defs/nonnegative"},
+        "infrastructure-failure": {"$ref": "#/$defs/nonnegative"},
+        "blocked": {"$ref": "#/$defs/nonnegative"},
+        "unsupported": {"$ref": "#/$defs/nonnegative"}
+      },
+      "additionalProperties": false
+    },
+    "containment": {
+      "type": "object",
+      "required": ["passed", "failed", "notMeasured"],
+      "properties": {
+        "passed": {"$ref": "#/$defs/nonnegative"},
+        "failed": {"$ref": "#/$defs/nonnegative"},
+        "notMeasured": {"$ref": "#/$defs/nonnegative"}
+      },
+      "additionalProperties": false
+    },
+    "laneAggregate": {
+      "type": "object",
+      "required": ["laneId", "kind", "provider", "model", "harness", "observedRuns", "statusCounts", "workflowCoverage", "surfaceCoverage", "findingsReported", "findingsConfirmed", "findingsReproduced", "precision", "reproductionRate", "infrastructureFailures", "actionsUsed", "inputBytes", "outputBytes", "durationMilliseconds", "costMicrousd", "containment"],
+      "properties": {
+        "laneId": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["candidate", "baseline", "scripted", "weak-model"]},
+        "provider": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "harness": {"type": "string", "minLength": 1},
+        "observedRuns": {"$ref": "#/$defs/nonnegative"},
+        "statusCounts": {"$ref": "#/$defs/statusCounts"},
+        "workflowCoverage": {"$ref": "#/$defs/ratio"},
+        "surfaceCoverage": {"$ref": "#/$defs/ratio"},
+        "findingsReported": {"$ref": "#/$defs/nonnegative"},
+        "findingsConfirmed": {"$ref": "#/$defs/nonnegative"},
+        "findingsReproduced": {"$ref": "#/$defs/nonnegative"},
+        "precision": {"$ref": "#/$defs/ratio"},
+        "reproductionRate": {"$ref": "#/$defs/ratio"},
+        "infrastructureFailures": {"$ref": "#/$defs/nonnegative"},
+        "actionsUsed": {"$ref": "#/$defs/nonnegative"},
+        "inputBytes": {"$ref": "#/$defs/nonnegative"},
+        "outputBytes": {"$ref": "#/$defs/nonnegative"},
+        "durationMilliseconds": {"$ref": "#/$defs/nonnegative"},
+        "costMicrousd": {"$ref": "#/$defs/nonnegative"},
+        "containment": {"$ref": "#/$defs/containment"}
+      },
+      "additionalProperties": false
+    },
+    "classAggregate": {
+      "type": "object",
+      "required": ["targetClass", "runs", "confirmedFindings", "infrastructureFailures"],
+      "properties": {
+        "targetClass": {"enum": ["web", "api", "package", "oci", "network", "desktop", "ai-model-agent", "mcp-a2a"]},
+        "runs": {"$ref": "#/$defs/nonnegative"},
+        "confirmedFindings": {"$ref": "#/$defs/nonnegative"},
+        "infrastructureFailures": {"$ref": "#/$defs/nonnegative"}
+      },
+      "additionalProperties": false
+    },
+    "harnessContrast": {
+      "type": "object",
+      "required": ["provider", "model", "leftLane", "rightLane", "leftConfirmed", "rightConfirmed", "pairedRunKeysEqual", "harnessContributionCausalClaimed"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "leftLane": {"type": "string", "minLength": 1},
+        "rightLane": {"type": "string", "minLength": 1},
+        "leftConfirmed": {"$ref": "#/$defs/nonnegative"},
+        "rightConfirmed": {"$ref": "#/$defs/nonnegative"},
+        "pairedRunKeysEqual": {"type": "boolean"},
+        "harnessContributionCausalClaimed": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "claims": {
+      "type": "object",
+      "required": ["executionComplete", "resultsConclusive", "fieldValidationEstablished", "independentlyReplicated", "allVulnerabilitiesFound", "weakModelMadeExpert", "generalProviderOrTargetSuperiorityEstablished"],
+      "properties": {
+        "executionComplete": {"type": "boolean"},
+        "resultsConclusive": {"type": "boolean"},
+        "fieldValidationEstablished": {"const": false},
+        "independentlyReplicated": {"const": false},
+        "allVulnerabilitiesFound": {"const": false},
+        "weakModelMadeExpert": {"const": false},
+        "generalProviderOrTargetSuperiorityEstablished": {"const": false}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

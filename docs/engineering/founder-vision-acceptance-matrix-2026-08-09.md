@@ -1,6 +1,6 @@
 <!-- status: experiment -->
 
-# Founder-vision acceptance matrix — updated 2026-08-26
+# Founder-vision acceptance matrix — updated 2026-08-27
 
 This is the controlling gap ledger for the requested whole-product validation.
 “Implemented” means a real acceptance path exists; it never means universal,
@@ -8,10 +8,14 @@ secure, or independently validated beyond the stated boundary.
 
 | Founder capability | Current evidence | State | Exit criterion |
 |---|---|---|---|
+| Arbitrary website/software intake and workflow understanding | P1 implements strict target profiles, workflow and surface graphs, bounded collectors, frozen discovery budgets, coverage contracts, and explicit gaps for web, API, package/OCI, network, desktop, AI model/agent, and MCP/A2A targets | Working contract and deterministic owned fixtures; arbitrary-target completeness unproven | Independently licensed blinded targets in all eight classes pass preregistered workflow/surface coverage thresholds, with unsupported and missed surfaces retained |
+| Professional methodology and security playbook library | P2 deterministically compiles six bounded assessment phases from profiles and gaps; 74 native playbooks cover web, API, network/cloud, source/package, AI/model, and agentic work. P3 adds a 21-entry admission catalog, 12 promoted evidence normalizers, constrained descriptors, an Nmap legal hold, authority routing, and failure-preserving normalization | Working bounded compiler/library/adapters; not expert-equivalence evidence | Held-out assessors and licensed targets establish usefulness, completeness limits, and matched-budget performance against named professional baselines |
+| Target-specific vulnerability oracles and measured coverage | P4 separates oracle proposals from calibrated/promoted checks, uses differential/metamorphic evidence and fresh independent reproduction, and reports eight measured coverage dimensions with explicit not-observed, unsupported, inconclusive, blocked, and infrastructure-failure states | Working deterministic laboratory; no universal oracle factory or all-vulnerabilities guarantee | Preregistered real-target studies establish oracle calibration and reproduction performance by target class, including false positives, missed cases, and abstentions |
+| Blinded multi-provider evaluation and launch controls | P6 implements the eight-class/four-lane frozen-protocol machinery, five provenance/loss-reporting adapter boundaries, exact expected-run accounting, a ten-control Registry readiness policy, and a five-review exact-release hold ledger | Local machinery accepted; no live blinded field result, production Registry, independent review, or release approval | Real preregistration, multiple providers, matched baselines, blinded owned/licensed targets, production receipts, independent/legal/security reviews, and public limitations bind to the exact release artifacts |
 | Authorized website execution | `arena explore-web` gives a provider—or, on a registered attested live gVisor host, a conforming OCI planner—successive secret-redacted accessibility snapshots and lets it propose typed plans across navigation, history, forms, pointer/keyboard, drag, modal, and bounded-tab workflows. Proposed refs are bound to exactly one currently observed control and compatible accessibility role; conflicting locators and visible no-op retyping fail before execution with bounded repair context. Each admitted UI boundary is recorded in signed traces, deterministic success must reproduce from reset, and installed Chrome has passed the strengthened controlled-fixture multi-page/video/replay lane. Allowed-origin request filtering and post-action drift detection do not claim a process-network or VM egress sandbox | Working, bounded; all-nine mission documents passed static preflight. The local Qwen v10 Challenge 1 run autonomously selected the successful reviewed seed and SOVA's deterministic unique-submit recovery exposed the real flag in signed evidence. The corrected v16 recorded-source regression then bound that sealed action to a fresh control, passed the same flag oracle, reset AI Goat, rebound both actions to independently observed fresh controls, reproduced the finding, and packaged verified trace/capsule/video/replay evidence. This proves Challenge 1 only; provider-backed all-nine and live OCI planning remain unproven | The prepared nine-challenge AI Goat provider campaign passes, including Knowledge Base Challenges 3, 7, and 8, with verified capsules and duration-bounded decisive replay cues |
 | Consequential UI workflows | The resettable browser action lab visibly creates a disposable file, transfers mail through loopback SMTP, posts a message to a loopback sink, changes a disposable setting, independently verifies every effect, reproduces them, and packages video, signed traces, replay, and a registry-ready module | Working contained vertical | New real service families require their own declared adapters, substitute accounts, proof of control, effect sensors, and exact authorization; this fixture is not authority over arbitrary real accounts |
 | Arbitrary desktop-software UI testing | `engine run-software` launches separately owned primary/reproduction applications in disposable workspaces, binds every computer action to the exact measured process generation and HWND, dynamically discovers only visible enabled child controls, and verifies observed effects through deterministic workspace/UI projections. Fresh Windows acceptance passed click, a changing two-screen workflow, bounded typing, save, exact-window recording, decisive replay, portable reproduction, and cleanup | Working controlled Windows vertical; arbitrary-app and cross-platform compatibility unproven | A second independently implemented adapter and each supported OS pass the same fixture-owned click/type/save, cancellation, timeout, recovery, exact-window evidence, and fresh-reproduction suite |
-| Strong untrusted-agent isolation | When a registered, ready, host-attested gVisor `runsc` runtime is available, the external-agent adapter conditionally admits only exact digest-pinned images. It enforces no network, credentials, host mounts, engine socket, capabilities, or writable root; runs non-root with CPU/memory/PID/time/output bounds; passes requests over bounded stdin rather than the host command line; verifies cleanup; and refuses fallback to ordinary OCI | Mandatory contract and failure-path tests pass. Fresh hardened Docker Desktop VM-hosted OCI conformance passed against a cached exact digest on 2026-08-26; live `runsc` remains unavailable and Docker is the lower-assurance lane | A production operator registers and patches `runsc`, builds an independent agent image, passes the optional live conformance/cleanup lane, and records external host-security review; gVisor is a user kernel, not a separate VM kernel |
+| Strong untrusted-agent isolation | P5 implements immutable controller/worker jobs, TLS 1.3 mutual-authentication contexts, certificate-bound signed messages, content-addressed inputs, exact network and secret brokers, controller-side hostile-evidence validation, cleanup/attestation receipts, and an exact Firecracker 1.16.1 jailer launch-plan compiler. Kata is disabled pending review and gVisor remains a lower-assurance compatibility backend | Local policy, protocol, broker, adverse-input, and deterministic acceptance tests pass; no hostile job has run on an exact dedicated Linux/KVM worker and no independent isolation review exists | Provision and patch the dedicated worker, execute the live Firecracker and malicious-guest matrix against the exact kernel/microcode/VMM/policy/image set, verify cleanup, and obtain independent review |
 | Arbitrary third-party agents | On that admitted live gVisor boundary, `sova agent conform-oci`, `arena agent-run`, and `arena explore-web` can conditionally accept the strict `describe`/`self-test`/`respond` JSON protocol. Agents return messages or typed plans and never receive raw browser, target, host, or approval authority | Working contract and mandatory tests; live third-party image pending | Independently built digest-pinned agents pass signed conformance and controlled Arena experiments on a registered `runsc` host |
 | Persistent authenticated browser sessions | Opaque target-bound profile vault, cross-process exclusive leases, bounded stale recovery, manual headful login/CAPTCHA handoff, campaign integration, graceful shutdown, and an installed-Chrome two-process persistence proof pass without profile handle/path/cookie material entering traces or reports | Working, bounded | Founder-selected control-proven site login is completed manually, survives restart, and passes an authorized campaign without scope drift; site-specific compatibility remains external |
 | Broad computer-use execution | The dependency-free native Windows adapter now passes exact-HWND discovery plus real `computer.click` and `computer.type` mutation over owned click, changing-screen, and type/save fixtures. MELRA capability probes and the CUA read lane remain optional adapters whose provider-output/effectful conformance is not promoted to independent proof | Working, bounded; one mutation-capable adapter proven | At least two independently implemented adapters pass the same fixture-owned action/effect conformance suite |
@@ -27,34 +31,36 @@ secure, or independently validated beyond the stated boundary.
 | Independent causal validation | A strict three-phase blinded protocol separates label-free tasks, frozen predictions, and commitment-checked scoring; schemas, stochastic nondeterministic fixtures, Wilson intervals, abstention metrics, DSSE reviewer-key pins, tamper rejection, and predeclared gates pass | Working protocol; external study pending | A separately governed reviewer and real nondeterministic ground-truth dataset pass predeclared thresholds with intervention-fidelity review; a key signature alone never proves reviewer identity or independence |
 | Community deployment | Signed local/offline registry, staging/verification service, health contract, and hardened TLS deployment blueprint with mandatory immutable-image preflight, exact resolved-image equality, external operator-input validation/protected staging, and persistent-volume ownership repair exist | Blueprint/preflight test-validated; not hosted or production deployed | Operator completes the production controls listed above and independently security-reviews a public service; SOVA never silently uploads |
 
-## Final bounded-launch gate snapshot — 2026-08-26
+## Final bounded-launch gate snapshot — 2026-08-27
 
-- Public regression: 2,096 passed and 29 explicitly optional environment lanes
-  skipped. The required owned Windows/Chrome full-capability acceptance passed
-  separately and raised combined meaningful coverage to 95.14%.
-- The owned full-capability acceptance exercised browser click/type, native
-  computer click, filesystem write, process execution, signed traces, a
-  packaged capsule, four visual replays, and exact-moment browser/computer
-  replay selection.
-- The final wheel and source archive were each built twice with a frozen source
-  epoch and were byte-identical. The wheel SHA-256 is
-  `b14aa3fff044a8fc026fd45010f5cb47de164885fe748286d865893eabc11f82`;
-  the source archive SHA-256 is
-  `cee3c1b108611674822b65c1e5340469695d92bc9c5dbe2832ad52afa4374914`.
-  Their 731 combined members contain no private, Git, Codex, environment,
-  credential-document, or `.sova-trace` paths. A fresh unseeded environment
-  installed 11 compatible packages and executed the packaged CLI and replay
-  mode contract.
-- The no-Ollama Claude/AI Goat preflight passed with loopback-only services,
-  stateless one-turn tool-disabled provider calls, and hidden exact oracles.
-  Two live Challenge 1 campaigns did not pass: the first exposed final-snapshot
-  starvation; the second exposed an MCP timeout at the mission deadline. SOVA
-  now reserves 45 seconds for terminal evidence and the private harness no
-  longer spends 130 seconds after every submission. Those corrections pass the
-  focused and full public regression gates, but the corrected provider-backed
-  campaign was not rerun because the DPAPI credential became absent. Therefore
-  a provider-backed AI Goat jailbreak, fresh reproduction, and decisive replay
-  are still an open launch-evidence gate, not a completed result.
+- P4 is implementation-complete. P5 is locally implementation-complete but its
+  exact dedicated Linux/KVM Firecracker and independent-review exit gates remain
+  open. P6 machinery is locally accepted while all live field, production,
+  external-review, and publication gates remain open.
+- The current public regression collected 2,570 tests: 2,540 passed, 30
+  capability-gated lanes skipped, zero failed, and combined statement/branch
+  coverage reached 95.11%. Focused P6 coverage is 97.87% across 45 passing tests.
+- Ruff format/lint passed across 710 files; strict mypy passed across 512 source
+  and test files; parser-to-handler execution passed 144/144 commands; repository
+  policy and public-boundary checks each passed across 851 files.
+- The strict OSV dependency audit found no known vulnerabilities. The ten runtime
+  dependency components declare Apache-2.0, BSD-3-Clause, MIT, MIT-0, or PSF-2.0
+  compatible expressions in installed metadata.
+- Two source/wheel builds with the same source epoch were byte-identical. Wheel
+  SHA-256 is `9974acfd4a06b8e16e2936cc4a18a0116330717cb11f5bc2a3af593d49325e3f`;
+  source archive SHA-256 is
+  `8f2d58b7dd8e500c0ef65824d6b40ec3d0b1e01a4a6f87b489d6578d794842ce`.
+  Both contain all five P6 schemas, and an isolated wheel environment installed
+  11 packages and returned `sova 0.1.0a0`. These are validation-snapshot hashes,
+  not final-release hashes; the receipt documents were updated afterward.
+- Runtime SBOM generation and offline exact-membership checksum verification
+  passed. Hosted provenance attestation remains an exact-final-commit release
+  gate and is not replaced by these local receipts.
+- Two consecutive P6 acceptance runs produced
+  `sha256:18d8806803330b3f81a56488005eb4813ba702ec56f1fd710d9114d5c3febf6b`.
+  That receipt explicitly reports no live provider execution, blinded field
+  targets, strongest-baseline result, public Registry, external reviews, tag, or
+  publication.
 
 ## Non-negotiable bounds
 
@@ -66,6 +72,10 @@ secure, or independently validated beyond the stated boundary.
   and state transitions are recorded. Hidden model thoughts are not claimed.
 - Provider observations and hash chains provide bounded provenance and tamper
   evidence, not unforgeability, non-repudiation, truth, or independent audit.
+- The separately hosted TRUSCOR website currently uses broader SOVA Engine,
+  autonomous-testing, real-time rating, and actuarial language than this OSS
+  evidence set establishes. It requires separate founder, publication, legal,
+  and evidence review before P6-10 can close.
 - External review, a public deployment, a founder-selected production target,
   and unavailable host isolation features remain external gates rather than
   percentages disguised as completed engineering.

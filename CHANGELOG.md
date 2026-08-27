@@ -24,6 +24,24 @@ have independent version ledgers.
 
 ### Added
 
+- A digest-frozen blinded-evaluation protocol spanning eight target classes and
+  four lane kinds, provenance/loss-reporting adapters for five external benchmark
+  families, exact expected-run accounting, and explicit coverage, finding,
+  reproduction, false-positive, infrastructure, cost, latency, and containment
+  measures. The included acceptance is synthetic and establishes no comparative
+  field result.
+- A ten-control Registry beta readiness contract, deterministic bounded local
+  backup/verification/empty-root restore, and a five-review exact-release ledger
+  that refuses synthetic, non-production, wrong-artifact, missing, failed, and
+  non-independent receipts. Public deployment and release approval remain open.
+- An immutable controller/worker protocol with mutually authenticated signed
+  messages, content-addressed jobs, exact network and secret brokers, hostile
+  evidence validation, cleanup/attestation receipts, and a Firecracker 1.16.1
+  jailer launch-plan compiler. Live dedicated-host isolation and independent
+  review are explicitly not claimed.
+- An oracle laboratory with proposal/calibration/promotion separation,
+  differential and metamorphic checks, independent reproduction, explicit
+  abstention and failure states, and eight-dimensional measured coverage.
 - Adaptive semantic browser exploration for controlled targets, with
   secret-redacted accessibility observations, a closed typed action algebra,
   multi-page UI workflows, per-batch approval, one shared hard deadline,

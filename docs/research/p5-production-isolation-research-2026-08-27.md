@@ -1,4 +1,4 @@
-<!-- status: researched-and-adapted -->
+<!-- status: implemented -->
 
 # P5 production-isolation research refresh
 

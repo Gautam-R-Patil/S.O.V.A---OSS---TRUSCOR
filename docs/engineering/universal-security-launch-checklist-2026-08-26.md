@@ -34,8 +34,8 @@ infrastructure-failure states instead of translating them into success.
 | P2 | Methodology compiler and native playbook library | **COMPLETE** | [P2 validation](./p2-methodology-compiler-validation-2026-08-26.md), 74 versioned playbooks, deterministic compiler and replanning conformance, signed contribution tests |
 | P3 | Tool adapters and evidence normalization | **COMPLETE** | [P3 validation](./p3-security-adapter-validation-2026-08-27.md), 21-entry admission catalog, 12 promoted normalizers, authority-routed runner and failure matrix |
 | P4 | Oracle laboratory, reproduction, and coverage accounting | **COMPLETE** | [P4 validation](./p4-oracle-laboratory-validation-2026-08-27.md), blinded positive/adverse study, fresh reproduction, eight-dimensional coverage contract |
-| P5 | Production isolation and untrusted-agent worker | NOT STARTED | Linux/KVM worker, containment tests, attestation, independent review |
-| P6 | Blinded validation, Registry beta, and public launch | NOT STARTED | Multi-provider/target benchmark, release receipts, claim review |
+| P5 | Production isolation and untrusted-agent worker | **LOCAL IMPLEMENTATION COMPLETE; EXIT GATE OPEN** | [P5 validation](./p5-production-isolation-validation-2026-08-27.md); exact Linux/KVM execution and independent review remain open |
+| P6 | Blinded validation, Registry beta, and public launch | **LOCAL IMPLEMENTATION COMPLETE; EXIT GATE OPEN** | [P6 validation](./p6-validation-and-launch-readiness-2026-08-27.md); live benchmark, production Registry, reviews, and publication remain open |
 
 The table measures roadmap gates, not a marketing readiness percentage. A phase is
 complete only when every mandatory item and its exit gate are complete.
@@ -290,12 +290,12 @@ configuration; a WSL development probe is not that receipt.
   lanes; report the harness contribution separately from model capability.
 - [ ] **P6-03** Run blinded owned and licensed targets spanning web, API, package,
   OCI, network, desktop, AI model/agent, and MCP/A2A classes.
-- [ ] **P6-04** Add benchmark adapters for Inspect AI/Inspect Evals cybersecurity
+- [x] **P6-04** Add benchmark adapters for Inspect AI/Inspect Evals cybersecurity
   tasks, AgentDojo, OASB, PentestGPT/XBOW-compatible cases, EthiBench, and other
   datasets that pass licence, provenance, safety, and ground-truth review.
 - [ ] **P6-05** Compare against named scanner/tool and agent baselines under equal
   access and budgets; retain failures and negative results.
-- [ ] **P6-06** Measure workflow/surface coverage, confirmed findings, reproduction,
+- [x] **P6-06** Measure workflow/surface coverage, confirmed findings, reproduction,
   precision/false positives, infrastructure failures, cost, latency, and containment.
 - [ ] **P6-07** Deploy the hardened reference Registry beta with authentication,
   moderation, malware/secret screening, rate limits, backups, rollback, and incident
@@ -315,6 +315,22 @@ configuration; a WSL development probe is not that receipt.
 **P6 exit gate:** every mandatory receipt exists for the exact release commit and
 artifact digests; blinded results and limitations are public; all review gates are
 green; rollback and incident procedures are tested.
+
+**P6 implementation evidence:** the
+[P6 specification](../specifications/blinded-validation-registry-and-launch-0.1.md)
+and [research record](../research/p6-blinded-validation-and-launch-research-2026-08-27.md)
+and [P6 validation record](./p6-validation-and-launch-readiness-2026-08-27.md)
+cover the frozen-protocol machinery, five provenance/loss-reporting adapter
+boundaries, complete metric ledger, ten-control Registry readiness policy, local
+backup/restore rehearsal, and five-review release ledger. P6-04 and P6-06 are
+implemented. Repository README, release-note, claims-register, and founder-matrix
+language has been reconciled, but P6-10 remains open because the separately hosted
+TRUSCOR website contains broader SOVA Engine claims and no release-controlled paper
+or public Registry surface exists in this checkout. P6-01 through P6-03, P6-05, and
+P6-07 through P6-11 remain open where
+they require the exact real preregistration, live providers/targets/baselines,
+production operator receipts, final-commit artifacts, independent/legal/security
+review, public results, or an explicitly authorized publication action.
 
 ## 10. Change-control rule
 
