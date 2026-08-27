@@ -245,21 +245,21 @@ the machinery; it is not presented as arbitrary-target field accuracy.
 - [ ] **P5-01** Keep the Windows product as controller; provision a dedicated,
   patched Linux/KVM worker. Docker Desktop remains a compatibility backend, not the
   production claim for hostile workloads.
-- [ ] **P5-02** Implement a mutually authenticated, versioned controller/worker
+- [x] **P5-02** Implement a mutually authenticated, versioned controller/worker
   protocol carrying immutable job manifests and content-addressed inputs/outputs.
 - [ ] **P5-03** Use one Firecracker microVM per hostile job, launched through the
   jailer with unique UID/GID, namespaces, cgroups, seccomp, read-only base image,
   disposable writable layer, bounded serial/log output, watchdog, and no host mounts.
-- [ ] **P5-04** Broker network access through explicit destination/protocol policy,
+- [x] **P5-04** Broker network access through explicit destination/protocol policy,
   DNS pinning/revalidation, rate/byte/time budgets, and full flow receipts.
-- [ ] **P5-05** Broker secrets as scoped, short-lived capabilities; never place host
+- [x] **P5-05** Broker secrets as scoped, short-lived capabilities; never place host
   credentials, daemon sockets, browser profiles, or signing keys in a guest image.
-- [ ] **P5-06** Separate evidence extraction from guest verdicts; verify manifests,
+- [x] **P5-06** Separate evidence extraction from guest verdicts; verify manifests,
   digests, sizes, schemas, signatures, and redaction on the controller side.
-- [ ] **P5-07** Treat Kata Containers as an optional OCI-compatible backend only
+- [x] **P5-07** Treat Kata Containers as an optional OCI-compatible backend only
   after version/advisory pinning and annotation/mount-policy hardening; recent escape
   advisories prohibit a generic “Kata is safe” claim.
-- [ ] **P5-08** Treat gVisor as a lower-assurance compatibility backend, not a VM
+- [x] **P5-08** Treat gVisor as a lower-assurance compatibility backend, not a VM
   substitute for arbitrary hostile code.
 - [ ] **P5-09** Add malicious-guest tests for resource exhaustion, output bombs,
   symlink/path abuse, device/mount access, metadata service access, DNS rebinding,
@@ -271,6 +271,16 @@ the machinery; it is not presented as arbitrary-target field accuracy.
 negative containment tests, emits attestation and cleanup receipts, and has an
 independent review. Until then SOVA must not advertise production-grade isolation
 for completely untrusted agents on the Windows host.
+
+**P5 implementation evidence:** the
+[controller/worker specification](../specifications/controller-worker-production-isolation-0.1.md)
+and [P5 research record](../research/p5-production-isolation-research-2026-08-27.md)
+and [P5 validation record](./p5-production-isolation-validation-2026-08-27.md)
+cover the completed P5-02 and P5-04 through P5-08 controls. The local acceptance
+suite also exercises the policy side of P5-03 and all P5-09 classes. P5-01,
+P5-03, P5-09, and P5-10 remain open until the exact dedicated Linux/KVM worker
+executes the live matrix and an independent reviewer signs the same measured
+configuration; a WSL development probe is not that receipt.
 
 ## 9. P6 — blinded validation, Registry beta, and launch
 

@@ -46,6 +46,14 @@ _SCHEMA_FILES = {
     "sova.blinded-causal-answer-key": "blinded-causal-answer-key-0.1.0.schema.json",
     "sova.blinded-causal-predictions": "blinded-causal-predictions-0.1.0.schema.json",
     "sova.blinded-causal-score": "blinded-causal-score-0.1.0.schema.json",
+    "sova.worker-job-manifest": "worker-job-manifest-0.1.0.schema.json",
+    "sova.worker-attestation": "worker-attestation-0.1.0.schema.json",
+    "sova.worker-protocol-message": "worker-protocol-message-0.1.0.schema.json",
+    "sova.worker-network-receipt": "worker-network-receipt-0.1.0.schema.json",
+    "sova.worker-secret-receipt": "worker-secret-receipt-0.1.0.schema.json",
+    "sova.worker-evidence-report": "worker-evidence-report-0.1.0.schema.json",
+    "sova.worker-cleanup-receipt": "worker-cleanup-receipt-0.1.0.schema.json",
+    "sova.firecracker-launch-plan": "firecracker-launch-plan-0.1.0.schema.json",
 }
 
 

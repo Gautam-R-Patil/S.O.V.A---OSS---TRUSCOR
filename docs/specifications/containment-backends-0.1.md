@@ -1,4 +1,4 @@
-<!-- status: experimental-partial -->
+<!-- status: implemented-with-external-firecracker-validation-required -->
 
 # Detonation containment backends 0.1
 
@@ -32,9 +32,9 @@ as `developer-only`, never as allowed hardened isolation.
 | OCI/Docker | capability probe only | client presence does not prove hardened daemon |
 | SOVA Docker Desktop OCI | implemented, live-attested per image | no network/host mounts/socket, bounded non-root container inside Docker Desktop VM; shared VM kernel |
 | Docker Sandboxes | degraded candidate on current host | per-agent microVM architecture; VM record did not become an executable sandbox within the bounded probe |
-| gVisor | capability probe only | user-kernel isolation; configuration unverified |
-| Firecracker | capability probe only | microVM candidate; needs Linux/KVM orchestration |
-| Kata Containers | capability probe only | VM-backed OCI candidate; configuration unverified |
+| gVisor | implemented compatibility policy and existing executor | lower-assurance user-kernel lane; not a VM substitute |
+| Firecracker | controller/worker contracts and launch compiler implemented | primary hostile-job boundary; exact dedicated-host execution and review still required |
+| Kata Containers | fail-closed optional compatibility policy | disabled until exact pins, advisories, annotations, mounts, and path controls pass |
 
 The no-native-code synthetic world may satisfy a research run that asks for a
 stronger native-code boundary only because it executes no target-native code.
@@ -47,6 +47,10 @@ workload boundary. It is not a per-workload microVM and is not admitted when a
 scenario requires `IsolationKind.MICROVM`. Other container, user-kernel, and
 microVM candidates remain capability descriptors until their setup, teardown,
 network, image, kernel, and escape-oriented conformance tests pass.
+
+The normative controller/worker, Firecracker, broker, evidence, and claim boundary
+is specified in
+[Controller/worker production isolation 0.1](./controller-worker-production-isolation-0.1.md).
 
 ## Primary references
 

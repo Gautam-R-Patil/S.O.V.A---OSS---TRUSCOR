@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/worker-cleanup-receipt-0.1.0.schema.json",
+  "title": "SOVA worker cleanup receipt 0.1.0",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "jobId", "vmId", "completedAt", "checks", "status", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.worker-cleanup-receipt"}, "schemaVersion": {"const": "0.1.0"}, "jobId": {"type": "string"}, "vmId": {"type": "string"}, "completedAt": {"type": "string", "format": "date-time"},
+    "checks": {"type": "object", "additionalProperties": {"type": "boolean"}, "minProperties": 7, "maxProperties": 7}, "status": {"enum": ["complete", "cleanup-failed"]}, "claims": {"type": "object", "required": ["futureEscapeImpossible"], "properties": {"futureEscapeImpossible": {"const": false}}, "additionalProperties": false}, "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+  "additionalProperties": false
+}

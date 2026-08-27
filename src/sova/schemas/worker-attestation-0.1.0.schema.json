@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/worker-attestation-0.1.0.schema.json",
+  "title": "SOVA worker attestation 0.1.0",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "workerId", "measuredAt", "backend", "host", "isolation", "pins", "independentReviewReceipt", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.worker-attestation"},
+    "schemaVersion": {"const": "0.1.0"},
+    "workerId": {"type": "string", "minLength": 1},
+    "measuredAt": {"type": "string", "format": "date-time"},
+    "backend": {"const": "firecracker"},
+    "host": {"type": "object", "additionalProperties": {"type": "boolean"}, "minProperties": 6, "maxProperties": 6},
+    "isolation": {"type": "object", "additionalProperties": {"type": "boolean"}, "minProperties": 4, "maxProperties": 4},
+    "pins": {"type": "object", "additionalProperties": {"type": "string"}, "minProperties": 9, "maxProperties": 9},
+    "independentReviewReceipt": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/digest"}]},
+    "claims": {
+      "type": "object",
+      "required": ["selfMeasured", "independentlyReviewed", "escapeImpossible"],
+      "properties": {"selfMeasured": {"const": true}, "independentlyReviewed": {"type": "boolean"}, "escapeImpossible": {"const": false}},
+      "additionalProperties": false
+    },
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+  "additionalProperties": false
+}

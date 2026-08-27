@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/worker-evidence-report-0.1.0.schema.json",
+  "title": "SOVA worker evidence report 0.1.0",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "jobId", "jobManifestDigest", "guestBundleDigest", "guestManifestDigest", "guestOutputKeyDigest", "artifacts", "validation", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.worker-evidence-report"}, "schemaVersion": {"const": "0.1.0"}, "jobId": {"type": "string"},
+    "jobManifestDigest": {"$ref": "#/$defs/digest"}, "guestBundleDigest": {"$ref": "#/$defs/digest"}, "guestManifestDigest": {"$ref": "#/$defs/digest"}, "guestOutputKeyDigest": {"$ref": "#/$defs/digest"},
+    "artifacts": {"type": "array", "items": {"type": "object", "required": ["name", "digest", "size", "mediaType", "schemaId", "schemaValidated", "redactionValidated"], "properties": {"name": {"type": "string"}, "digest": {"$ref": "#/$defs/digest"}, "size": {"type": "integer", "minimum": 0}, "mediaType": {"type": "string"}, "schemaId": {"type": "string"}, "schemaValidated": {"const": true}, "redactionValidated": {"const": true}}, "additionalProperties": false}},
+    "validation": {"type": "object", "additionalProperties": {"const": true}, "minProperties": 6, "maxProperties": 6},
+    "claims": {"type": "object", "required": ["guestVerdictsTrusted", "controllerSigningKeyPresentInGuest", "absenceOfVulnerabilitiesProven"], "properties": {"guestVerdictsTrusted": {"const": false}, "controllerSigningKeyPresentInGuest": {"const": false}, "absenceOfVulnerabilitiesProven": {"const": false}}, "additionalProperties": false},
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+  "additionalProperties": false
+}

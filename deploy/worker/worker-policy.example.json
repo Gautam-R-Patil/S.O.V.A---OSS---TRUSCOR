@@ -1,0 +1,30 @@
+{
+  "artifactType": "sova.worker-deployment-policy",
+  "schemaVersion": "0.1.0",
+  "status": "template-not-admitted",
+  "workerId": "REPLACE_WITH_WORKER_ID",
+  "firecrackerVersion": "1.16.1",
+  "pins": {
+    "firecrackerDigest": "REPLACE_WITH_SHA256",
+    "jailerDigest": "REPLACE_WITH_SHA256",
+    "hostKernelDigest": "REPLACE_WITH_SHA256",
+    "microcodeDigest": "REPLACE_WITH_SHA256",
+    "guestKernelDigest": "REPLACE_WITH_SHA256",
+    "rootFilesystemDigest": "REPLACE_WITH_SHA256",
+    "workerPolicyDigest": "REPLACE_WITH_SHA256",
+    "advisorySnapshotDigest": "REPLACE_WITH_SHA256"
+  },
+  "requiredControls": {
+    "dedicatedLinuxHost": true,
+    "kvm": true,
+    "cgroupV2": true,
+    "swapDisabled": true,
+    "defaultSeccomp": true,
+    "uniqueUidGidPerJob": true,
+    "rootOwnedPaths": true,
+    "hostMountsAllowed": false,
+    "pciEnabled": false,
+    "ambientGuestNetwork": false,
+    "independentReviewRequired": true
+  }
+}

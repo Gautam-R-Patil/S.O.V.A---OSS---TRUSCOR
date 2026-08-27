@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/worker-protocol-message-0.1.0.schema.json",
+  "title": "SOVA worker protocol message 0.1.0",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "protocolVersion", "messageType", "messageId", "jobId", "sender", "recipientId", "issuedAt", "expiresAt", "nonce", "senderCertificateDigest", "payloadDigest", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.worker-protocol-message"},
+    "schemaVersion": {"const": "0.1.0"},
+    "protocolVersion": {"const": "0.1.0"},
+    "messageType": {"enum": ["submit-job", "accept-job", "reject-job", "cancel-job", "job-result", "heartbeat"]},
+    "messageId": {"type": "string", "minLength": 1},
+    "jobId": {"type": "string", "minLength": 1},
+    "sender": {"type": "object", "required": ["role", "id"], "properties": {"role": {"enum": ["controller", "worker"]}, "id": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+    "recipientId": {"type": "string", "minLength": 1},
+    "issuedAt": {"type": "string", "format": "date-time"},
+    "expiresAt": {"type": "string", "format": "date-time"},
+    "nonce": {"type": "string", "pattern": "^[A-Za-z0-9_-]{22,128}$"},
+    "senderCertificateDigest": {"$ref": "#/$defs/digest"},
+    "payloadDigest": {"$ref": "#/$defs/digest"},
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+  "additionalProperties": false
+}

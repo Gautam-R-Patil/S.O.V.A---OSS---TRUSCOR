@@ -16,6 +16,7 @@ claiming that the field set is ready for `1.0`.
 - [observable oracles and declared-outcome comparison](./observable-oracles-0.1.md)
 - [authorization and safety contract](./authorization-safety-0.1.md)
 - [containment backend admission](./containment-backends-0.1.md)
+- [controller/worker production isolation](./controller-worker-production-isolation-0.1.md)
 - [VM-hosted OCI isolation backend](./docker-desktop-oci-isolation-0.1.md)
 - [synthetic detonation world](./synthetic-detonation-0.1.md)
 - [MELRA executor adapter boundary](./melra-adapter-boundary-0.1.md)

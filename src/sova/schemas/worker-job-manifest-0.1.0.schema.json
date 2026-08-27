@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/worker-job-manifest-0.1.0.schema.json",
+  "title": "SOVA worker job manifest 0.1.0",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "protocolVersion", "jobId", "issuedAt", "expiresAt", "bindings", "backend", "boot", "inputs", "networkRules", "secretGrants", "outputSchemaIds", "limits", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.worker-job-manifest"},
+    "schemaVersion": {"const": "0.1.0"},
+    "protocolVersion": {"const": "0.1.0"},
+    "jobId": {"type": "string", "minLength": 1, "maxLength": 191},
+    "issuedAt": {"type": "string", "format": "date-time"},
+    "expiresAt": {"type": "string", "format": "date-time"},
+    "bindings": {
+      "type": "object",
+      "required": ["targetProfileDigest", "authorizationDecisionDigest", "methodologyPlanDigest", "guestOutputKeyDigest"],
+      "properties": {
+        "targetProfileDigest": {"$ref": "#/$defs/digest"},
+        "authorizationDecisionDigest": {"$ref": "#/$defs/digest"},
+        "methodologyPlanDigest": {"$ref": "#/$defs/digest"},
+        "guestOutputKeyDigest": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "backend": {"const": "firecracker"},
+    "boot": {
+      "type": "object",
+      "required": ["guestKernel", "rootFilesystem", "writableLayerSeed"],
+      "properties": {
+        "guestKernel": {"$ref": "#/$defs/content"},
+        "rootFilesystem": {"$ref": "#/$defs/content"},
+        "writableLayerSeed": {"$ref": "#/$defs/content"}
+      },
+      "additionalProperties": false
+    },
+    "inputs": {"type": "array", "items": {"$ref": "#/$defs/content"}, "maxItems": 1024},
+    "networkRules": {"type": "array", "items": {"$ref": "#/$defs/networkRule"}, "maxItems": 1024},
+    "secretGrants": {"type": "array", "items": {"$ref": "#/$defs/secretGrant"}, "maxItems": 256},
+    "outputSchemaIds": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+    "limits": {"$ref": "#/$defs/limits"},
+    "claims": {
+      "type": "object",
+      "required": ["executionAuthorizedByManifestAlone", "hostMountsAllowed", "hostCredentialsEmbedded", "guestVerdictsTrusted"],
+      "properties": {
+        "executionAuthorizedByManifestAlone": {"const": false},
+        "hostMountsAllowed": {"const": false},
+        "hostCredentialsEmbedded": {"const": false},
+        "guestVerdictsTrusted": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "content": {
+      "type": "object",
+      "required": ["name", "digest", "size", "mediaType"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 191},
+        "digest": {"$ref": "#/$defs/digest"},
+        "size": {"type": "integer", "minimum": 0},
+        "mediaType": {"type": "string", "minLength": 3}
+      },
+      "additionalProperties": false
+    },
+    "networkRule": {
+      "type": "object",
+      "required": ["hostname", "port", "protocol", "initialAddresses", "allowPrivate"],
+      "properties": {
+        "hostname": {"type": "string", "minLength": 1, "maxLength": 253},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "protocol": {"enum": ["tcp", "udp"]},
+        "initialAddresses": {"type": "array", "items": {"type": "string"}, "minItems": 1, "uniqueItems": true},
+        "allowPrivate": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "secretGrant": {
+      "type": "object",
+      "required": ["name", "audience", "expiresAt", "kind", "maximumUses", "secretValuePresent"],
+      "properties": {
+        "name": {"type": "string"},
+        "audience": {"type": "string"},
+        "expiresAt": {"type": "string", "format": "date-time"},
+        "kind": {"enum": ["target-credential", "provider-token", "canary"]},
+        "maximumUses": {"type": "integer", "minimum": 1, "maximum": 16},
+        "secretValuePresent": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "limits": {
+      "type": "object",
+      "required": ["vcpuCount", "memoryMiB", "timeoutSeconds", "outputBytes", "writableDiskBytes", "processLimit", "openFileLimit", "networkConnectionLimit", "networkBytes"],
+      "properties": {
+        "vcpuCount": {"type": "integer", "minimum": 1, "maximum": 8},
+        "memoryMiB": {"type": "integer", "minimum": 128, "maximum": 32768},
+        "timeoutSeconds": {"type": "integer", "minimum": 1, "maximum": 86400},
+        "outputBytes": {"type": "integer", "minimum": 1},
+        "writableDiskBytes": {"type": "integer", "minimum": 1},
+        "processLimit": {"type": "integer", "minimum": 1},
+        "openFileLimit": {"type": "integer", "minimum": 32},
+        "networkConnectionLimit": {"type": "integer", "minimum": 0},
+        "networkBytes": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

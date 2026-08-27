@@ -36,6 +36,14 @@ evidence-aware capability-map report contract.
 - `blinded-causal-answer-key-0.1.0.schema.json` — committed, optionally DSSE-signed labels
 - `blinded-causal-predictions-0.1.0.schema.json` — pre-unblinding attribution output
 - `blinded-causal-score-0.1.0.schema.json` — post-unblinding metrics and declared gates
+- `worker-job-manifest-0.1.0.schema.json` — immutable controller-authorized worker job
+- `worker-attestation-0.1.0.schema.json` — exact worker host, binary, image, and policy measurements
+- `worker-protocol-message-0.1.0.schema.json` — signed peer-bound controller/worker message
+- `worker-network-receipt-0.1.0.schema.json` — allowed or denied broker flow evidence
+- `worker-secret-receipt-0.1.0.schema.json` — redacted scoped-capability use evidence
+- `worker-evidence-report-0.1.0.schema.json` — controller-validated hostile-output report
+- `worker-cleanup-receipt-0.1.0.schema.json` — exact-job teardown verification
+- `firecracker-launch-plan-0.1.0.schema.json` — jailer, cgroup, drive, device, and watchdog plan
 
 Schema files are versioned and immutable after a tagged release. Semantics,
 canonicalization, migrations, threat boundaries, and interoperability rules
