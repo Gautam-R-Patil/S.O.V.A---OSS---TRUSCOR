@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import stat
 import subprocess
 from dataclasses import dataclass, field, replace
@@ -12,9 +13,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from sova.formats import FormatError, canonical_json_bytes, validate_document
+from sova.formats import FormatError, canonical_json_bytes, sha256_digest, validate_document
 from sova.worker.brokers import NetworkFlowReceipt
-from sova.worker.contracts import WorkerJobManifest, assess_worker_attestation
+from sova.worker.contracts import NetworkRule, WorkerJobManifest, assess_worker_attestation
 from sova.worker.firecracker import (
     FirecrackerHostPolicy,
     FirecrackerLaunchPlan,
@@ -111,6 +112,7 @@ def test_online_network_plan_is_mediator_only_and_schema_valid(tmp_path: Path) -
     assert plan.namespace_veth is not None
     assert all(len(item) <= 15 for item in (plan.tap_device, plan.root_veth, plan.namespace_veth))
     assert plan.mediator_policy is not None
+    validate_document(plan.mediator_policy, "sova.worker-network-mediator-policy")
     assert plan.mediator_policy["rules"] == [item.to_mapping() for item in manifest.network_rules]
     assert plan.mediator_policy["invariants"]["rawTcpUdpSupported"] is False
     namespace_rules = next(
@@ -137,6 +139,43 @@ def test_online_network_plan_is_mediator_only_and_schema_valid(tmp_path: Path) -
     )
     assert guest.removesuffix("/30") in boot["boot_args"]
     assert f"http://{broker.removesuffix('/30')}:8888" in boot["boot_args"]
+
+
+def test_python_mediator_policy_fixture_is_canonical_and_content_bound() -> None:
+    fixture = (
+        (Path(__file__).parents[1] / "fixtures" / "worker" / "network-mediator-policy-python.json")
+        .read_bytes()
+        .removesuffix(b"\n")
+    )
+    value = json.loads(fixture)
+    validate_document(value, "sova.worker-network-mediator-policy")
+    assert canonical_json_bytes(value) == fixture
+    claimed = value.pop("contentDigest")
+    assert claimed == sha256_digest(canonical_json_bytes(value))
+
+
+def test_rust_mediator_wsl_receipt_fixture_passes_controller_validation() -> None:
+    fixture = (
+        (
+            Path(__file__).parents[1]
+            / "fixtures"
+            / "worker"
+            / "network-mediator-wsl-denied-receipt.json"
+        )
+        .read_bytes()
+        .removesuffix(b"\n")
+    )
+    sequence, content_digest = _validated_flow_receipt(
+        fixture, "job:mediator-cross-language-fixture"
+    )
+    value = json.loads(fixture)
+    assert sequence == 1
+    assert (
+        content_digest == "sha256:15f82ae1d024ee904bb3f46a8ce59eed54fd56c67ff819e8c31d6c5f322f2302"
+    )
+    assert value["decision"] == "denied"
+    assert value["reason"] == "endpoint-not-authorized"
+    assert value["endpoint"] == {"hostname": "example.com", "port": 80, "protocol": "tcp"}
 
 
 def test_offline_network_plan_creates_closed_namespace_without_mediator(tmp_path: Path) -> None:
@@ -167,6 +206,33 @@ def test_network_plan_rejects_cross_job_binding_and_bad_host_policy(tmp_path: Pa
     ):
         with pytest.raises(FormatError):
             replace(policy, **changes)
+
+
+def test_network_plan_rejects_unsupported_protocol_and_uncollectable_budget(
+    tmp_path: Path,
+) -> None:
+    manifest, launch, _plan = _plans(tmp_path)
+    udp_manifest = replace(
+        manifest,
+        network_rules=(NetworkRule("example.com", 443, "udp", ("1.1.1.1",)),),
+    )
+    with pytest.raises(FormatError, match="HTTP-family traffic over TCP only"):
+        build_firecracker_network_plan(
+            udp_manifest,
+            replace(launch, manifest_digest=udp_manifest.digest),
+            _network_policy(tmp_path),
+        )
+
+    excessive_manifest = replace(
+        manifest,
+        limits=replace(manifest.limits, network_connection_limit=1_025),
+    )
+    with pytest.raises(FormatError, match="evidence limits"):
+        build_firecracker_network_plan(
+            excessive_manifest,
+            replace(launch, manifest_digest=excessive_manifest.digest),
+            _network_policy(tmp_path),
+        )
 
 
 @dataclass

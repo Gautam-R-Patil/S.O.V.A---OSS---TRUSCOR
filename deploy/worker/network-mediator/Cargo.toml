@@ -1,0 +1,31 @@
+[package]
+name = "sova-network-mediator"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+description = "Fail-closed HTTP egress mediator for SOVA Firecracker workers"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+httparse = "=1.10.1"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+time = { version = "=0.3.47", features = ["parsing"] }
+url = "=2.5.4"
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = 3
+panic = "abort"
+strip = "symbols"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "deny"
+pedantic = "deny"
+nursery = "deny"

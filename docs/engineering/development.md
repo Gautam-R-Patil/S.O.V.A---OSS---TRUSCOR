@@ -38,6 +38,22 @@ uv run python scripts/generate_taxonomy.py --check
 uv run python scripts/check_repository.py
 ```
 
+The separately pinned hostile-worker mediator has its own Rust lockfile and gate:
+
+```console
+cd deploy/worker/network-mediator
+rustup toolchain install 1.88.0 --profile minimal --component clippy,rustfmt --target x86_64-unknown-linux-musl
+cargo +1.88.0 fmt --check
+cargo +1.88.0 clippy --locked --all-targets -- -D warnings
+cargo +1.88.0 test --locked
+cargo +1.88.0 build --locked --release --target x86_64-unknown-linux-musl
+cargo +1.88.0 install cargo-audit --locked --version 0.22.2
+cargo +1.88.0 audit --deny warnings
+```
+
+CI fixes Rust at 1.88.0. Production uses the reviewed Linux musl artifact and its
+recorded SHA-256 digest; a developer-host build is not production approval.
+
 Run the confidential/public boundary on Windows:
 
 ```powershell
@@ -53,10 +69,9 @@ pwsh ./scripts/check-public-boundary.ps1
 Run everything before requesting review. CI is the authoritative
 cross-platform result.
 
-The one explicit advisory identifier in the audit command is not a blanket
-waiver. Its affected API, non-applicability guard, unavailable fixed release,
-owner, and removal condition are recorded in the
-[dependency advisory register](../governance/dependency-advisory-register.md).
+Current Python and Rust audits contain no advisory ignore. Resolved temporary
+exceptions and dependencies upgraded after audit findings remain documented in
+the [dependency advisory register](../governance/dependency-advisory-register.md).
 
 ## Local hooks
 

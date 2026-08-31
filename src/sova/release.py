@@ -19,6 +19,10 @@ if TYPE_CHECKING:
 _CHECKSUM = re.compile(r"^(?P<digest>[0-9a-f]{64})  (?P<path>[^\r\n]+)$")
 _MAX_RELEASE_FILES = 4096
 _MAX_RELEASE_BYTES = 4 * 1024 * 1024 * 1024
+_CARGO_LOCK_VERSION = 4
+_CARGO_DEPENDENCY_WITH_VERSION = 2
+_CARGO_DEPENDENCY_WITH_SOURCE = 3
+_CARGO_SOURCE_MIN_LENGTH = 3
 
 
 def _packages(lock_path: Path) -> dict[str, dict[str, Any]]:
@@ -163,6 +167,189 @@ def write_cyclonedx_sbom(
     }
 
 
+def _cargo_packages(
+    lock_path: Path,
+) -> tuple[
+    dict[tuple[str, str, str | None], dict[str, Any]],
+    dict[str, list[tuple[str, str, str | None]]],
+]:
+    try:
+        document = tomllib.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        raise FormatError("SOVA-SBOM-CARGO-LOCK", "Cargo.lock could not be parsed") from error
+    if document.get("version") != _CARGO_LOCK_VERSION:
+        raise FormatError("SOVA-SBOM-CARGO-LOCK", "Cargo.lock version 4 is required")
+    raw = document.get("package")
+    if not isinstance(raw, list):
+        raise FormatError("SOVA-SBOM-CARGO-LOCK", "Cargo.lock package list is missing")
+    packages: dict[tuple[str, str, str | None], dict[str, Any]] = {}
+    by_name: dict[str, list[tuple[str, str, str | None]]] = {}
+    for item in raw:
+        if (
+            not isinstance(item, dict)
+            or not isinstance(item.get("name"), str)
+            or not isinstance(item.get("version"), str)
+            or (item.get("source") is not None and not isinstance(item.get("source"), str))
+        ):
+            raise FormatError("SOVA-SBOM-CARGO-LOCK", "Cargo.lock package entry is malformed")
+        key = (item["name"], item["version"], item.get("source"))
+        if key in packages:
+            raise FormatError("SOVA-SBOM-CARGO-LOCK", "Cargo.lock package entry is duplicated")
+        packages[key] = item
+        by_name.setdefault(item["name"], []).append(key)
+    return packages, by_name
+
+
+def _cargo_dependency_key(
+    value: object,
+    packages: dict[tuple[str, str, str | None], dict[str, Any]],
+    by_name: dict[str, list[tuple[str, str, str | None]]],
+) -> tuple[str, str, str | None]:
+    if not isinstance(value, str):
+        raise FormatError("SOVA-SBOM-CARGO-LOCK", "Cargo.lock dependency entry is malformed")
+    parts = value.split(" ", 2)
+    candidates = list(by_name.get(parts[0], ()))
+    if len(parts) >= _CARGO_DEPENDENCY_WITH_VERSION:
+        candidates = [key for key in candidates if key[1] == parts[1]]
+    if len(parts) == _CARGO_DEPENDENCY_WITH_SOURCE:
+        source = parts[2]
+        if (
+            len(source) < _CARGO_SOURCE_MIN_LENGTH
+            or not source.startswith("(")
+            or not source.endswith(")")
+        ):
+            raise FormatError("SOVA-SBOM-CARGO-LOCK", "Cargo.lock dependency source is malformed")
+        candidates = [key for key in candidates if key[2] == source[1:-1]]
+    if len(candidates) != 1 or candidates[0] not in packages:
+        raise FormatError(
+            "SOVA-SBOM-CARGO-LOCK", f"locked Cargo dependency is missing or ambiguous: {value}"
+        )
+    return candidates[0]
+
+
+def _cargo_dependencies(
+    package: dict[str, Any],
+    packages: dict[tuple[str, str, str | None], dict[str, Any]],
+    by_name: dict[str, list[tuple[str, str, str | None]]],
+) -> tuple[tuple[str, str, str | None], ...]:
+    raw = package.get("dependencies", [])
+    if not isinstance(raw, list):
+        raise FormatError("SOVA-SBOM-CARGO-LOCK", "Cargo.lock dependencies are malformed")
+    return tuple(sorted(_cargo_dependency_key(value, packages, by_name) for value in raw))
+
+
+def _cargo_purl(key: tuple[str, str, str | None]) -> str:
+    name, version, source = key
+    value = f"pkg:cargo/{quote(name, safe='')}@{quote(version, safe='')}"
+    if source is not None and not source.startswith("registry+"):
+        value += f"?source={quote(source, safe='')}"
+    return value
+
+
+def _cargo_component(key: tuple[str, str, str | None], package: dict[str, Any]) -> dict[str, Any]:
+    name, version, source = key
+    purl = _cargo_purl(key)
+    component: dict[str, Any] = {
+        "type": "library",
+        "bom-ref": purl,
+        "name": name,
+        "version": version,
+        "purl": purl,
+    }
+    checksum = package.get("checksum")
+    if source is not None and source.startswith("registry+") and checksum is None:
+        raise FormatError("SOVA-SBOM-CARGO-LOCK", "registry Cargo package has no checksum")
+    if checksum is not None:
+        if not isinstance(checksum, str) or re.fullmatch(r"[0-9a-f]{64}", checksum) is None:
+            raise FormatError("SOVA-SBOM-CARGO-LOCK", "Cargo.lock checksum is malformed")
+        component["hashes"] = [{"alg": "SHA-256", "content": checksum}]
+    return component
+
+
+def generate_cargo_cyclonedx_sbom(lock_path: Path, *, root: str) -> dict[str, Any]:
+    """Generate a timestamp-free CycloneDX 1.6 SBOM from a Cargo v4 lockfile."""
+    if not root or root.strip() != root:
+        raise FormatError("SOVA-SBOM-CARGO-ROOT", "Cargo root package name is invalid")
+    lock_path = lock_path.resolve()
+    packages, by_name = _cargo_packages(lock_path)
+    root_candidates = by_name.get(root, [])
+    if len(root_candidates) != 1:
+        raise FormatError(
+            "SOVA-SBOM-CARGO-ROOT", "Cargo root package is absent or ambiguous in Cargo.lock"
+        )
+    root_key = root_candidates[0]
+    selected: set[tuple[str, str, str | None]] = set()
+    pending = list(_cargo_dependencies(packages[root_key], packages, by_name))
+    while pending:
+        key = pending.pop()
+        if key in selected:
+            continue
+        selected.add(key)
+        pending.extend(_cargo_dependencies(packages[key], packages, by_name))
+    ordered = sorted(selected)
+    root_ref = _cargo_purl(root_key)
+    references = {key: _cargo_purl(key) for key in ordered}
+    if root_ref in references.values() or len(set(references.values())) != len(references):
+        raise FormatError("SOVA-SBOM-CARGO-LOCK", "Cargo package identity collides in SBOM")
+    root_dependencies = _cargo_dependencies(packages[root_key], packages, by_name)
+    dependencies = [
+        {
+            "ref": root_ref,
+            "dependsOn": sorted(references[key] for key in root_dependencies),
+        }
+    ]
+    dependencies.extend(
+        {
+            "ref": references[key],
+            "dependsOn": sorted(
+                references[dependency]
+                for dependency in _cargo_dependencies(packages[key], packages, by_name)
+                if dependency in references
+            ),
+        }
+        for key in ordered
+    )
+    return {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {
+            "component": {
+                "type": "application",
+                "bom-ref": root_ref,
+                "name": root_key[0],
+                "version": root_key[1],
+                "purl": root_ref,
+                "licenses": [{"license": {"id": "Apache-2.0"}}],
+            },
+            "properties": [
+                {"name": "sova:sbom:scope", "value": "cargo-locked-closure"},
+                {"name": "sova:lock:sha256", "value": sha256_digest(lock_path.read_bytes())},
+                {"name": "sova:network-used", "value": "false"},
+            ],
+        },
+        "components": [_cargo_component(key, packages[key]) for key in ordered],
+        "dependencies": dependencies,
+    }
+
+
+def write_cargo_cyclonedx_sbom(lock_path: Path, destination: Path, *, root: str) -> dict[str, Any]:
+    """Write one canonical Cargo-lock CycloneDX document."""
+    document = generate_cargo_cyclonedx_sbom(lock_path, root=root)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(canonical_json_bytes(document) + b"\n")
+    return {
+        "artifactType": "sova.release-sbom-result",
+        "schemaVersion": "0.1.0",
+        "format": "CycloneDX-1.6",
+        "scope": "cargo-locked-closure",
+        "componentCount": len(document["components"]),
+        "digest": sha256_digest(destination.read_bytes()),
+        "destination": str(destination),
+        "networkUsed": False,
+    }
+
+
 def _release_files(root: Path, output: Path) -> list[Path]:
     root = root.resolve()
     output = output.resolve()
@@ -260,8 +447,10 @@ def verify_checksums(root: Path, manifest: Path) -> dict[str, Any]:
 
 
 __all__ = [
+    "generate_cargo_cyclonedx_sbom",
     "generate_cyclonedx_sbom",
     "verify_checksums",
+    "write_cargo_cyclonedx_sbom",
     "write_checksums",
     "write_cyclonedx_sbom",
 ]

@@ -37,18 +37,18 @@ secure, or independently validated beyond the stated boundary.
   exact dedicated Linux/KVM Firecracker and independent-review exit gates remain
   open. P6 machinery is locally accepted while all live field, production,
   external-review, and publication gates remain open.
-- The current public regression collected 2,664 tests: 2,634 passed, 30
+- The current public regression collected 2,674 tests: 2,644 passed, 30
   capability-gated lanes skipped, zero failed, and combined statement/branch
-  coverage reached 95.15%. The focused privileged P5 boundary passed 79 tests at
+  coverage reached 95.12%. The focused privileged P5 boundary passed 79 tests at
   96.20% selected combined statement/branch coverage.
-- Ruff format/lint passed across 732 files; strict mypy passed across 534 source
-  and test files; parser-to-handler execution passed 148/148 commands; repository
+- Ruff format/lint passed across 733 files; strict mypy passed across 534 source
+  and test files; parser-to-handler execution passed 149/149 commands; repository
   policy and public-boundary checks passed.
 - The strict OSV dependency audit found no known vulnerabilities. The ten runtime
   dependency components declare Apache-2.0, BSD-3-Clause, MIT, MIT-0, or PSF-2.0
   compatible expressions in installed metadata.
 - Two source/wheel builds with the same source epoch were byte-identical. Both
-  contain all 59 package schemas, including the P5 host/network and P6 work-order
+  contain all 60 package schemas, including the P5 host/network and P6 work-order
   contracts, and an isolated wheel environment installed 11 packages and returned
   `sova 0.1.0a0`. Exact artifact digests belong in the external candidate
   checksum/provenance record because this document is itself included in the

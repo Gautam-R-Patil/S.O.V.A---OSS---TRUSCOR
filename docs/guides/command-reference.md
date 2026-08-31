@@ -19,7 +19,7 @@ human text or HTML artifact is the command's purpose.
 | Registry/community | `registry init-service`, `registry prepare-upload`, `registry serve`, `registry healthcheck`, `registry verify-live-index`, `registry verify`, `registry replay`, `sync`, `contribute`, `probe issue`, `probe verify`, `arena run`, `arena agent-run`, `arena chamber`, `arena web`, `arena explore-web`, `arena swarm-web`, `arena run-software`, `arena swarm-software`, `arena full-web`, `leaderboard build`, `ctf build` |
 | Extensions and agents | `extension discover`, `extension prepare`, `extension run`, `agent conform-oci` |
 | Local MCP | `mcp manifest`, `mcp init-control`, `mcp approve`, `mcp serve` |
-| Release and compatibility | `release sbom`, `release checksums`, `release verify-checksums`, `release keygen`, `release sign-evidence`, `release assemble-evidence`, `release dossier`, `conformance export`, `conformance verify` |
+| Release and compatibility | `release sbom`, `release cargo-sbom`, `release checksums`, `release verify-checksums`, `release keygen`, `release sign-evidence`, `release assemble-evidence`, `release dossier`, `conformance export`, `conformance verify` |
 | Final-mile acceptance | `acceptance run`, `acceptance evaluate`, `acceptance template` |
 | Authorized targets | `target profile-create`, `target profile-validate`, `target intake`, `target browser-kit`, `target template`, `target validate`, `target plan`, `target fixture`, `target challenge`, `target prove`, `detonate owned-web-fixture`, `detonate owned-software-fixture`, `detonate browser`, `detonate software`, `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt adaptive-browser` |
 

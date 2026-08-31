@@ -35,6 +35,7 @@ _HOST_RULE_TEARDOWNS = 2
 _HOST_TEARDOWN_COMMANDS = 4
 _MAX_MEDIATOR_RECEIPT_FILES = 2_048
 _MAX_MEDIATOR_RECEIPT_BYTES = 16 * 1024 * 1024
+_MAX_MEDIATED_CONNECTIONS = 1_024
 
 
 def _validate_digest(value: str, role: str) -> None:
@@ -358,6 +359,7 @@ def _mediator_policy(
         },
     }
     body["contentDigest"] = sha256_digest(canonical_json_bytes(body))
+    validate_document(body, "sova.worker-network-mediator-policy")
     return body
 
 
@@ -461,6 +463,16 @@ def build_firecracker_network_plan(
         raise FormatError("SOVA-WORKER-NETWORK-IDENTITY", "mediator identity slot is invalid")
     mediator_uid = policy.mediator_uid_base + launch_plan.identity_slot
     mediator_gid = policy.mediator_gid_base + launch_plan.identity_slot
+    if any(rule.protocol != "tcp" for rule in manifest.network_rules):
+        raise FormatError(
+            "SOVA-WORKER-NETWORK-PROTOCOL",
+            "protocol 0.1 mediator supports HTTP-family traffic over TCP only",
+        )
+    if manifest.limits.network_connection_limit > _MAX_MEDIATED_CONNECTIONS:
+        raise FormatError(
+            "SOVA-WORKER-NETWORK-BUDGET",
+            "network connection budget exceeds protocol 0.1 evidence limits",
+        )
     mediator_policy = _mediator_policy(manifest, launch_plan, broker, policy.proxy_port)
     namespace_rules = (
         f"table inet {namespace_table} {{ "

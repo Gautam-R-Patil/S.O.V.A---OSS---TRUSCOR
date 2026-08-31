@@ -82,6 +82,7 @@ temp/
 /.tmp/
 .cache/
 .tmp-npm-cache/
+/deploy/worker/network-mediator/target/
 
 # Editors and operating systems
 /.claude/

@@ -32,7 +32,7 @@ and the source selection, advisories, machine probe, and non-adoptions are in th
 | P5-01 | Open | Windows remains the controller, but no dedicated patched Linux/KVM worker has been provisioned or attested in this evidence set. The local WSL2 environment is developer-only. |
 | P5-02 | Implemented | Versioned manifests, content references, TLS 1.3 mutual-authentication contexts, certificate-bound DSSE messages, expiry, replay defense, and immutable CAS verification pass focused tests. |
 | P5-03 | Partially implemented | The Firecracker 1.16.1 plan is compiled, command-drift checked, staged with a unique job UID/GID, executed by a root-only Unix-socket/API/pidfd/watchdog lifecycle backend, and schema-receipted. Persistent `O_EXCL` leases prevent concurrent or post-crash identity/address-slot reuse and release only after complete cleanup/evidence. The online guest now receives its deterministic `/30` and proxy endpoint. It has not executed a live microVM on the exact worker. |
-| P5-04 | Implemented locally | Network rules, exact endpoint and DNS revalidation, address selection, global/private policy, budgets, and receipts pass positive and adverse tests. The host compiler creates separate TAP and mediator-uplink segments, deny-all namespace forwarding, output restricted to the exact per-job mediator UID, mediator-only `/32` NAT, and evidence-bound cleanup. Canonical exact-job flow receipts are captured through a bounded mediator-owned directory and bound into the returned network receipt. No approved mediator binary has run on the exact host. |
+| P5-04 | Implemented locally | Network rules, exact endpoint and DNS revalidation, address selection, global/private policy, budgets, and receipts pass positive and adverse tests. The host compiler creates separate TAP and mediator-uplink segments, deny-all namespace forwarding, output restricted to the exact per-job mediator UID, mediator-only `/32` NAT, and evidence-bound cleanup. The Rust mediator verifies canonical policy, exact DNS set and selected literal address, HTTP authority, TLS SNI, budgets, and receipts. Its static musl build passed a real WSL denied-flow/receipt interop smoke; no production artifact has run inside the exact worker namespace. |
 | P5-05 | Implemented | Opaque scalar secret capabilities enforce job, audience, expiry, and use limits; receipts omit token and value; revocation and redaction checks pass. |
 | P5-06 | Implemented | ZIPs are processed in memory with path, file type, encryption, member, ratio, and byte checks; guest signatures, manifests, digests, schemas, authority, and redaction are verified before controller signing. |
 | P5-07 | Implemented policy | Kata remains disabled unless an exact reviewed version and advisory snapshot are approved. It is not granted generic equivalence. |
@@ -78,9 +78,22 @@ removal fails cleanup and retains the lease. Host preflight rejects configured j
 or mediator ranges that overlap an allocated passwd/group identity and also checks
 exact directory modes, root ownership, and binary pins.
 
-The design adapts Pipelock's separate-proxy topology but does not vendor or claim
-drop-in compatibility with Pipelock. An exact mediator adapter and dedicated-host
-execution remain external gates.
+The design adapts Pipelock's separate-proxy, exact-grant, and resolve-to-dial
+patterns but does not vendor or claim drop-in compatibility with Pipelock. The
+SOVA-specific mediator source, lockfile, cross-language policy schema/fixture,
+eleven Rust unit tests, strict Clippy gate, licence record, CI/RustSec job, separate
+Cargo SBOM, release-tree checksum, Sigstore input, and provenance-attested
+release-candidate build are implemented. The 953,392-byte stripped static PIE
+developer build has SHA-256
+`6a4609267a8a0606227dcf883a97d8a8d912a5894afa085dfd137ef4847b98b7`.
+An isolated clean-target rebuild produced the same digest.
+Its WSL smoke emitted this
+[463-byte `endpoint-not-authorized` receipt](../../tests/fixtures/worker/network-mediator-wsl-denied-receipt.json)
+for `example.com:80`; the Python controller accepted the canonical receipt and its
+`sha256:15f82ae1d024ee904bb3f46a8ce59eed54fd56c67ff819e8c31d6c5f322f2302`
+content binding. Building and pinning the production artifact on the reviewed
+builder, executing it inside the exact namespace, and independently reviewing
+that measured host remain external P5 gates.
 
 ## Validation receipts
 
@@ -88,12 +101,16 @@ execution remain external gates.
 |---|---|
 | Focused privileged-worker boundary | `79 passed`; selected combined statement/branch coverage `96.20%` |
 | Focused Ruff and strict mypy | passed |
-| Full repository suite | `2,634 passed, 30 skipped in 999.26s`; zero failed |
-| Combined statement/branch coverage | `95.15%`; mandatory 95% gate passed |
-| Full Ruff format and lint | `732 files already formatted`; all checks passed |
+| Full repository suite | `2,644 passed, 30 skipped in 498.58s`; zero failed |
+| Combined statement/branch coverage | `95.12%`; mandatory 95% gate passed |
+| Full Ruff format and lint | `733 files already formatted`; all checks passed |
 | Full strict mypy | no issues in 534 source files |
-| CLI parser-to-handler execution audit | `148/148`; no unexecuted command |
-| Wheel and source distribution | built `sova_oss-0.1.0a0`; all 59 schemas, including all 13 P5 worker schemas, are present in both artifacts |
+| CLI parser-to-handler execution audit | `149/149`; no unexecuted command |
+| Wheel and source distribution | built `sova_oss-0.1.0a0`; all 60 schemas, including all 14 P5 worker/Firecracker schemas, are present in both artifacts |
+| Rust mediator unit/lint gate | `11 passed`; Rust 1.88.0 format and strict Clippy passed |
+| Rust mediator advisory gate | `cargo-audit 0.22.2` scanned 58 locked dependencies against 1,233 loaded RustSec advisories; zero findings and no ignores |
+| Rust mediator artifact gate | 953,392-byte stripped static PIE; isolated builds were byte-identical; WSL denied-flow receipt passed the Python controller validator |
+| Candidate release tree | Python wheel/sdist, both CycloneDX SBOMs, and mediator binary passed exact five-file SHA-256 membership verification; signing/attestation remains a CI/publication-time gate |
 | Repository policy | passed |
 | Public-boundary scan | passed |
 

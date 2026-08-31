@@ -21,6 +21,9 @@ have independent version ledgers.
 - Upgraded the runtime dependency to `cryptography 50.x` after the fixed stable
   release became available, retired the temporary PKCS#7 advisory exception,
   and restored a strict no-ignored-advisory dependency audit.
+- Upgraded the worker mediator from vulnerable `time 0.3.41` to fixed `0.3.47`
+  for RUSTSEC-2026-0009, moved its pinned build floor to Rust 1.88.0, and kept
+  the RustSec gate strict with no advisory ignore.
 
 ### Added
 
@@ -46,11 +49,15 @@ have independent version ledgers.
   that refuses synthetic, non-production, wrong-artifact, missing, failed, and
   non-independent receipts. Public deployment and release approval remain open.
 - An immutable controller/worker protocol with mutually authenticated signed
-  messages, content-addressed jobs, exact network and secret brokers, hostile
-  evidence validation, cleanup/attestation receipts, and a Firecracker 1.16.1
-  jailer launch compiler plus root-only Unix-API, pidfd watchdog, exact cleanup,
-  and lifecycle receipt path. Live dedicated-host isolation and independent review
-  are explicitly not claimed.
+  messages, content-addressed jobs, exact secret capabilities, hostile evidence
+  validation, cleanup/attestation receipts, and a Firecracker 1.16.1 jailer
+  launch compiler plus root-only Unix-API, pidfd watchdog, exact cleanup, and
+  lifecycle receipt path. A separately pinned static Rust mediator now enforces
+  canonical per-job policy, exact hostname/port/DNS-pin/SNI authority, address
+  floors, budgets, and durable no-replace receipts. It has cross-language tests,
+  a real WSL denied-flow smoke, a deterministic Cargo SBOM, and candidate
+  checksum/signing/provenance integration. Live dedicated-host isolation and
+  independent review are explicitly not claimed.
 - An oracle laboratory with proposal/calibration/promotion separation,
   differential and metamorphic checks, independent reproduction, explicit
   abstention and failure states, and eight-dimensional measured coverage.

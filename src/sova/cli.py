@@ -234,7 +234,12 @@ from sova.rehearsal import (
     run_rehearsal,
     specification_from_mapping,
 )
-from sova.release import verify_checksums, write_checksums, write_cyclonedx_sbom
+from sova.release import (
+    verify_checksums,
+    write_cargo_cyclonedx_sbom,
+    write_checksums,
+    write_cyclonedx_sbom,
+)
 from sova.replay import (
     CapsuleReplaySelection,
     ReplayHTTPService,
@@ -378,6 +383,13 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     release_sbom.add_argument("destination", type=_path)
     release_sbom.add_argument("--scope", choices=("runtime", "all"), default="runtime")
     release_sbom.set_defaults(handler=_release_sbom)
+    release_cargo_sbom = release_commands.add_parser(
+        "cargo-sbom", help="generate a timestamp-free CycloneDX SBOM from Cargo.lock"
+    )
+    release_cargo_sbom.add_argument("lock", type=_path)
+    release_cargo_sbom.add_argument("destination", type=_path)
+    release_cargo_sbom.add_argument("--root", required=True)
+    release_cargo_sbom.set_defaults(handler=_release_cargo_sbom)
     release_checksums = release_commands.add_parser(
         "checksums", help="write a stable SHA-256 manifest for a release directory"
     )
@@ -2730,6 +2742,12 @@ def _data_delete(args: argparse.Namespace) -> int:
 
 def _release_sbom(args: argparse.Namespace) -> int:
     report = write_cyclonedx_sbom(args.lock, args.destination, scope=str(args.scope))
+    sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
+    return 0
+
+
+def _release_cargo_sbom(args: argparse.Namespace) -> int:
+    report = write_cargo_cyclonedx_sbom(args.lock, args.destination, root=str(args.root))
     sys.stdout.buffer.write(canonical_json_bytes(report) + b"\n")
     return 0
 

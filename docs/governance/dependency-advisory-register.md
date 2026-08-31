@@ -36,3 +36,23 @@ Sources: the official [PyPI 50.0.0 metadata](https://pypi.org/pypi/cryptography/
 plus the repository's locked dependency manifest. The advisory's cryptographic
 impact is not reinterpreted or downgraded here; only reachability in the shipped
 SOVA source was assessed while a fixed stable release was unavailable.
+
+## RUSTSEC-2026-0009 / CVE-2026-25727
+
+| Field | Decision |
+|---|---|
+| Status | **Resolved 2026-08-31; no exception introduced** |
+| Former package | `time==0.3.41` in the worker network mediator |
+| Upstream effect | Stack-exhaustion denial of service in affected parsing paths |
+| Affected range | `>=0.3.6,<0.3.47` for the named `time` parsers |
+| SOVA use | Strict 20-byte, second-precision UTC expiry parsing |
+| Resolution | Mediator MSRV/build pin moved to Rust 1.88.0 and `time` upgraded to fixed `0.3.47`; required serde pins and `Cargo.lock` were refreshed |
+| Audit behavior | Pinned `cargo-audit==0.22.2 --deny warnings` loads the RustSec database and passes the complete locked graph without an ignore |
+| Owner | SOVA OSS security maintainers |
+| Re-review condition | Every mediator lockfile change and every release candidate |
+
+Source: the official
+[RustSec advisory](https://rustsec.org/advisories/RUSTSEC-2026-0009.html) and
+the mediator's exact Cargo manifest and lockfile. Although the SOVA call site was
+more constrained than the published exploit shape, release admission required
+the fixed dependency rather than a reachability exception.

@@ -292,10 +292,44 @@ jobs:
         if: github.event_name != 'pull_request'
         run: python -c "print('DCO_CHECK=NOT_APPLICABLE_TO_PUSH_RANGE')"
 
+  mediator:
+    name: Network mediator
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy/worker/network-mediator
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal --component clippy,rustfmt --target x86_64-unknown-linux-musl
+          rustup override set 1.88.0
+
+      - name: Check mediator formatting
+        run: cargo fmt --check
+
+      - name: Lint mediator and tests
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test mediator contracts
+        run: cargo test --locked
+
+      - name: Build pinned release artifact
+        run: cargo build --locked --release --target x86_64-unknown-linux-musl
+
+      - name: Audit Rust dependency graph
+        run: |
+          cargo install cargo-audit --locked --version 0.22.2
+          cargo audit --deny warnings
+
   ci-gate:
     name: CI gate
     if: always()
-    needs: [quality, platform, dco]
+    needs: [quality, platform, dco, mediator]
     runs-on: ubuntu-latest
     steps:
       - name: Require every CI job
@@ -303,7 +337,9 @@ jobs:
           QUALITY: ${{ needs.quality.result }}
           PLATFORM: ${{ needs.platform.result }}
           DCO: ${{ needs.dco.result }}
+          MEDIATOR: ${{ needs.mediator.result }}
         run: |
           test "$QUALITY" = "success"
           test "$PLATFORM" = "success"
           test "$DCO" = "success"
+          test "$MEDIATOR" = "success"

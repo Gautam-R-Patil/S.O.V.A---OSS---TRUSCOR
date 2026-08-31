@@ -32,10 +32,12 @@ A CLI major version does not imply an artifact-schema major version.
 
 ## Current automation
 
-The release-candidate workflow builds and retains artifacts, emits a
-timestamp-free CycloneDX 1.6 SBOM and stable SHA-256 manifest, verifies exact
-release-tree membership, and creates GitHub/Sigstore build-provenance
-attestations for the candidate files. It does not publish to a package index.
+The release-candidate workflow builds and retains the Python distributions and
+the pinned static Linux network mediator, emits separate timestamp-free
+CycloneDX 1.6 SBOMs for their exact uv and Cargo closures, writes a stable
+SHA-256 manifest, verifies exact release-tree membership, and creates
+GitHub/Sigstore build-provenance attestations for every candidate file. It does
+not publish to a package index.
 This is intentional: a
 pushed tag or candidate attestation is not a substitute for founder/publication
 approval, and an attestation must still be verified by consumers.

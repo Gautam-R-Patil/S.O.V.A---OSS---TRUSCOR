@@ -14,6 +14,11 @@ parity-tested `jsonschema-rs` runtime validator. Development, build, and runtime
 dependencies are declared in `pyproject.toml`, resolved in `uv.lock`, and
 listed in `THIRD_PARTY_NOTICES.md`.
 
+The separately shipped Linux worker mediator is a Rust crate under
+`deploy/worker/network-mediator`. Its small direct dependency set is exact-version
+pinned, the complete graph is committed in `Cargo.lock`, and CI applies formatting,
+Clippy, unit/interop tests, a release build, and RustSec audit before admission.
+
 ## Intake checklist
 
 Before adding or upgrading a dependency:
@@ -54,12 +59,16 @@ introduced. See the [advisory register](./dependency-advisory-register.md).
 ## Build and release
 
 - CI installs from the checked-in lockfile using `uv --locked`.
+- CI builds the mediator from its checked-in `Cargo.lock` using Rust 1.88.0,
+  runs pinned `cargo-audit` 0.22.2, and rejects
+  formatting, Clippy, test, or RustSec failures.
 - Release artifacts are built in CI from the tagged source.
 - Package-index publication will use short-lived OIDC Trusted Publishing, not a
   long-lived API token.
 - Release artifacts will carry provenance attestations when publishing is
   enabled.
-- An SBOM is generated for promoted releases.
+- Separate deterministic SBOMs are generated for the Python and mediator Cargo
+  dependency closures in promoted releases.
 
 No setup step may silently contact a SOVA, TRUSCOR, Atlas, model, telemetry, or
 registry service.

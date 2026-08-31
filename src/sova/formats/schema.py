@@ -50,6 +50,7 @@ _SCHEMA_FILES = {
     "sova.worker-attestation": "worker-attestation-0.1.0.schema.json",
     "sova.worker-protocol-message": "worker-protocol-message-0.1.0.schema.json",
     "sova.worker-network-receipt": "worker-network-receipt-0.1.0.schema.json",
+    "sova.worker-network-mediator-policy": ("worker-network-mediator-policy-0.1.0.schema.json"),
     "sova.worker-secret-receipt": "worker-secret-receipt-0.1.0.schema.json",
     "sova.worker-evidence-report": "worker-evidence-report-0.1.0.schema.json",
     "sova.worker-cleanup-receipt": "worker-cleanup-receipt-0.1.0.schema.json",

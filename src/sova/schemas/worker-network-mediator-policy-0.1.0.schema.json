@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/worker-network-mediator-policy-0.1.0.schema.json",
+  "title": "SOVA worker network mediator policy 0.1.0",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "jobId", "manifestDigest", "launchPlanDigest", "listen", "allowedTransports", "rules", "budgets", "receiptArtifactType", "invariants", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.worker-network-mediator-policy"},
+    "schemaVersion": {"const": "0.1.0"},
+    "jobId": {"type": "string", "minLength": 1, "maxLength": 191},
+    "manifestDigest": {"$ref": "#/$defs/digest"},
+    "launchPlanDigest": {"$ref": "#/$defs/digest"},
+    "listen": {
+      "type": "object",
+      "required": ["address", "port"],
+      "properties": {
+        "address": {"type": "string", "format": "ipv4"},
+        "port": {"const": 8888}
+      },
+      "additionalProperties": false
+    },
+    "allowedTransports": {
+      "type": "array",
+      "items": {"enum": ["http", "https-connect", "websocket", "mcp-http"]},
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true
+    },
+    "rules": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {"$ref": "#/$defs/rule"}
+    },
+    "budgets": {
+      "type": "object",
+      "required": ["maximumConnections", "maximumBytes", "expiresAt"],
+      "properties": {
+        "maximumConnections": {"type": "integer", "minimum": 0, "maximum": 1024},
+        "maximumBytes": {"type": "integer", "minimum": 0, "maximum": 8589934592},
+        "expiresAt": {"type": "string", "format": "date-time"}
+      },
+      "additionalProperties": false
+    },
+    "receiptArtifactType": {"const": "sova.worker-network-receipt"},
+    "invariants": {
+      "type": "object",
+      "required": ["dnsResolvedByMediator", "dnsPinsRevalidated", "selectedAddressBoundToConnection", "privateAddressesDefaultDenied", "rawTcpUdpSupported"],
+      "properties": {
+        "dnsResolvedByMediator": {"const": true},
+        "dnsPinsRevalidated": {"const": true},
+        "selectedAddressBoundToConnection": {"const": true},
+        "privateAddressesDefaultDenied": {"const": true},
+        "rawTcpUdpSupported": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "rule": {
+      "type": "object",
+      "required": ["hostname", "port", "protocol", "initialAddresses", "allowPrivate"],
+      "properties": {
+        "hostname": {"type": "string", "minLength": 1, "maxLength": 253, "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535},
+        "protocol": {"const": "tcp"},
+        "initialAddresses": {"type": "array", "items": {"type": "string", "oneOf": [{"format": "ipv4"}, {"format": "ipv6"}]}, "minItems": 1, "maxItems": 16, "uniqueItems": true},
+        "allowPrivate": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

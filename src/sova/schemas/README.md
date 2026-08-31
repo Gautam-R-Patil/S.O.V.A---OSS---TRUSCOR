@@ -40,6 +40,7 @@ evidence-aware capability-map report contract.
 - `worker-attestation-0.1.0.schema.json` — exact worker host, binary, image, and policy measurements
 - `worker-protocol-message-0.1.0.schema.json` — signed peer-bound controller/worker message
 - `worker-network-receipt-0.1.0.schema.json` — allowed or denied broker flow evidence
+- `worker-network-mediator-policy-0.1.0.schema.json` — immutable per-job mediator authority and budget contract
 - `worker-secret-receipt-0.1.0.schema.json` — redacted scoped-capability use evidence
 - `worker-evidence-report-0.1.0.schema.json` — controller-validated hostile-output report
 - `worker-cleanup-receipt-0.1.0.schema.json` — exact-job teardown verification

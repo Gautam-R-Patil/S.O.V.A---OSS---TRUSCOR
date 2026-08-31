@@ -105,15 +105,34 @@ SOVA adapted that topology to a Firecracker TAP namespace, separating the guest
 segment from the mediator uplink and filtering namespace output by an exact per-job
 mediator UID.
 
-Pipelock is not vendored, copied, or silently treated as compatible. Its direct
-CLI/config does not implement SOVA's immutable job-policy and exact DNS-pin
-contract, and CONNECT without TLS interception cannot inspect HTTPS bodies. The
-host policy therefore admits only an exact-digest `sova-network-mediator` adapter
-implementing SOVA's small JSON contract. Pipelock may back that adapter after its
-exact source revision, configuration translation, DNS-pin behavior, receipt
-mapping, licence contents, and TLS posture pass dedicated compatibility tests.
-Until that happens the live host preflight correctly fails because no approved
-mediator binary exists.
+Pipelock is not vendored, copied, or silently treated as compatible. A second
+source review pinned revision `1876e2326908ee57d764adf6a62f27a851c1d92a` and
+confirmed that the Apache-2.0 community source contains exact network/host/port
+grants and scan-to-dial DNS snapshots. Those grants are wired into Pipelock
+Guard's workload wrapper, not its standalone `run` proxy. The repository also
+contains separately licensed ELv2 enterprise files, so prebuilt mixed-tier
+artifacts are not an acceptable shortcut. Pipelock's direct proxy CLI/config
+still does not implement SOVA's immutable initial-pin equality, selected-address,
+canonical SOVA receipt, or worker-job binding contract.
+
+SOVA therefore implements `deploy/worker/network-mediator` as a small separately
+pinned Rust binary. It adapts the exact-grant, immutable address floor,
+resolve-then-connect, proxy-only, and fail-closed evidence ideas without copying
+Pipelock code. The binary rejects noncanonical/tampered policies, UDP/raw TCP,
+authority confusion, transfer-encoding ambiguity, proxy credentials, DNS-set
+drift, prohibited addresses, budget expiry/exhaustion, and HTTPS CONNECT whose TLS
+ClientHello SNI differs from the authorized hostname. It connects to the selected
+IP literal and emits canonical contiguous content-addressed receipts through the
+controller-owned evidence contract. Eleven Rust unit tests, strict Clippy, a
+Python-made wire fixture, the Python schema, exact dependency lock, CI release
+build, licence ledger, and RustSec gate are implemented. A stripped static PIE
+musl build (`sha256:6a4609267a8a0606227dcf883a97d8a8d912a5894afa085dfd137ef4847b98b7`)
+was byte-identical across two isolated Cargo target directories and passed a WSL
+developer smoke: it denied an unauthorized `example.com:80` flow,
+persisted a canonical receipt, and that receipt passed the Python controller's
+schema, digest, sequence, and job-binding checks. This is cross-language
+implementation evidence only. The artifact has not run the dedicated-host
+matrix, so no production approval is claimed.
 
 The integration review found two controls that neither upstream project supplies
 for SOVA: crash-persistent exclusivity for the UID/GID/address slot, and a
@@ -135,3 +154,6 @@ Additional primary sources:
 - [Pipelock configuration and forward-proxy limitations](https://github.com/luckyPipewrench/pipelock/blob/main/docs/configuration.md)
 - [Pipelock TLS-interception limitations](https://github.com/luckyPipewrench/pipelock/blob/main/docs/guides/tls-interception.md)
 - [Pipelock Apache-2.0 licence](https://github.com/luckyPipewrench/pipelock/blob/main/LICENSE)
+- [Pipelock Guard exact service grants](https://github.com/luckyPipewrench/pipelock/blob/main/internal/config/schema.go)
+- [Pipelock resolve-to-dial enforcement](https://github.com/luckyPipewrench/pipelock/blob/main/internal/proxy/ssrf_dial_block.go)
+- [Pipelock security and edition boundary](https://github.com/luckyPipewrench/pipelock/blob/main/SECURITY.md)

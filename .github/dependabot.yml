@@ -26,3 +26,16 @@ updates:
       github-actions:
         patterns: ["*"]
     labels: ["dependencies", "github-actions"]
+
+  - package-ecosystem: cargo
+    directory: /deploy/worker/network-mediator
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: "07:00"
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    groups:
+      mediator-rust:
+        patterns: ["*"]
+    labels: ["dependencies", "rust", "security-boundary"]

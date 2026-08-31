@@ -25,6 +25,12 @@ digest. The worker operator must verify:
    every digest in the policy.
 8. An independent isolation reviewer signs the final receipt.
 
+Build the exact mediator source under `network-mediator/` on a reviewed Linux
+builder, run its locked test/Clippy/RustSec gates, and install only the resulting
+root-owned digest-pinned artifact. The source implementation does not make a
+developer-host build production-approved; its README records the reproducible
+musl build and Pipelock architectural provenance.
+
 `provision-host.sh --check` is read-only. `--apply --ack-dedicated-host` creates
 only root-controlled directories; it creates no user/group identity and does not
 download binaries/images, change swap, patch a kernel, alter a firewall, or assert

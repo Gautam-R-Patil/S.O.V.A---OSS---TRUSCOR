@@ -281,7 +281,16 @@ suite also exercises the executable lifecycle side of P5-03 and all P5-09 classe
 including exact jailer arguments, Unix-socket API sequencing, pidfd watchdog
 control, persistent exclusive identity slots, cleanup receipts, canonical mediator
 flow-receipt capture, deterministic disjoint per-job job/mediator UID/GID ranges,
-state-removal proof, and the deterministic per-job TAP/veth/nftables plan.
+state-removal proof, and the deterministic per-job TAP/veth/nftables plan. The
+exact SOVA mediator source now implements canonical policy verification, exact
+hostname/port/DNS-set and selected-address enforcement, HTTP authority and TLS-SNI
+binding, aggregate budgets, and durable controller-compatible receipts. Its locked
+Rust dependency graph, eleven unit/interop tests, strict Clippy, licence ledger,
+Dependabot lane, CI build, RustSec gate, Cargo SBOM, release checksum, Sigstore
+input, and provenance-attestation path are included. A stripped static musl build
+was byte-identical across isolated target directories, and its cross-language
+denied-flow receipt passed in WSL, but no production Linux artifact or exact-host
+execution receipt exists yet.
 The check-only host preflight and eleven-case exact-host receipt contracts are now
 implemented; preflight rejects reserved ranges already allocated in passwd/group,
 but these controls create no live receipt. The deterministic local P5 receipt is
@@ -349,8 +358,8 @@ production operator receipts, final-commit artifacts, independent/legal/security
 review, public results, or an explicitly authorized publication action.
 The recomputed dossier exposes those remaining states as sorted machine-readable
 hold reasons mapped to evaluation, Registry, review, and external-gate summaries.
-Current-tree validation passes `2,634` tests with `30` declared capability-gated
-skips and `95.15%` combined statement/branch coverage; all `148` CLI handlers,
+Current-tree validation passes `2,644` tests with `30` declared capability-gated
+skips and `95.12%` combined statement/branch coverage; all `149` CLI handlers,
 strict types, formatting, lint, dependency audit, acceptance, package-resource,
 reproducible-build, isolated-wheel, checksum, repository-policy, and public-boundary
 checks pass. The deterministic P6 acceptance receipt is

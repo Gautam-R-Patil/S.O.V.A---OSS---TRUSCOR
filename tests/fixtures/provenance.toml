@@ -64,3 +64,23 @@ license = "Apache-2.0"
 expected = "execute-as-explicit-test-subprocess"
 sha256 = "e79b444c2f966b64db080183a8caa054fe528e142c4467930d1994633ebe1177"
 purpose = "Exercise the external JSONL extension protocol without importing code into the SOVA process."
+
+[[fixture]]
+path = "tests/fixtures/worker/network-mediator-policy-python.json"
+provenance_class = "synthetic"
+license = "Apache-2.0"
+expected = "accept-after-removing-the-repository-newline"
+sha256 = "c4ed5db42314e74cf613b1367fcc2267916853b1ae8da67ceec4b6cbe04b0734"
+source = "Generated from the SOVA Python worker network-plane policy encoder with fixed public values."
+purpose = "Prove canonical policy and digest compatibility between the Python controller and Rust mediator."
+
+[[fixture]]
+path = "tests/fixtures/worker/network-mediator-wsl-denied-receipt.json"
+provenance_class = "synthetic"
+license = "Apache-2.0"
+expected = "accept-after-removing-the-repository-newline"
+sha256 = "770ce1d188ce254fc9e09b6a887b0cab186c2e41f0aaec36e7d7952354005348"
+source = "Emitted by the SOVA Rust mediator WSL smoke for a denied synthetic example.com request."
+generator = "deploy/worker/network-mediator/scripts/smoke-wsl.sh"
+generator_binary_sha256 = "6a4609267a8a0606227dcf883a97d8a8d912a5894afa085dfd137ef4847b98b7"
+purpose = "Prove canonical receipt, sequence, digest, job, endpoint, and decision compatibility with the Python controller."

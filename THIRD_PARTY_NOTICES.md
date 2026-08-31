@@ -21,6 +21,12 @@ automation workflow and are not vendored into this repository.
 | `types-jsonschema` | Development-only type information for jsonschema | Apache-2.0 | [python/typeshed](https://github.com/python/typeshed) |
 | `uv` | Contributor environment, lockfile, and build runner | Apache-2.0 or MIT | [astral-sh/uv](https://github.com/astral-sh/uv) |
 | `websocket-client` | Development-only installed-Chrome replay acceptance transport | Apache-2.0 | [websocket-client/websocket-client](https://github.com/websocket-client/websocket-client) |
+| `httparse` | Strict bounded HTTP/1 request parsing in the worker mediator | Apache-2.0 or MIT | [seanmonstar/httparse](https://github.com/seanmonstar/httparse) |
+| `serde` / `serde_json` | Typed and canonical JSON parsing/encoding in the worker mediator | Apache-2.0 or MIT | [serde-rs/serde](https://github.com/serde-rs/serde) / [serde-rs/json](https://github.com/serde-rs/json) |
+| `sha2` | SHA-256 policy and receipt content bindings in the worker mediator | Apache-2.0 or MIT | [RustCrypto/hashes](https://github.com/RustCrypto/hashes) |
+| `time` 0.3.47 | Strict UTC expiry parsing in the worker mediator; fixed release for RUSTSEC-2026-0009 | Apache-2.0 or MIT | [time-rs/time](https://github.com/time-rs/time) |
+| `url` | Absolute HTTP/WebSocket target parsing in the worker mediator | Apache-2.0 or MIT | [servo/rust-url](https://github.com/servo/rust-url) |
+| `cargo-audit` 0.22.2 | RustSec dependency-advisory enforcement in CI | Apache-2.0 or MIT | [rustsec/rustsec](https://github.com/rustsec/rustsec) |
 | `actions/checkout` | GitHub Actions checkout | MIT | [actions/checkout](https://github.com/actions/checkout) |
 | `actions/dependency-review-action` | Pull-request dependency review | MIT | [actions/dependency-review-action](https://github.com/actions/dependency-review-action) |
 | `actions/upload-artifact` | Release-candidate artifact retention | MIT | [actions/upload-artifact](https://github.com/actions/upload-artifact) |
@@ -29,9 +35,13 @@ automation workflow and are not vendored into this repository.
 | `gitleaks/gitleaks-action` | CI secret scanning | Gitleaks Action licence | [gitleaks/gitleaks-action](https://github.com/gitleaks/gitleaks-action) |
 | Contributor Covenant 2.1 | Community code-of-conduct text | CC BY 4.0 | [Contributor Covenant](https://www.contributor-covenant.org/version/2/1/code_of_conduct.html) |
 
-Transitive development dependencies and exact versions are recorded in
-`uv.lock`. GitHub Actions are pinned to immutable full commit SHAs and are
-updated through reviewed Dependabot pull requests.
+Transitive Python dependencies and exact versions are recorded in `uv.lock`.
+The mediator's complete Rust graph is recorded in its `Cargo.lock`; package
+metadata reports Apache-2.0, MIT, Unicode-3.0, or Unlicense licence identifiers,
+with dual-licence choices resolved under the applicable permissive option and no
+missing licence field. The graph and selected terms must be re-audited on every lockfile change.
+GitHub Actions are pinned to
+immutable full commit SHAs and are updated through reviewed Dependabot pull requests.
 
 ## Referenced classification catalogs
 

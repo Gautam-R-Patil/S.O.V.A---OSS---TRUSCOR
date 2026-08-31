@@ -12,8 +12,10 @@ import sova.release as release_module
 from sova.cli import main
 from sova.formats.errors import FormatError
 from sova.release import (
+    generate_cargo_cyclonedx_sbom,
     generate_cyclonedx_sbom,
     verify_checksums,
+    write_cargo_cyclonedx_sbom,
     write_checksums,
     write_cyclonedx_sbom,
 )
@@ -50,6 +52,41 @@ dependencies = [{ name = "alpha" }]
     return path
 
 
+def _cargo_lock(path: Path) -> Path:
+    path.write_text(
+        """version = 4
+[[package]]
+name = "alpha"
+version = "1.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+dependencies = ["syn 2.0.1"]
+[[package]]
+name = "beta"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+dependencies = ["syn 3.0.0"]
+[[package]]
+name = "sova-network-mediator"
+version = "0.1.0"
+dependencies = ["alpha", "beta"]
+[[package]]
+name = "syn"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+[[package]]
+name = "syn"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+""",
+        encoding="utf-8",
+    )
+    return path
+
+
 def test_runtime_sbom_is_deterministic_and_transitive(tmp_path: Path) -> None:
     lock = _lock(tmp_path / "uv.lock")
     first = generate_cyclonedx_sbom(lock)
@@ -69,6 +106,30 @@ def test_sbom_writer_uses_canonical_json(tmp_path: Path) -> None:
     assert report["componentCount"] == 2
     parsed = json.loads(destination.read_text(encoding="utf-8"))
     assert parsed["specVersion"] == "1.6"
+
+
+def test_cargo_sbom_is_deterministic_transitive_and_version_disambiguated(
+    tmp_path: Path,
+) -> None:
+    lock = _cargo_lock(tmp_path / "Cargo.lock")
+    first = generate_cargo_cyclonedx_sbom(lock, root="sova-network-mediator")
+    second = generate_cargo_cyclonedx_sbom(lock, root="sova-network-mediator")
+    assert first == second
+    assert [item["bom-ref"] for item in first["components"]] == [
+        "pkg:cargo/alpha@1.2.3",
+        "pkg:cargo/beta@2.0.0",
+        "pkg:cargo/syn@2.0.1",
+        "pkg:cargo/syn@3.0.0",
+    ]
+    assert first["dependencies"][0] == {
+        "ref": "pkg:cargo/sova-network-mediator@0.1.0",
+        "dependsOn": ["pkg:cargo/alpha@1.2.3", "pkg:cargo/beta@2.0.0"],
+    }
+    assert first["components"][0]["hashes"][0]["content"] == "a" * 64
+    destination = tmp_path / "dist" / "mediator.cdx.json"
+    report = write_cargo_cyclonedx_sbom(lock, destination, root="sova-network-mediator")
+    assert report["componentCount"] == 4
+    assert destination.read_bytes().endswith(b"\n")
 
 
 def test_checksums_detect_tampering_missing_and_extra_files(tmp_path: Path) -> None:
@@ -112,8 +173,24 @@ def test_release_cli_round_trip(tmp_path: Path, capsys: pytest.CaptureFixture[st
     root = tmp_path / "dist"
     root.mkdir()
     sbom = root / "sova.cdx.json"
+    cargo_sbom = root / "mediator.cdx.json"
     sums = root / "SHA256SUMS"
     assert main(["release", "sbom", str(lock), str(sbom)]) == 0
+    capsys.readouterr()
+    cargo_lock = _cargo_lock(tmp_path / "Cargo.lock")
+    assert (
+        main(
+            [
+                "release",
+                "cargo-sbom",
+                str(cargo_lock),
+                str(cargo_sbom),
+                "--root",
+                "sova-network-mediator",
+            ]
+        )
+        == 0
+    )
     capsys.readouterr()
     assert main(["release", "checksums", str(root), str(sums)]) == 0
     capsys.readouterr()
@@ -159,6 +236,39 @@ def test_sbom_rejects_scope_missing_root_and_missing_file(tmp_path: Path) -> Non
         generate_cyclonedx_sbom(lock)
     with pytest.raises(FormatError, match="could not be parsed"):
         generate_cyclonedx_sbom(tmp_path / "missing.lock")
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        ("version = 3\npackage = []", "version 4"),
+        ("version = 4", "package list"),
+        ("version = 4\npackage = [1]", "entry is malformed"),
+        (
+            'version = 4\n[[package]]\nname = "root"\nversion = "1"\ndependencies = ["missing"]',
+            "missing or ambiguous",
+        ),
+        (
+            'version = 4\n[[package]]\nname = "root"\nversion = "1"\n'
+            'dependencies = ["dep"]\n[[package]]\nname = "dep"\nversion = "1"\n'
+            'checksum = "nope"',
+            "checksum is malformed",
+        ),
+        (
+            'version = 4\n[[package]]\nname = "root"\nversion = "1"\n'
+            'dependencies = ["dep"]\n[[package]]\nname = "dep"\nversion = "1"\n'
+            'source = "registry+https://example.test/index"',
+            "has no checksum",
+        ),
+    ],
+)
+def test_cargo_sbom_rejects_hostile_or_incomplete_locks(
+    tmp_path: Path, content: str, message: str
+) -> None:
+    lock = tmp_path / "Cargo.lock"
+    lock.write_text(content, encoding="utf-8")
+    with pytest.raises(FormatError, match=message):
+        generate_cargo_cyclonedx_sbom(lock, root="root")
 
 
 def test_checksums_reject_invalid_roots_empty_trees_links_and_limits(
