@@ -22,12 +22,13 @@
   "$defs": {
     "externalGates": {
       "type": "object",
-      "required": ["p5ProductionIsolation", "blindedFieldValidation", "registryLiveBeta", "deterministicReleaseChecks", "blindedResultsPublic", "limitationsPublic"],
+      "required": ["p5ProductionIsolation", "blindedFieldValidation", "registryLiveBeta", "deterministicReleaseChecks", "publicClaimsReconciled", "blindedResultsPublic", "limitationsPublic"],
       "properties": {
         "p5ProductionIsolation": {"type": "boolean"},
         "blindedFieldValidation": {"type": "boolean"},
         "registryLiveBeta": {"type": "boolean"},
         "deterministicReleaseChecks": {"type": "boolean"},
+        "publicClaimsReconciled": {"type": "boolean"},
         "blindedResultsPublic": {"type": "boolean"},
         "limitationsPublic": {"type": "boolean"}
       },

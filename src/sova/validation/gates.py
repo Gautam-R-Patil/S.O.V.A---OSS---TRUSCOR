@@ -262,6 +262,7 @@ class ReleaseCandidate:
     evaluation_report_digest: str
     registry_readiness_digest: str
     claims_register_digest: str
+    public_claims_snapshot_digest: str
     rollback_test_digest: str
     incident_test_digest: str
     blinded_results_public: bool
@@ -275,6 +276,7 @@ class ReleaseCandidate:
             (self.evaluation_report_digest, "evaluation report"),
             (self.registry_readiness_digest, "Registry readiness"),
             (self.claims_register_digest, "claims register"),
+            (self.public_claims_snapshot_digest, "public claims snapshot"),
             (self.rollback_test_digest, "rollback test"),
             (self.incident_test_digest, "incident test"),
         ):
@@ -293,6 +295,7 @@ class ReleaseCandidate:
             "evaluationReportDigest": self.evaluation_report_digest,
             "registryReadinessDigest": self.registry_readiness_digest,
             "claimsRegisterDigest": self.claims_register_digest,
+            "publicClaimsSnapshotDigest": self.public_claims_snapshot_digest,
             "rollbackTestDigest": self.rollback_test_digest,
             "incidentTestDigest": self.incident_test_digest,
             "blindedResultsPublic": self.blinded_results_public,
@@ -360,6 +363,7 @@ def evaluate_release_candidate(  # noqa: PLR0913 - release gates remain independ
     blinded_field_validation_passed: bool,
     registry_live_ready: bool,
     deterministic_release_checks_passed: bool,
+    public_claims_reconciled: bool,
 ) -> dict[str, Any]:
     if len({item.gate for item in reviews}) != len(reviews):
         raise FormatError("SOVA-P6-REVIEW-DUPLICATE", "release review gate is duplicated")
@@ -394,6 +398,7 @@ def evaluate_release_candidate(  # noqa: PLR0913 - release gates remain independ
         "blindedFieldValidation": blinded_field_validation_passed,
         "registryLiveBeta": registry_live_ready,
         "deterministicReleaseChecks": deterministic_release_checks_passed,
+        "publicClaimsReconciled": public_claims_reconciled,
         "blindedResultsPublic": candidate.blinded_results_public,
         "limitationsPublic": candidate.limitations_public,
     }

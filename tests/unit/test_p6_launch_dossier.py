@@ -89,6 +89,33 @@ def _with_digest(document: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _public_claims_snapshot(commit: str, *, ready: bool = True) -> bytes:
+    kinds = ("readme", "documentation", "demo", "website", "paper", "registry", "release-notes")
+    surfaces = [
+        {
+            "id": f"surface:{kind}",
+            "kind": kind,
+            "locator": f"fixture://{kind}",
+            "contentDigest": digest(f"public-claim:{kind}"),
+            "status": "reconciled" if ready or kind != "website" else "hold",
+            "reviewed": ready or kind != "website",
+            "limitations": ["fixture-only"],
+        }
+        for kind in kinds
+    ]
+    document = _with_digest(
+        {
+            "artifactType": "sova.public-claims-snapshot",
+            "schemaVersion": "0.1.0",
+            "releaseCommit": commit,
+            "capturedAt": "2026-08-31T13:30:00Z",
+            "surfaces": surfaces,
+            "publicClaimsReady": ready,
+        }
+    )
+    return canonical_json_bytes(document) + b"\n"
+
+
 def _principals() -> tuple[dict[LaunchRole, Ed25519Keypair], list[dict[str, Any]]]:
     keys: dict[LaunchRole, Ed25519Keypair] = {}
     rows: list[dict[str, Any]] = []
@@ -131,6 +158,7 @@ def _ready_bundle() -> tuple[dict[str, Any], bytes, bytes, str, dict[LaunchRole,
     commit = plan.release_commit
     manifest = b"sha256 fixture-release.whl\n"
     claims = b"# exact release claims\n"
+    public_claims = _public_claims_snapshot(commit)
     manifest_digest = sha256_digest(manifest)
     claims_digest = sha256_digest(claims)
     keys, principals = _principals()
@@ -167,6 +195,7 @@ def _ready_bundle() -> tuple[dict[str, Any], bytes, bytes, str, dict[LaunchRole,
         evaluation_report_digest=str(evaluation["contentDigest"]),
         registry_readiness_digest=str(registry["contentDigest"]),
         claims_register_digest=claims_digest,
+        public_claims_snapshot_digest=sha256_digest(public_claims),
         rollback_test_digest=operation_by_control[RegistryControl.ROLLBACK].evidence_digest,
         incident_test_digest=operation_by_control[
             RegistryControl.INCIDENT_RESPONSE
@@ -299,6 +328,7 @@ def test_signed_launch_dossier_can_be_ready_but_never_publishes() -> None:
         launch_bundle_from_mapping(document),
         artifact_manifest=manifest,
         claims_register=claims,
+        public_claims_snapshot=_public_claims_snapshot(commit),
         expected_commit=commit,
         expected_trust_policy_digest=_trust_digest(document),
     )
@@ -333,6 +363,85 @@ def test_signed_launch_dossier_can_be_ready_but_never_publishes() -> None:
         validate_document(inconsistent, "sova.launch-dossier")
 
 
+def test_unreconciled_or_tampered_public_claims_keep_release_closed() -> None:
+    document, manifest, claims, commit, _keys = _ready_bundle()
+    held_snapshot = _public_claims_snapshot(commit, ready=False)
+    document["candidate"]["publicClaimsSnapshotDigest"] = sha256_digest(held_snapshot)
+    document["trustPolicy"]["releaseCandidateDigest"] = sha256_digest(
+        canonical_json_bytes(document["candidate"])
+    )
+    document = _refresh_trust(document)
+    dossier = evaluate_launch_bundle(
+        launch_bundle_from_mapping(document),
+        artifact_manifest=manifest,
+        claims_register=claims,
+        public_claims_snapshot=held_snapshot,
+        expected_commit=commit,
+        expected_trust_policy_digest=_trust_digest(document),
+    )
+    assert dossier["externalGates"]["publicClaimsReconciled"] is False
+    assert dossier["status"] == "hold"
+    assert dossier["holdReasons"] == ["external-gate-not-passed:publicClaimsReconciled"]
+
+    ready_document, manifest, claims, commit, _keys = _ready_bundle()
+    with pytest.raises(FormatError, match="snapshot bytes"):
+        evaluate_launch_bundle(
+            launch_bundle_from_mapping(ready_document),
+            artifact_manifest=manifest,
+            claims_register=claims,
+            public_claims_snapshot=held_snapshot,
+            expected_commit=commit,
+            expected_trust_policy_digest=_trust_digest(ready_document),
+        )
+    with pytest.raises(FormatError, match="canonical JSON"):
+        evaluate_launch_bundle(
+            launch_bundle_from_mapping(ready_document),
+            artifact_manifest=manifest,
+            claims_register=claims,
+            public_claims_snapshot=_public_claims_snapshot(commit) + b" ",
+            expected_commit=commit,
+            expected_trust_policy_digest=_trust_digest(ready_document),
+        )
+    with pytest.raises(FormatError, match="another release commit"):
+        evaluate_launch_bundle(
+            launch_bundle_from_mapping(ready_document),
+            artifact_manifest=manifest,
+            claims_register=claims,
+            public_claims_snapshot=_public_claims_snapshot("different-commit"),
+            expected_commit=commit,
+            expected_trust_policy_digest=_trust_digest(ready_document),
+        )
+
+
+def test_public_claims_snapshot_rejects_false_readiness_and_duplicate_surfaces() -> None:
+    document, manifest, claims, commit, _keys = _ready_bundle()
+    parsed = json.loads(_public_claims_snapshot(commit))
+    parsed["publicClaimsReady"] = False
+    parsed = _with_digest({key: value for key, value in parsed.items() if key != "contentDigest"})
+    with pytest.raises(FormatError, match="readiness"):
+        evaluate_launch_bundle(
+            launch_bundle_from_mapping(document),
+            artifact_manifest=manifest,
+            claims_register=claims,
+            public_claims_snapshot=canonical_json_bytes(parsed) + b"\n",
+            expected_commit=commit,
+            expected_trust_policy_digest=_trust_digest(document),
+        )
+
+    parsed = json.loads(_public_claims_snapshot(commit))
+    parsed["surfaces"][-1]["kind"] = parsed["surfaces"][0]["kind"]
+    parsed = _with_digest({key: value for key, value in parsed.items() if key != "contentDigest"})
+    with pytest.raises(FormatError, match="unique"):
+        evaluate_launch_bundle(
+            launch_bundle_from_mapping(document),
+            artifact_manifest=manifest,
+            claims_register=claims,
+            public_claims_snapshot=canonical_json_bytes(parsed) + b"\n",
+            expected_commit=commit,
+            expected_trust_policy_digest=_trust_digest(document),
+        )
+
+
 def test_missing_or_synthetic_gate_keeps_dossier_on_hold() -> None:
     document, manifest, claims, commit, _keys = _ready_bundle()
     document["gateReceipts"] = document["gateReceipts"][:-1]
@@ -343,6 +452,7 @@ def test_missing_or_synthetic_gate_keeps_dossier_on_hold() -> None:
         launch_bundle_from_mapping(document),
         artifact_manifest=manifest,
         claims_register=claims,
+        public_claims_snapshot=_public_claims_snapshot(commit),
         expected_commit=commit,
         expected_trust_policy_digest=_trust_digest(document),
     )
@@ -381,6 +491,7 @@ def test_launch_bundle_rejects_tampering_drift_and_untrusted_signers() -> None:
             bundle,
             artifact_manifest=manifest,
             claims_register=claims,
+            public_claims_snapshot=_public_claims_snapshot(commit),
             expected_commit="other",
             expected_trust_policy_digest=_trust_digest(document),
         )
@@ -389,6 +500,7 @@ def test_launch_bundle_rejects_tampering_drift_and_untrusted_signers() -> None:
             bundle,
             artifact_manifest=b"tampered",
             claims_register=claims,
+            public_claims_snapshot=_public_claims_snapshot(commit),
             expected_commit=commit,
             expected_trust_policy_digest=_trust_digest(document),
         )
@@ -404,6 +516,7 @@ def test_launch_bundle_rejects_tampering_drift_and_untrusted_signers() -> None:
             launch_bundle_from_mapping(tampered),
             artifact_manifest=manifest,
             claims_register=claims,
+            public_claims_snapshot=_public_claims_snapshot(commit),
             expected_commit=commit,
             expected_trust_policy_digest=_trust_digest(tampered),
         )
@@ -422,6 +535,7 @@ def test_launch_bundle_rejects_tampering_drift_and_untrusted_signers() -> None:
             launch_bundle_from_mapping(unauthorized),
             artifact_manifest=manifest,
             claims_register=claims,
+            public_claims_snapshot=_public_claims_snapshot(commit),
             expected_commit=commit,
             expected_trust_policy_digest=_trust_digest(unauthorized),
         )
@@ -508,9 +622,11 @@ def test_launch_signing_and_cli_operator_path(
 
     manifest_path = tmp_path / "SHA256SUMS"
     claims_path = tmp_path / "claims.md"
+    public_claims_path = tmp_path / "public-claims.json"
     dossier_path = tmp_path / "dossier.json"
     manifest_path.write_bytes(manifest)
     claims_path.write_bytes(claims)
+    public_claims_path.write_bytes(_public_claims_snapshot(commit))
     assert (
         main(
             [
@@ -519,6 +635,7 @@ def test_launch_signing_and_cli_operator_path(
                 str(bundle_path),
                 str(manifest_path),
                 str(claims_path),
+                str(public_claims_path),
                 str(dossier_path),
                 "--expected-commit",
                 commit,
@@ -664,6 +781,7 @@ def _evaluate_ready_document(
         launch_bundle_from_mapping(document),
         artifact_manifest=manifest,
         claims_register=claims,
+        public_claims_snapshot=_public_claims_snapshot(commit),
         expected_commit=commit,
         expected_trust_policy_digest=_trust_digest(document),
     )
@@ -736,6 +854,7 @@ def test_candidate_and_external_trust_pins_fail_closed() -> None:
             bundle,
             artifact_manifest=manifest,
             claims_register=claims,
+            public_claims_snapshot=_public_claims_snapshot(commit),
             expected_commit=commit,
             expected_trust_policy_digest=digest("different-policy"),
         )
@@ -744,6 +863,16 @@ def test_candidate_and_external_trust_pins_fail_closed() -> None:
             bundle,
             artifact_manifest=manifest,
             claims_register=b"different claims",
+            public_claims_snapshot=_public_claims_snapshot(commit),
+            expected_commit=commit,
+            expected_trust_policy_digest=_trust_digest(document),
+        )
+    with pytest.raises(FormatError, match="snapshot bytes"):
+        evaluate_launch_bundle(
+            bundle,
+            artifact_manifest=manifest,
+            claims_register=claims,
+            public_claims_snapshot=_public_claims_snapshot(commit, ready=False),
             expected_commit=commit,
             expected_trust_policy_digest=_trust_digest(document),
         )
@@ -757,6 +886,7 @@ def test_candidate_and_external_trust_pins_fail_closed() -> None:
     for field, message in (
         ("evaluationReportDigest", "evaluation report digest drifted"),
         ("registryReadinessDigest", "Registry readiness digest drifted"),
+        ("publicClaimsSnapshotDigest", "public claims snapshot bytes do not match release"),
         ("rollbackTestDigest", "rollback receipt digest drifted"),
         ("incidentTestDigest", "incident receipt digest drifted"),
     ):

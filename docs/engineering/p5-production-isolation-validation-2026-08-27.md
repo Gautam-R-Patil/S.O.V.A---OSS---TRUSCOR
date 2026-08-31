@@ -101,12 +101,12 @@ that measured host remain external P5 gates.
 |---|---|
 | Focused privileged-worker boundary | `79 passed`; selected combined statement/branch coverage `96.20%` |
 | Focused Ruff and strict mypy | passed |
-| Full repository suite | `2,644 passed, 30 skipped in 498.58s`; zero failed |
-| Combined statement/branch coverage | `95.12%`; mandatory 95% gate passed |
-| Full Ruff format and lint | `733 files already formatted`; all checks passed |
+| Full repository suite | `2,646 passed, 30 skipped in 492.88s`; zero failed |
+| Combined statement/branch coverage | `95.11%`; mandatory 95% gate passed |
+| Full Ruff format and lint | `734 files already formatted`; all checks passed |
 | Full strict mypy | no issues in 534 source files |
 | CLI parser-to-handler execution audit | `149/149`; no unexecuted command |
-| Wheel and source distribution | built `sova_oss-0.1.0a0`; all 60 schemas, including all 14 P5 worker/Firecracker schemas, are present in both artifacts |
+| Wheel and source distribution | built `sova_oss-0.1.0a0`; all 61 schemas, including all 14 P5 worker/Firecracker schemas, are present in both artifacts |
 | Rust mediator unit/lint gate | `11 passed`; Rust 1.88.0 format and strict Clippy passed |
 | Rust mediator advisory gate | `cargo-audit 0.22.2` scanned 58 locked dependencies against 1,233 loaded RustSec advisories; zero findings and no ignores |
 | Rust mediator artifact gate | 953,392-byte stripped static PIE; isolated builds were byte-identical; WSL denied-flow receipt passed the Python controller validator |

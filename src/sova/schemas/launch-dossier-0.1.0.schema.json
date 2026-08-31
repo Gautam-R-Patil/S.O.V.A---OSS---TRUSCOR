@@ -2,13 +2,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sova.dev/schemas/launch-dossier-0.1.0.schema.json",
   "type": "object",
-  "required": ["artifactType", "schemaVersion", "releaseCommit", "artifactManifestDigest", "claimsRegisterDigest", "bundleDigest", "trustPolicyDigest", "protocolDigest", "observationLedgerDigest", "evaluationReportDigest", "registryPolicyDigest", "registryReadinessDigest", "releaseCandidateDigest", "releaseGateLedgerDigest", "trustedSignerKeyIds", "receiptCounts", "sourceBindings", "gateReceipts", "evaluationSummary", "registrySummary", "reviewSummary", "externalGates", "holdReasons", "status", "tagOrPublishAllowed", "automaticPublishPerformed", "claims", "contentDigest"],
+  "required": ["artifactType", "schemaVersion", "releaseCommit", "artifactManifestDigest", "claimsRegisterDigest", "publicClaimsSnapshotDigest", "bundleDigest", "trustPolicyDigest", "protocolDigest", "observationLedgerDigest", "evaluationReportDigest", "registryPolicyDigest", "registryReadinessDigest", "releaseCandidateDigest", "releaseGateLedgerDigest", "trustedSignerKeyIds", "receiptCounts", "sourceBindings", "gateReceipts", "evaluationSummary", "registrySummary", "reviewSummary", "externalGates", "holdReasons", "status", "tagOrPublishAllowed", "automaticPublishPerformed", "claims", "contentDigest"],
   "properties": {
     "artifactType": {"const": "sova.launch-dossier"},
     "schemaVersion": {"const": "0.1.0"},
     "releaseCommit": {"type": "string", "minLength": 1},
     "artifactManifestDigest": {"$ref": "#/$defs/digest"},
     "claimsRegisterDigest": {"$ref": "#/$defs/digest"},
+    "publicClaimsSnapshotDigest": {"$ref": "#/$defs/digest"},
     "bundleDigest": {"$ref": "#/$defs/digest"},
     "trustPolicyDigest": {"$ref": "#/$defs/digest"},
     "protocolDigest": {"$ref": "#/$defs/digest"},
@@ -35,11 +36,12 @@
     },
     "sourceBindings": {
       "type": "object",
-      "required": ["expectedCommit", "artifactManifest", "claimsRegister", "trustPolicyPinned", "protocol", "evaluationReport", "registryReadiness", "signedEvidence"],
+      "required": ["expectedCommit", "artifactManifest", "claimsRegister", "publicClaimsSnapshot", "trustPolicyPinned", "protocol", "evaluationReport", "registryReadiness", "signedEvidence"],
       "properties": {
         "expectedCommit": {"const": true},
         "artifactManifest": {"const": true},
         "claimsRegister": {"const": true},
+        "publicClaimsSnapshot": {"const": true},
         "trustPolicyPinned": {"const": true},
         "protocol": {"const": true},
         "evaluationReport": {"const": true},
@@ -96,12 +98,13 @@
     },
     "externalGates": {
       "type": "object",
-      "required": ["p5ProductionIsolation", "blindedFieldValidation", "registryLiveBeta", "deterministicReleaseChecks", "blindedResultsPublic", "limitationsPublic"],
+      "required": ["p5ProductionIsolation", "blindedFieldValidation", "registryLiveBeta", "deterministicReleaseChecks", "publicClaimsReconciled", "blindedResultsPublic", "limitationsPublic"],
       "properties": {
         "p5ProductionIsolation": {"type": "boolean"},
         "blindedFieldValidation": {"type": "boolean"},
         "registryLiveBeta": {"type": "boolean"},
         "deterministicReleaseChecks": {"type": "boolean"},
+        "publicClaimsReconciled": {"type": "boolean"},
         "blindedResultsPublic": {"type": "boolean"},
         "limitationsPublic": {"type": "boolean"}
       },

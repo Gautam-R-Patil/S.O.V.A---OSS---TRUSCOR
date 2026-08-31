@@ -68,6 +68,7 @@ _SCHEMA_FILES = {
     "sova.registry-beta-readiness": "registry-beta-readiness-0.1.0.schema.json",
     "sova.release-gate-ledger": "release-gate-ledger-0.1.0.schema.json",
     "sova.release-candidate": "release-candidate-0.1.0.schema.json",
+    "sova.public-claims-snapshot": "public-claims-snapshot-0.1.0.schema.json",
     "sova.registry-operational-receipt": "registry-operational-receipt-0.1.0.schema.json",
     "sova.release-review-receipt": "release-review-receipt-0.1.0.schema.json",
     "sova.launch-trust-policy": "launch-trust-policy-0.1.0.schema.json",

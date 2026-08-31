@@ -23,6 +23,11 @@ human text or HTML artifact is the command's purpose.
 | Final-mile acceptance | `acceptance run`, `acceptance evaluate`, `acceptance template` |
 | Authorized targets | `target profile-create`, `target profile-validate`, `target intake`, `target browser-kit`, `target template`, `target validate`, `target plan`, `target fixture`, `target challenge`, `target prove`, `detonate owned-web-fixture`, `detonate owned-software-fixture`, `detonate browser`, `detonate software`, `hunt owned-web-fixture`, `hunt browser`, `hunt agent-browser`, `hunt adaptive-browser` |
 
+`release dossier` requires the exact canonical `sova.public-claims-snapshot`
+between the claims-register and destination arguments. The snapshot covers the
+README, documentation, demo, website, paper, Registry, and release-note surfaces;
+one held or unreviewed surface keeps the release verdict on hold.
+
 `sova target profile-create` binds one or more target kinds, inert entry points,
 and content-addressed supplied materials into a secret-free composite profile.
 `profile-validate` checks the portable contract without loading target materials.

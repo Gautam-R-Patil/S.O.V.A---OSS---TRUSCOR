@@ -436,6 +436,7 @@ def build_parser() -> argparse.ArgumentParser:  # noqa: PLR0915
     release_dossier.add_argument("bundle", type=_path)
     release_dossier.add_argument("artifact_manifest", type=_path)
     release_dossier.add_argument("claims_register", type=_path)
+    release_dossier.add_argument("public_claims_snapshot", type=_path)
     release_dossier.add_argument("destination", type=_path)
     release_dossier.add_argument("--expected-commit", required=True)
     release_dossier.add_argument("--expected-trust-policy-digest", required=True)
@@ -2879,6 +2880,11 @@ def _release_dossier(args: argparse.Namespace) -> int:
         ),
         claims_register=_release_dossier_input(
             args.claims_register, "claims register", maximum_bytes=16 * 1024 * 1024
+        ),
+        public_claims_snapshot=_release_dossier_input(
+            args.public_claims_snapshot,
+            "public claims snapshot",
+            maximum_bytes=4 * 1024 * 1024,
         ),
         expected_commit=str(args.expected_commit),
         expected_trust_policy_digest=str(args.expected_trust_policy_digest),

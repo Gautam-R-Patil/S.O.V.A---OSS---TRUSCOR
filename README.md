@@ -758,7 +758,7 @@ sova release verify-checksums ./dist ./dist/SHA256SUMS
 sova release keygen ./private.key ./public.key
 sova release sign-evidence ./receipt.json ./private.key ./public.key ./receipt.dsse.json
 sova release assemble-evidence ./trust-policy.json ./protocol.json ./observations.dsse.json ./registry-policy.json ./candidate.json ./launch-bundle.json --operational-receipt ./operation.dsse.json --review-receipt ./review.dsse.json --gate-receipt ./gate.dsse.json
-sova release dossier ./launch-bundle.json ./dist/SHA256SUMS ./docs/research/claims-register.md ./launch-dossier.json --expected-commit COMMIT --expected-trust-policy-digest sha256:...
+sova release dossier ./launch-bundle.json ./dist/SHA256SUMS ./docs/research/claims-register.md ./public-claims-snapshot.json ./launch-dossier.json --expected-commit COMMIT --expected-trust-policy-digest sha256:...
 sova conformance export ./sova-conformance-0.1.zip
 sova conformance verify ./sova-conformance-0.1.zip
 

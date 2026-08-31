@@ -37,27 +37,28 @@ secure, or independently validated beyond the stated boundary.
   exact dedicated Linux/KVM Firecracker and independent-review exit gates remain
   open. P6 machinery is locally accepted while all live field, production,
   external-review, and publication gates remain open.
-- The current public regression collected 2,674 tests: 2,644 passed, 30
+- The current public regression collected 2,676 tests: 2,646 passed, 30
   capability-gated lanes skipped, zero failed, and combined statement/branch
-  coverage reached 95.12%. The focused privileged P5 boundary passed 79 tests at
+  coverage reached 95.11%. The focused privileged P5 boundary passed 79 tests at
   96.20% selected combined statement/branch coverage.
-- Ruff format/lint passed across 733 files; strict mypy passed across 534 source
+- Ruff format/lint passed across 734 files; strict mypy passed across 534 source
   and test files; parser-to-handler execution passed 149/149 commands; repository
   policy and public-boundary checks passed.
 - The strict OSV dependency audit found no known vulnerabilities. The ten runtime
   dependency components declare Apache-2.0, BSD-3-Clause, MIT, MIT-0, or PSF-2.0
   compatible expressions in installed metadata.
 - Two source/wheel builds with the same source epoch were byte-identical. Both
-  contain all 60 package schemas, including the P5 host/network and P6 work-order
-  contracts, and an isolated wheel environment installed 11 packages and returned
+  contain all 61 package schemas, including the P5 host/network, P6 work-order,
+  and public-claims snapshot contracts. An isolated wheel environment installed
+  11 packages and returned
   `sova 0.1.0a0`. Exact artifact digests belong in the external candidate
   checksum/provenance record because this document is itself included in the
   sdist. A release commit and hosted provenance receipt remain mandatory.
 - Runtime SBOM generation and offline exact-membership checksum verification
   passed. Hosted provenance attestation remains an exact-final-commit release
   gate and is not replaced by these local receipts.
-- Two consecutive P6 acceptance runs produced
-  `sha256:7d2486d1b71e757a526760fbc381a9735cae7d950752c4a2242f7c020fbc4187`.
+- The current deterministic P6 acceptance run produced
+  `sha256:88f2b6c3aa1186cff26da44243a3f2727f6d111924d92d85dfb08262ceba9e70`.
   That receipt explicitly reports no live provider execution, blinded field
   targets, strongest-baseline result, public Registry, external reviews, tag, or
   publication.
@@ -74,8 +75,10 @@ secure, or independently validated beyond the stated boundary.
   evidence, not unforgeability, non-repudiation, truth, or independent audit.
 - The separately hosted TRUSCOR website currently uses broader SOVA Engine,
   autonomous-testing, real-time rating, and actuarial language than this OSS
-  evidence set establishes. It requires separate founder, publication, legal,
-  and evidence review before P6-10 can close.
+  evidence set establishes. The P6 public-claims reconciliation packet provides
+  exact replacement copy, and the dossier now digest-binds all seven public
+  surfaces, but the live site still requires founder, publication, legal, and
+  evidence review before P6-10 can close.
 - External review, a public deployment, a founder-selected production target,
   and unavailable host isolation features remain external gates rather than
   percentages disguised as completed engineering.

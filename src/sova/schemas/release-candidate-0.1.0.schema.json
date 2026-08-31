@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sova.dev/schemas/release-candidate-0.1.0.schema.json",
   "type": "object",
-  "required": ["artifactType", "schemaVersion", "releaseCommit", "artifactManifestDigest", "evaluationReportDigest", "registryReadinessDigest", "claimsRegisterDigest", "rollbackTestDigest", "incidentTestDigest", "blindedResultsPublic", "limitationsPublic"],
+  "required": ["artifactType", "schemaVersion", "releaseCommit", "artifactManifestDigest", "evaluationReportDigest", "registryReadinessDigest", "claimsRegisterDigest", "publicClaimsSnapshotDigest", "rollbackTestDigest", "incidentTestDigest", "blindedResultsPublic", "limitationsPublic"],
   "properties": {
     "artifactType": {"const": "sova.release-candidate"},
     "schemaVersion": {"const": "0.1.0"},
@@ -11,6 +11,7 @@
     "evaluationReportDigest": {"$ref": "#/$defs/digest"},
     "registryReadinessDigest": {"$ref": "#/$defs/digest"},
     "claimsRegisterDigest": {"$ref": "#/$defs/digest"},
+    "publicClaimsSnapshotDigest": {"$ref": "#/$defs/digest"},
     "rollbackTestDigest": {"$ref": "#/$defs/digest"},
     "incidentTestDigest": {"$ref": "#/$defs/digest"},
     "blindedResultsPublic": {"type": "boolean"},

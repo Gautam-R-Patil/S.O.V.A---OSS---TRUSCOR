@@ -178,6 +178,7 @@ def _release(
         evaluation_report_digest=evaluation_digest,
         registry_readiness_digest=registry_digest,
         claims_register_digest=_digest("synthetic-claims-register"),
+        public_claims_snapshot_digest=_digest("synthetic-public-claims-snapshot"),
         rollback_test_digest=_digest("synthetic-rollback"),
         incident_test_digest=_digest("synthetic-incident"),
         blinded_results_public=False,
@@ -220,6 +221,7 @@ def build_acceptance_receipt() -> dict[str, Any]:
         blinded_field_validation_passed=False,
         registry_live_ready=False,
         deterministic_release_checks_passed=True,
+        public_claims_reconciled=False,
     )
     validate_document(release)
     receipt: dict[str, Any] = {
@@ -258,7 +260,7 @@ def build_acceptance_receipt() -> dict[str, Any]:
             "P6-07": "operations-policy-and-local-backup-passed-live-beta-required",
             "P6-08": "exact-final-commit-release-validation-required",
             "P6-09": "five-real-review-receipts-required",
-            "P6-10": "claims-reconciliation-required",
+            "P6-10": "exact-claims-binding-passed-live-reconciliation-required",
             "P6-11": "publication-held",
         },
     }

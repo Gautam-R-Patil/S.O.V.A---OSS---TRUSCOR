@@ -45,6 +45,7 @@ def _candidate() -> ReleaseCandidate:
         evaluation_report_digest=digest("evaluation-report"),
         registry_readiness_digest=digest("registry-readiness"),
         claims_register_digest=digest("claims-register"),
+        public_claims_snapshot_digest=digest("public-claims-snapshot"),
         rollback_test_digest=digest("rollback-test"),
         incident_test_digest=digest("incident-test"),
         blinded_results_public=True,
@@ -125,6 +126,7 @@ def test_release_ledger_stays_on_hold_without_real_external_gates() -> None:
         blinded_field_validation_passed=False,
         registry_live_ready=False,
         deterministic_release_checks_passed=True,
+        public_claims_reconciled=False,
     )
     validate_document(report)
     assert report["status"] == "hold"
@@ -143,6 +145,7 @@ def test_release_ledger_can_be_ready_only_with_all_exact_real_receipts() -> None
         blinded_field_validation_passed=True,
         registry_live_ready=True,
         deterministic_release_checks_passed=True,
+        public_claims_reconciled=True,
     )
     assert report["status"] == "ready"
     assert report["tagOrPublishAllowed"] is True
@@ -155,6 +158,7 @@ def test_release_ledger_can_be_ready_only_with_all_exact_real_receipts() -> None
             blinded_field_validation_passed=True,
             registry_live_ready=True,
             deterministic_release_checks_passed=True,
+            public_claims_reconciled=True,
         )["contentDigest"]
         == report["contentDigest"]
     )
@@ -171,6 +175,7 @@ def test_release_ledger_rejects_duplicate_binding_and_nonindependent_review() ->
             blinded_field_validation_passed=True,
             registry_live_ready=True,
             deterministic_release_checks_passed=True,
+            public_claims_reconciled=True,
         )
     with pytest.raises(FormatError, match="another release commit"):
         evaluate_release_candidate(
@@ -180,6 +185,7 @@ def test_release_ledger_rejects_duplicate_binding_and_nonindependent_review() ->
             blinded_field_validation_passed=True,
             registry_live_ready=True,
             deterministic_release_checks_passed=True,
+            public_claims_reconciled=True,
         )
     nonindependent = tuple(
         replace(item, independent=False) if item.gate is ReviewGate.INDEPENDENT_TECHNICAL else item
@@ -192,6 +198,7 @@ def test_release_ledger_rejects_duplicate_binding_and_nonindependent_review() ->
         blinded_field_validation_passed=True,
         registry_live_ready=True,
         deterministic_release_checks_passed=True,
+        public_claims_reconciled=True,
     )
     assert report["status"] == "hold"
     assert report["independenceFailures"] == [ReviewGate.INDEPENDENT_TECHNICAL.value]
@@ -209,6 +216,7 @@ def test_release_ledger_rejects_duplicate_binding_and_nonindependent_review() ->
         blinded_field_validation_passed=True,
         registry_live_ready=True,
         deterministic_release_checks_passed=True,
+        public_claims_reconciled=True,
     )
     assert report["status"] == "hold"
     assert report["independenceFailures"] == [ReviewGate.INDEPENDENT_ISOLATION.value]

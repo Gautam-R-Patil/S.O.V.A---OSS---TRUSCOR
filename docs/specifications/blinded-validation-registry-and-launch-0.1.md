@@ -100,10 +100,18 @@ exercise remain mandatory.
 
 ## 7. Release gate
 
-The exact release commit and artifact manifest MUST receive separate founder,
+The exact release commit, artifact manifest, claims register, and canonical public
+claims snapshot MUST receive separate founder,
 independent technical, independent isolation, legal/licence/public-disclosure, and
 security receipts. Independent gates MUST identify independent reviewers. Every
 receipt MUST be real, non-synthetic, passing, and exact-artifact-bound.
+
+The public claims snapshot MUST cover exactly the README, documentation, demo,
+website, paper, Registry, and release-notes surfaces. Each surface binds its exact
+content digest, locator, review state, and limitations. Its derived readiness is
+true only when all seven surfaces are reviewed and reconciled. The release
+candidate and dossier bind the raw canonical snapshot bytes; a missing, changed,
+held, or wrong-commit snapshot keeps publication on hold.
 Receipt issuer and signature/trust-chain validation occurs before construction of
 these typed ledger records; the pure policy evaluator is not an identity provider
 or signature verifier and its unsigned JSON output is not an attestation.
@@ -117,9 +125,9 @@ evaluator MUST NOT itself push, tag, deploy, or publish.
 
 The operator-facing release path is `sova release dossier`. It MUST consume one
 strict, digest-bound launch bundle; the exact artifact-manifest bytes; the exact
-claims-register bytes; the expected release commit; and a launch-trust-policy
-digest obtained out of band. A trust policy carried only inside the evidence
-bundle is not a trust root.
+claims-register bytes; the exact canonical public-claims-snapshot bytes; the
+expected release commit; and a launch-trust-policy digest obtained out of band. A
+trust policy carried only inside the evidence bundle is not a trust root.
 
 The trust policy MUST bind the release commit, artifact-manifest digest, release-
 candidate digest, raw Ed25519 public keys, named principals, organizations, and

@@ -349,21 +349,25 @@ dossier are also implemented, together with distinct-role/independent-review tru
 separation and deterministic bundle assembly; they close the local
 aggregation/trust-verification gap but create no external receipt. Repository README, release-note,
 claims-register, and founder-matrix
-language has been reconciled, but P6-10 remains open because the separately hosted
-TRUSCOR website contains broader SOVA Engine claims and no release-controlled paper
-or public Registry surface exists in this checkout. P6-01 through P6-03, P6-05, and
+language has been reconciled. The
+[P6 public-claims reconciliation packet](./p6-public-claims-reconciliation-2026-08-31.md)
+now supplies exact replacement copy, and the release candidate/dossier binds a
+canonical seven-surface claims snapshot so drift or an unreviewed surface blocks
+publication. P6-10 remains open because the separately hosted TRUSCOR website has
+not been changed or approved and no release-controlled paper or public Registry
+surface exists in this checkout. P6-01 through P6-03, P6-05, and
 P6-07 through P6-11 remain open where
 they require the exact real preregistration, live providers/targets/baselines,
 production operator receipts, final-commit artifacts, independent/legal/security
 review, public results, or an explicitly authorized publication action.
 The recomputed dossier exposes those remaining states as sorted machine-readable
 hold reasons mapped to evaluation, Registry, review, and external-gate summaries.
-Current-tree validation passes `2,644` tests with `30` declared capability-gated
-skips and `95.12%` combined statement/branch coverage; all `149` CLI handlers,
+Current-tree validation passes `2,646` tests with `30` declared capability-gated
+skips and `95.11%` combined statement/branch coverage; all `149` CLI handlers,
 strict types, formatting, lint, dependency audit, acceptance, package-resource,
 reproducible-build, isolated-wheel, checksum, repository-policy, and public-boundary
 checks pass. The deterministic P6 acceptance receipt is
-`sha256:7d2486d1b71e757a526760fbc381a9735cae7d950752c4a2242f7c020fbc4187`
+`sha256:88f2b6c3aa1186cff26da44243a3f2727f6d111924d92d85dfb08262ceba9e70`
 and correctly keeps the P6 exit and publication gates false. These local receipts
 do not satisfy the unchecked real-provider, blinded-target, production Registry,
 independent-review, exact-release-provenance, or publication items above.

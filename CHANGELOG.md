@@ -27,6 +27,10 @@ have independent version ledgers.
 
 ### Added
 
+- Bound the exact README, documentation, demo, website, paper, Registry, and
+  release-note claim surfaces into the P6 release candidate and launch dossier.
+  A canonical snapshot with any held or unreviewed surface now blocks publication.
+
 - A signed exact-candidate launch dossier workflow with strict input/output
   schemas, Ed25519/DSSE receipt verification, nine role-scoped trust roots, an
   out-of-band trust-policy pin, recomputed evaluation/Registry/release ledgers,

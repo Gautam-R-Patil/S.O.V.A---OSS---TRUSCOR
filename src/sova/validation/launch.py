@@ -48,7 +48,11 @@ _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 _RFC3339_UTC = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
 _MAX_BUNDLE_BYTES = 32 * 1024 * 1024
 _MAX_BUNDLE_ITEMS = 500_000
+_MAX_PUBLIC_CLAIMS_BYTES = 4 * 1024 * 1024
 _RAW_ED25519_KEY_BYTES = 32
+_PUBLIC_CLAIM_SURFACES = frozenset(
+    {"readme", "documentation", "demo", "website", "paper", "registry", "release-notes"}
+)
 
 
 class LaunchRole(StrEnum):
@@ -675,6 +679,7 @@ def release_candidate_from_mapping(document: Mapping[str, Any]) -> ReleaseCandid
             "evaluationReportDigest",
             "registryReadinessDigest",
             "claimsRegisterDigest",
+            "publicClaimsSnapshotDigest",
             "rollbackTestDigest",
             "incidentTestDigest",
             "blindedResultsPublic",
@@ -695,6 +700,9 @@ def release_candidate_from_mapping(document: Mapping[str, Any]) -> ReleaseCandid
         ),
         claims_register_digest=_string(
             document.get("claimsRegisterDigest"), "claims register digest"
+        ),
+        public_claims_snapshot_digest=_string(
+            document.get("publicClaimsSnapshotDigest"), "public claims snapshot digest"
         ),
         rollback_test_digest=_string(document.get("rollbackTestDigest"), "rollback digest"),
         incident_test_digest=_string(document.get("incidentTestDigest"), "incident digest"),
@@ -1059,11 +1067,65 @@ def _launch_hold_reasons(
     return tuple(sorted(reasons))
 
 
-def evaluate_launch_bundle(
+def _read_public_claims_snapshot(
+    raw: bytes, *, expected_commit: str
+) -> tuple[dict[str, Any], bool]:
+    if len(raw) > _MAX_PUBLIC_CLAIMS_BYTES:
+        raise FormatError("SOVA-P6-PUBLIC-CLAIMS-SIZE", "public claims snapshot is too large")
+    value = strict_json_loads(
+        raw,
+        max_bytes=_MAX_PUBLIC_CLAIMS_BYTES,
+        max_items=10_000,
+        max_depth=32,
+    )
+    document = _object(value, "public claims snapshot")
+    validate_document(document, "sova.public-claims-snapshot")
+    if raw != canonical_json_bytes(document) + b"\n":
+        raise FormatError(
+            "SOVA-P6-PUBLIC-CLAIMS-CANONICAL",
+            "public claims snapshot must be canonical JSON with one trailing newline",
+        )
+    _verify_content_digest(document, "public claims snapshot")
+    if _string(document.get("releaseCommit"), "public claims release commit") != expected_commit:
+        raise FormatError(
+            "SOVA-P6-PUBLIC-CLAIMS-COMMIT",
+            "public claims snapshot binds another release commit",
+        )
+    surfaces = tuple(
+        _object(item, "public claim surface")
+        for item in _array(document.get("surfaces"), "public claim surfaces")
+    )
+    identifiers = tuple(_string(item.get("id"), "public claim surface id") for item in surfaces)
+    kinds = tuple(_string(item.get("kind"), "public claim surface kind") for item in surfaces)
+    if len(set(identifiers)) != len(identifiers) or len(set(kinds)) != len(kinds):
+        raise FormatError(
+            "SOVA-P6-PUBLIC-CLAIMS-SURFACE",
+            "public claim surface ids and kinds must be unique",
+        )
+    if set(kinds) != _PUBLIC_CLAIM_SURFACES:
+        raise FormatError(
+            "SOVA-P6-PUBLIC-CLAIMS-SURFACE",
+            "all seven public claim surfaces are required",
+        )
+    reconciled = all(
+        _string(item.get("status"), "public claim surface status") == "reconciled"
+        and _boolean(item.get("reviewed"), "public claim surface review marker")
+        for item in surfaces
+    )
+    if _boolean(document.get("publicClaimsReady"), "public claims readiness") != reconciled:
+        raise FormatError(
+            "SOVA-P6-PUBLIC-CLAIMS-DERIVED",
+            "public claims readiness does not match the surface records",
+        )
+    return document, reconciled
+
+
+def evaluate_launch_bundle(  # noqa: PLR0913 - external release bindings stay explicit
     bundle: LaunchEvidenceBundle,
     *,
     artifact_manifest: bytes,
     claims_register: bytes,
+    public_claims_snapshot: bytes,
     expected_commit: str,
     expected_trust_policy_digest: str,
 ) -> dict[str, Any]:
@@ -1071,6 +1133,10 @@ def evaluate_launch_bundle(
     _bind_release(bundle, expected_commit, expected_trust_policy_digest)
     manifest_digest = sha256_digest(artifact_manifest)
     claims_digest = sha256_digest(claims_register)
+    _, public_claims_reconciled = _read_public_claims_snapshot(
+        public_claims_snapshot, expected_commit=expected_commit
+    )
+    public_claims_digest = sha256_digest(public_claims_snapshot)
     if (
         bundle.candidate.artifact_manifest_digest != manifest_digest
         or bundle.trust_policy.artifact_manifest_digest != manifest_digest
@@ -1078,6 +1144,10 @@ def evaluate_launch_bundle(
         raise FormatError("SOVA-P6-LAUNCH-BINDING", "artifact manifest bytes do not match release")
     if bundle.candidate.claims_register_digest != claims_digest:
         raise FormatError("SOVA-P6-LAUNCH-BINDING", "claims register bytes do not match release")
+    if bundle.candidate.public_claims_snapshot_digest != public_claims_digest:
+        raise FormatError(
+            "SOVA-P6-LAUNCH-BINDING", "public claims snapshot bytes do not match release"
+        )
 
     observations, observation_ledger_digest, observation_key = _verify_observations(bundle)
     evaluation = evaluate_blinded_protocol(bundle.protocol, observations)
@@ -1115,6 +1185,7 @@ def evaluate_launch_bundle(
         ),
         registry_live_ready=bool(registry["liveBetaReady"]),
         deterministic_release_checks_passed=checks_passed is not None and checks_passed.passed,
+        public_claims_reconciled=public_claims_reconciled,
     )
     validate_document(release, "sova.release-gate-ledger")
     signer_keys = tuple(sorted({observation_key, *operation_keys, *review_keys, *gate_keys}))
@@ -1125,6 +1196,7 @@ def evaluate_launch_bundle(
         "releaseCommit": bundle.candidate.release_commit,
         "artifactManifestDigest": manifest_digest,
         "claimsRegisterDigest": claims_digest,
+        "publicClaimsSnapshotDigest": public_claims_digest,
         "bundleDigest": bundle.content_digest,
         "trustPolicyDigest": bundle.trust_policy.digest,
         "protocolDigest": bundle.protocol.digest,
@@ -1144,6 +1216,7 @@ def evaluate_launch_bundle(
             "expectedCommit": True,
             "artifactManifest": True,
             "claimsRegister": True,
+            "publicClaimsSnapshot": True,
             "trustPolicyPinned": True,
             "protocol": True,
             "evaluationReport": True,

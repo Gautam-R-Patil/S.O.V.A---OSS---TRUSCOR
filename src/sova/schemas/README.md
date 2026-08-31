@@ -59,6 +59,7 @@ evidence-aware capability-map report contract.
 - `evaluation-work-order-set-0.1.0.schema.json` — complete non-executing lane/target/repetition run queue
 - `registry-operational-receipt-0.1.0.schema.json` — exact-candidate production Registry control receipt
 - `release-candidate-0.1.0.schema.json` — release commit and artifact/claims digest binding
+- `public-claims-snapshot-0.1.0.schema.json` — exact seven-surface public wording review bound to a release
 - `release-review-receipt-0.1.0.schema.json` — role-scoped exact-candidate review decision
 - `launch-trust-policy-0.1.0.schema.json` — pinned signer roles, identities, keys, and candidate binding
 - `launch-gate-receipt-0.1.0.schema.json` — exact-environment isolation, field-study, or deterministic-check receipt
