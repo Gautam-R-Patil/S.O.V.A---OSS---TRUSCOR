@@ -23,6 +23,7 @@ from sova.validation import (
     ReviewReceipt,
     TargetClass,
     benchmark_adapter_catalog,
+    build_evaluation_work_orders,
     evaluate_blinded_protocol,
     evaluate_registry_beta,
     evaluate_release_candidate,
@@ -204,6 +205,8 @@ def _release(
 def build_acceptance_receipt() -> dict[str, Any]:
     protocol = _protocol()
     validate_document(protocol.to_mapping())
+    work_orders = build_evaluation_work_orders(protocol)
+    validate_document(work_orders)
     evaluation = evaluate_blinded_protocol(protocol, _observations(protocol))
     validate_document(evaluation)
     policy, operational_receipts = _registry()
@@ -227,6 +230,8 @@ def build_acceptance_receipt() -> dict[str, Any]:
         "targetClassCount": len(protocol.targets),
         "laneKinds": [item.value for item in LaneKind],
         "predeclaredRunCount": protocol.run_count,
+        "workOrderCount": len(work_orders["workOrders"]),
+        "workOrderSetDigest": work_orders["contentDigest"],
         "evaluationReportDigest": evaluation["contentDigest"],
         "registryReadinessDigest": registry["contentDigest"],
         "releaseGateLedgerDigest": release["contentDigest"],
@@ -242,7 +247,9 @@ def build_acceptance_receipt() -> dict[str, Any]:
             "allVulnerabilitiesFound": False,
         },
         "controls": {
-            "P6-01": "contract-passed-real-preregistration-required",
+            "P6-01": (
+                "freeze-and-complete-work-order-machinery-passed-real-preregistration-required"
+            ),
             "P6-02": "external-provider-runs-required",
             "P6-03": "owned-or-licensed-blinded-field-runs-required",
             "P6-04": "five-provenance-bound-adapter-contracts-passed",

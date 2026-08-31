@@ -44,8 +44,10 @@ to the guest identity.
 
 ## Firecracker boundary
 
-Protocol 0.1 pins Firecracker `1.16.1`. One exclusive host-allocated UID/GID slot
-and one microVM are used per hostile job. The compiler and lifecycle runner require:
+Protocol 0.1 pins Firecracker `1.16.1`. One exclusive host-allocated job UID/GID,
+one distinct mediator UID/GID, and one microVM are used per hostile job. Both
+numeric identities derive from disjoint policy-pinned bases plus the exclusively
+leased slot. The compiler and lifecycle runner require:
 
 - launch through `jailer`, cgroup v2, default seccomp level 2, a private network
   namespace, root-controlled chroot/CAS paths, and no host mounts;
@@ -80,7 +82,7 @@ is not a guest-workload verdict or finding.
 
 The checked-in lifecycle has not executed Firecracker on an exact dedicated host.
 Its contract is therefore implementation-ready, not production-validated. The
-exact jailer/VMM invocation, TAP/broker data plane, kernel behavior, containment,
+exact jailer/VMM invocation, TAP/broker behavior, kernel behavior, containment,
 and cleanup sequence must pass the P5-10 host suite before use.
 
 ## Network broker
@@ -92,6 +94,40 @@ an altered DNS set; unlisted endpoints; and exhausted connection, byte, or time
 budgets. Private targets are denied by default and require an explicit rule tied
 to the authorized target profile; loopback and link-local destinations cannot be
 enabled. Allowed and denied attempts emit content-addressed flow receipts.
+
+The executable host plane compiles one namespace per job. An isolated guest-side
+TAP `/30` and a separate mediator-uplink `/30` are allocated deterministically
+from `100.64.0.0/10` by the exclusive identity slot. The guest receives its exact
+address and `http://<broker>:8888` through kernel boot arguments. It receives no
+DNS resolver and no default path around that endpoint.
+
+Inside the namespace, nftables drops all forwarding. Only the policy-pinned exact
+per-job mediator UID may send through the uplink veth or return proxy traffic to the TAP.
+The Firecracker job UID therefore cannot gain egress by creating a raw socket in
+the shared namespace. Host nftables masquerades only the mediator `/32`, drops
+access from the job veth to host services, and permits established return traffic.
+The mediator runs through pinned `ip`, `nft`, and `setpriv` binaries, an exact
+unprivileged UID/GID, `no_new_privs`, and a canonical per-job policy. It writes
+only to a private per-job mediator-owned receipt directory below a search-only
+root-owned state directory. After stopping the mediator, the controller requires canonical,
+digest-valid, exact-job flow receipts with contiguous sequence numbers, binds their
+set digest into the network-plane receipt, and then removes the state. The network
+receipt records whether that state was removed; a false or missing result fails
+cleanup. The lifecycle receipt binds the network-plan and network-plane-receipt
+digests, and live admission rejects a missing or incomplete network receipt.
+
+Protocol 0.1 supports mediated HTTP, HTTPS CONNECT, WebSocket, and MCP-over-HTTP.
+It deliberately does not claim generic raw TCP/UDP support or transparent TLS
+content inspection. Adding either requires a new reviewed protocol and mediator,
+not a permissive firewall exception.
+
+Identity and address slots are guarded by root-controlled, `O_EXCL` persistent
+lease files. The worker reserves a slot before live prepare, releases it only after
+complete process, namespace, chroot, writable-layer, secret, and network cleanup,
+and deliberately retains a stale lease after crashes or incomplete evidence for
+operator recovery. A controller-supplied integer alone never establishes UID/GID
+exclusivity. Exact-host preflight also requires every configured job and mediator
+UID/GID in the reserved ranges to be absent from the host passwd/group databases.
 
 ## Secret broker
 
@@ -129,6 +165,8 @@ described as a microVM or as equivalent to the primary hostile-code boundary.
 
 P5 is not exited until the exact host kernel, microcode, Firecracker, jailer,
 guest kernel, root filesystem, worker policy, and advisory snapshot are measured;
-positive and all ten malicious-guest cases pass on that host; cleanup and
-attestation receipts are signed; and an independent isolation reviewer approves
-the same digests. No self-attestation can satisfy the independent-review field.
+the host-preflight receipt is green; the positive control and all ten
+malicious-guest cases pass on that host; every case binds live execution, network,
+raw evidence, and complete cleanup receipts; and an independent isolation reviewer
+approves the same digests. No self-attestation can satisfy the independent-review
+field.

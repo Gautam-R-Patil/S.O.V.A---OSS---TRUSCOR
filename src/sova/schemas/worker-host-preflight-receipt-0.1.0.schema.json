@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/worker-host-preflight-receipt-0.1.0.schema.json",
+  "title": "SOVA worker host preflight receipt 0.1.0",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "releaseCommit", "workerId", "measuredAt", "attestationDigest", "checks", "failedRequiredChecks", "status", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.worker-host-preflight-receipt"},
+    "schemaVersion": {"const": "0.1.0"},
+    "releaseCommit": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
+    "workerId": {"type": "string", "minLength": 1},
+    "measuredAt": {"type": "string", "format": "date-time"},
+    "attestationDigest": {"$ref": "#/$defs/digest"},
+    "checks": {"type": "array", "minItems": 13, "maxItems": 32, "items": {"type": "object", "required": ["name", "required", "passed", "evidence"], "properties": {"name": {"type": "string", "pattern": "^[a-z0-9-]+$"}, "required": {"type": "boolean"}, "passed": {"type": "boolean"}, "evidence": {"type": "string", "maxLength": 512}}, "additionalProperties": false}},
+    "failedRequiredChecks": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "status": {"enum": ["ready-for-live-matrix", "blocked"]},
+    "claims": {"type": "object", "required": ["selfMeasured", "liveFirecrackerExecuted", "exactHostMatrixPassed", "independentlyReviewed", "productionIsolationClaimAllowed", "escapeImpossible"], "properties": {"selfMeasured": {"const": true}, "liveFirecrackerExecuted": {"const": false}, "exactHostMatrixPassed": {"const": false}, "independentlyReviewed": {"const": false}, "productionIsolationClaimAllowed": {"const": false}, "escapeImpossible": {"const": false}}, "additionalProperties": false},
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "ready-for-live-matrix"}}, "required": ["status"]}, "then": {"properties": {"failedRequiredChecks": {"maxItems": 0}}}},
+    {"if": {"properties": {"status": {"const": "blocked"}}, "required": ["status"]}, "then": {"properties": {"failedRequiredChecks": {"minItems": 1}}}}
+  ],
+  "additionalProperties": false
+}

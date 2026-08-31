@@ -15,6 +15,8 @@ from sova.worker.brokers import SecretBroker
 from sova.worker.cas import ContentAddressedStore
 from sova.worker.contracts import assess_worker_attestation
 from sova.worker.firecracker import FirecrackerHostPolicy, WorkerCleanupReceipt
+from sova.worker.identity import IdentitySlotLeaseTable
+from sova.worker.network_plane import NetworkPlaneHostPolicy, NetworkPlaneReceipt
 from sova.worker.protocol import (
     ProtocolMessage,
     ProtocolMessageType,
@@ -91,6 +93,23 @@ def _context(tmp_path: Path, *, allow_nonproduction: bool = True) -> _Context:
         allow_nonproduction=allow_nonproduction,
     )
     return _Context(guest, controller, store, manifest, raw, policy, admission, service)
+
+
+def _network_policy(tmp_path: Path) -> NetworkPlaneHostPolicy:
+    return NetworkPlaneHostPolicy(
+        ip_binary=(tmp_path / "bin" / "ip").resolve(),
+        nft_binary=(tmp_path / "bin" / "nft").resolve(),
+        setpriv_binary=(tmp_path / "bin" / "setpriv").resolve(),
+        mediator_binary=(tmp_path / "bin" / "sova-network-mediator").resolve(),
+        state_directory=(tmp_path / "network-state").resolve(),
+        approved_ip_digest=digest("ip"),
+        approved_nft_digest=digest("nft"),
+        approved_setpriv_digest=digest("setpriv"),
+        approved_mediator_digest=digest("mediator"),
+        egress_interface="eth0",
+        mediator_uid_base=700_000,
+        mediator_gid_base=700_000,
+    )
 
 
 def _message(
@@ -247,3 +266,128 @@ def test_service_reconstructs_plan_before_lifecycle_execution(tmp_path: Path) ->
             backend=backend,
             secret_broker=SecretBroker(admitted.manifest),
         )
+
+    backend.live_execution = True
+    with pytest.raises(FormatError, match="compiled network-plane"):
+        context.service.execute_admitted_job(
+            admitted,
+            backend=backend,
+            secret_broker=SecretBroker(admitted.manifest),
+        )
+
+
+def test_service_rejects_live_execution_without_post_cleanup_network_receipt(
+    tmp_path: Path,
+) -> None:
+    context = _context(tmp_path)
+    context.service.network_policy = _network_policy(tmp_path)
+    lease_root = (tmp_path / "identity-leases").resolve()
+    lease_root.mkdir()
+    context.service.identity_leases = IdentitySlotLeaseTable(lease_root)
+    admitted = context.service.admit_signed_job(
+        envelope=sign_protocol_message(_message(context.raw), context.controller),
+        peer_certificate_der=CERTIFICATE,
+        raw_manifest=context.raw,
+        now=NOW,
+        identity_slot=5,
+    )
+    assert admitted.network_plan is not None
+    backend = Mock()
+    backend.live_execution = True
+    backend.network_evidence.return_value = (admitted.network_plan.digest, None)
+    backend.launch.return_value = 0
+    backend.wait_for_api_socket.return_value = True
+    backend.wait_for_process_id.return_value = 4242
+    backend.put_api.return_value = 204
+    backend.wait_for_process.return_value = 0
+    backend.cleanup.side_effect = lambda plan, completed_at, secret_broker_revoked: (
+        WorkerCleanupReceipt(
+            job_id=plan.job_id,
+            vm_id=plan.vm_id,
+            completed_at=completed_at,
+            process_terminated=True,
+            api_socket_removed=True,
+            cgroup_removed=True,
+            network_namespace_removed=True,
+            chroot_removed=True,
+            writable_layer_removed=True,
+            secret_broker_revoked=secret_broker_revoked,
+        )
+    )
+    with pytest.raises(FormatError, match="did not emit"):
+        context.service.execute_admitted_job(
+            admitted,
+            backend=backend,
+            secret_broker=SecretBroker(admitted.manifest),
+        )
+    assert (lease_root / "000005.lease").is_file()
+
+
+def test_service_releases_identity_slot_only_after_complete_live_network_evidence(
+    tmp_path: Path,
+) -> None:
+    context = _context(tmp_path)
+    context.service.network_policy = _network_policy(tmp_path)
+    lease_root = (tmp_path / "identity-leases").resolve()
+    lease_root.mkdir()
+    context.service.identity_leases = IdentitySlotLeaseTable(lease_root)
+    admitted = context.service.admit_signed_job(
+        envelope=sign_protocol_message(_message(context.raw), context.controller),
+        peer_certificate_der=CERTIFICATE,
+        raw_manifest=context.raw,
+        now=NOW,
+        identity_slot=6,
+    )
+    assert admitted.network_plan is not None
+    network_receipt = NetworkPlaneReceipt(
+        job_id=admitted.manifest.job_id,
+        vm_id=admitted.launch_plan.vm_id,
+        plan_digest=admitted.network_plan.digest,
+        completed_at="2026-08-27T10:00:30Z",
+        enabled=True,
+        namespace_created=True,
+        firewall_loaded=True,
+        mediator_started=True,
+        mediator_process_id=4243,
+        mediator_receipt_set_digest=digest("network-receipt-set"),
+        mediator_terminated=True,
+        host_rules_removed=True,
+        root_veth_removed=True,
+        namespace_removed=True,
+        state_removed=True,
+        failure_code=None,
+    )
+    network_digest = network_receipt.to_mapping()["contentDigest"]
+    backend = Mock()
+    backend.live_execution = True
+    backend.network_evidence.side_effect = (
+        (admitted.network_plan.digest, None),
+        (admitted.network_plan.digest, network_digest),
+    )
+    backend.network_receipt.return_value = network_receipt
+    backend.launch.return_value = 0
+    backend.wait_for_api_socket.return_value = True
+    backend.wait_for_process_id.return_value = 4242
+    backend.put_api.return_value = 204
+    backend.wait_for_process.return_value = 0
+    backend.cleanup.side_effect = lambda plan, completed_at, secret_broker_revoked: (
+        WorkerCleanupReceipt(
+            job_id=plan.job_id,
+            vm_id=plan.vm_id,
+            completed_at=completed_at,
+            process_terminated=True,
+            api_socket_removed=True,
+            cgroup_removed=True,
+            network_namespace_removed=True,
+            chroot_removed=True,
+            writable_layer_removed=True,
+            secret_broker_revoked=secret_broker_revoked,
+        )
+    )
+    result = context.service.execute_admitted_job(
+        admitted,
+        backend=backend,
+        secret_broker=SecretBroker(admitted.manifest),
+    )
+    assert result.network == network_receipt
+    assert not (lease_root / "000006.lease").exists()

@@ -32,10 +32,9 @@ def _digest_file(path: Path) -> str:
 
 
 def _root_owned(path: Path) -> bool:
-    try:
-        current = path.resolve(strict=True)
-    except OSError:
+    if not path.is_absolute() or ".." in path.parts:
         return False
+    current = path
     while True:
         try:
             stat_result = current.lstat()

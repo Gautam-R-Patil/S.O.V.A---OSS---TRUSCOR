@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/evaluation-work-order-set-0.1.0.schema.json",
+  "title": "SOVA evaluation work-order set 0.1.0",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "protocolDigest", "releaseCommit", "expectedRuns", "workOrders", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.evaluation-work-order-set"},
+    "schemaVersion": {"const": "0.1.0"},
+    "protocolDigest": {"$ref": "#/$defs/digest"},
+    "releaseCommit": {"type": "string", "minLength": 1},
+    "expectedRuns": {"type": "integer", "minimum": 32, "maximum": 100000},
+    "workOrders": {"type": "array", "minItems": 32, "maxItems": 100000, "items": {"$ref": "#/$defs/workOrder"}},
+    "claims": {"type": "object", "required": ["completeProtocolMatrixExpanded", "answerKeyEmbedded", "targetExecutionPerformed", "publicationPerformed"], "properties": {"completeProtocolMatrixExpanded": {"const": true}, "answerKeyEmbedded": {"const": false}, "targetExecutionPerformed": {"const": false}, "publicationPerformed": {"const": false}}, "additionalProperties": false},
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "budget": {"type": "object", "required": ["maximumActions", "maximumWallSeconds", "maximumInputBytes", "maximumOutputBytes", "maximumCostMicrousd"], "properties": {"maximumActions": {"type": "integer", "minimum": 1}, "maximumWallSeconds": {"type": "integer", "minimum": 1}, "maximumInputBytes": {"type": "integer", "minimum": 1}, "maximumOutputBytes": {"type": "integer", "minimum": 1}, "maximumCostMicrousd": {"type": "integer", "minimum": 0}}, "additionalProperties": false},
+    "lane": {"type": "object", "required": ["id", "kind", "provider", "model", "harness", "configurationDigest"], "properties": {"id": {"type": "string", "minLength": 1}, "kind": {"enum": ["candidate", "baseline", "scripted", "weak-model"]}, "provider": {"type": "string", "minLength": 1}, "model": {"type": "string", "minLength": 1}, "harness": {"type": "string", "minLength": 1}, "configurationDigest": {"$ref": "#/$defs/digest"}}, "additionalProperties": false},
+    "target": {"type": "object", "required": ["id", "targetClass", "inputDigest", "authorizationReceiptDigest", "sourceRevision", "licenseIdentifier", "containmentBackend"], "properties": {"id": {"type": "string", "minLength": 1}, "targetClass": {"enum": ["web", "api", "package", "oci", "network", "desktop", "ai-model-agent", "mcp-a2a"]}, "inputDigest": {"$ref": "#/$defs/digest"}, "authorizationReceiptDigest": {"$ref": "#/$defs/digest"}, "sourceRevision": {"type": "string", "minLength": 1}, "licenseIdentifier": {"type": "string", "minLength": 1}, "containmentBackend": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+    "workOrder": {"type": "object", "required": ["id", "protocolDigest", "laneId", "targetId", "repetition", "releaseCommit", "lane", "target", "derivedSeed", "budget", "controls"], "properties": {"id": {"type": "string", "pattern": "^run:[0-9a-f]{64}$"}, "protocolDigest": {"$ref": "#/$defs/digest"}, "laneId": {"type": "string", "minLength": 1}, "targetId": {"type": "string", "minLength": 1}, "repetition": {"type": "integer", "minimum": 0}, "releaseCommit": {"type": "string", "minLength": 1}, "lane": {"$ref": "#/$defs/lane"}, "target": {"$ref": "#/$defs/target"}, "derivedSeed": {"type": "integer", "minimum": 0, "maximum": 9007199254740991}, "budget": {"$ref": "#/$defs/budget"}, "controls": {"type": "object", "required": ["answerKeyAvailable", "automaticExecutionAuthorized", "automaticPublicationAuthorized"], "properties": {"answerKeyAvailable": {"const": false}, "automaticExecutionAuthorized": {"const": false}, "automaticPublicationAuthorized": {"const": false}}, "additionalProperties": false}}, "additionalProperties": false}
+  },
+  "additionalProperties": false
+}

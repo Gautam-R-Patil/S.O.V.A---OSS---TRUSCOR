@@ -50,6 +50,7 @@ from sova.validation.launch import (
     trust_policy_from_mapping,
 )
 from sova.validation.ledger import EvaluationObservation, evaluate_blinded_protocol
+from sova.validation.work_orders import build_evaluation_work_orders
 
 __all__ = [
     "LAUNCH_EVIDENCE_PAYLOAD_TYPE",
@@ -78,6 +79,7 @@ __all__ = [
     "TrustedLaunchPrincipal",
     "assemble_launch_bundle",
     "benchmark_adapter_catalog",
+    "build_evaluation_work_orders",
     "evaluate_blinded_protocol",
     "evaluate_launch_bundle",
     "evaluate_registry_beta",

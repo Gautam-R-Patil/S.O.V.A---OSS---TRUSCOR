@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/firecracker-network-plan-0.1.0.schema.json",
+  "title": "SOVA Firecracker network plan 0.1.0",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "jobId", "vmId", "manifestDigest", "launchPlanDigest", "enabled", "namespace", "devices", "addresses", "proxyPort", "firewallTables", "mediatorPolicy", "mediatorPolicyPath", "mediatorReceiptDirectory", "mediatorIdentity", "setupCommands", "mediatorCommand", "teardownCommands", "invariants", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.firecracker-network-plan"},
+    "schemaVersion": {"const": "0.1.0"},
+    "jobId": {"type": "string", "minLength": 1},
+    "vmId": {"type": "string", "pattern": "^[A-Za-z0-9_.-]{1,64}$"},
+    "manifestDigest": {"$ref": "#/$defs/digest"},
+    "launchPlanDigest": {"$ref": "#/$defs/digest"},
+    "enabled": {"type": "boolean"},
+    "namespace": {"type": "object", "required": ["name", "path"], "properties": {"name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]{1,64}$"}, "path": {"type": "string", "minLength": 1}}, "additionalProperties": false},
+    "devices": {"type": "object", "required": ["tap", "rootVeth", "namespaceVeth"], "properties": {"tap": {"$ref": "#/$defs/interfaceOrNull"}, "rootVeth": {"$ref": "#/$defs/interfaceOrNull"}, "namespaceVeth": {"$ref": "#/$defs/interfaceOrNull"}}, "additionalProperties": false},
+    "addresses": {"type": "object", "required": ["guest", "broker", "rootUplink", "mediatorUplink"], "properties": {"guest": {"$ref": "#/$defs/cidrOrNull"}, "broker": {"$ref": "#/$defs/cidrOrNull"}, "rootUplink": {"$ref": "#/$defs/cidrOrNull"}, "mediatorUplink": {"$ref": "#/$defs/cidrOrNull"}}, "additionalProperties": false},
+    "proxyPort": {"type": ["integer", "null"], "minimum": 1024, "maximum": 65535},
+    "firewallTables": {"type": "object", "required": ["namespaceFilter", "hostFilter", "hostNat"], "properties": {"namespaceFilter": {"type": "string", "pattern": "^[A-Za-z0-9_]{1,32}$"}, "hostFilter": {"type": ["string", "null"], "pattern": "^[A-Za-z0-9_]{1,32}$"}, "hostNat": {"type": ["string", "null"], "pattern": "^[A-Za-z0-9_]{1,32}$"}}, "additionalProperties": false},
+    "mediatorPolicy": {"type": ["object", "null"]},
+    "mediatorPolicyPath": {"type": ["string", "null"]},
+    "mediatorReceiptDirectory": {"type": ["string", "null"]},
+    "mediatorIdentity": {"oneOf": [{"$ref": "#/$defs/mediatorIdentity"}, {"type": "null"}]},
+    "setupCommands": {"type": "array", "minItems": 3, "maxItems": 32, "items": {"$ref": "#/$defs/command"}},
+    "mediatorCommand": {"oneOf": [{"type": "array", "minItems": 1, "items": {"type": "string"}}, {"type": "null"}]},
+    "teardownCommands": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/$defs/command"}},
+    "invariants": {"type": "object", "required": ["ambientGuestNatAllowed", "guestForwardingAllowed", "guestDnsAllowed", "mediatorOnlyEgress", "rawTcpUdpSupported", "shellCommandsAllowed"], "properties": {"ambientGuestNatAllowed": {"const": false}, "guestForwardingAllowed": {"const": false}, "guestDnsAllowed": {"const": false}, "mediatorOnlyEgress": {"const": true}, "rawTcpUdpSupported": {"const": false}, "shellCommandsAllowed": {"const": false}}, "additionalProperties": false},
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "interfaceOrNull": {"type": ["string", "null"], "pattern": "^[A-Za-z0-9_.-]{1,15}$"},
+    "cidrOrNull": {"type": ["string", "null"], "pattern": "^[0-9.]+/30$"},
+    "mediatorIdentity": {"type": "object", "required": ["uid", "gid", "uniquePerJob"], "properties": {"uid": {"type": "integer", "minimum": 700000, "maximum": 2000000}, "gid": {"type": "integer", "minimum": 700000, "maximum": 2000000}, "uniquePerJob": {"const": true}}, "additionalProperties": false},
+    "command": {"type": "object", "required": ["argv", "stdin", "stdinDigest"], "properties": {"argv": {"type": "array", "minItems": 1, "items": {"type": "string"}}, "stdin": {"type": ["string", "null"]}, "stdinDigest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]}}, "additionalProperties": false}
+  },
+  "allOf": [
+    {"if": {"properties": {"enabled": {"const": true}}, "required": ["enabled"]}, "then": {"properties": {"proxyPort": {"type": "integer"}, "mediatorPolicy": {"type": "object"}, "mediatorPolicyPath": {"type": "string"}, "mediatorReceiptDirectory": {"type": "string"}, "mediatorIdentity": {"type": "object"}, "mediatorCommand": {"type": "array"}}}},
+    {"if": {"properties": {"enabled": {"const": false}}, "required": ["enabled"]}, "then": {"properties": {"proxyPort": {"type": "null"}, "mediatorPolicy": {"type": "null"}, "mediatorPolicyPath": {"type": "null"}, "mediatorReceiptDirectory": {"type": "null"}, "mediatorIdentity": {"type": "null"}, "mediatorCommand": {"type": "null"}}}}
+  ],
+  "additionalProperties": false
+}

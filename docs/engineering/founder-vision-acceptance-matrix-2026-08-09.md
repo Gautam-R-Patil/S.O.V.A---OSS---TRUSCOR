@@ -1,6 +1,6 @@
 <!-- status: experiment -->
 
-# Founder-vision acceptance matrix — updated 2026-08-27
+# Founder-vision acceptance matrix — updated 2026-08-31
 
 This is the controlling gap ledger for the requested whole-product validation.
 “Implemented” means a real acceptance path exists; it never means universal,
@@ -15,7 +15,7 @@ secure, or independently validated beyond the stated boundary.
 | Authorized website execution | `arena explore-web` gives a provider—or, on a registered attested live gVisor host, a conforming OCI planner—successive secret-redacted accessibility snapshots and lets it propose typed plans across navigation, history, forms, pointer/keyboard, drag, modal, and bounded-tab workflows. Proposed refs are bound to exactly one currently observed control and compatible accessibility role; conflicting locators and visible no-op retyping fail before execution with bounded repair context. Each admitted UI boundary is recorded in signed traces, deterministic success must reproduce from reset, and installed Chrome has passed the strengthened controlled-fixture multi-page/video/replay lane. Allowed-origin request filtering and post-action drift detection do not claim a process-network or VM egress sandbox | Working, bounded; all-nine mission documents passed static preflight. The local Qwen v10 Challenge 1 run autonomously selected the successful reviewed seed and SOVA's deterministic unique-submit recovery exposed the real flag in signed evidence. The corrected v16 recorded-source regression then bound that sealed action to a fresh control, passed the same flag oracle, reset AI Goat, rebound both actions to independently observed fresh controls, reproduced the finding, and packaged verified trace/capsule/video/replay evidence. This proves Challenge 1 only; provider-backed all-nine and live OCI planning remain unproven | The prepared nine-challenge AI Goat provider campaign passes, including Knowledge Base Challenges 3, 7, and 8, with verified capsules and duration-bounded decisive replay cues |
 | Consequential UI workflows | The resettable browser action lab visibly creates a disposable file, transfers mail through loopback SMTP, posts a message to a loopback sink, changes a disposable setting, independently verifies every effect, reproduces them, and packages video, signed traces, replay, and a registry-ready module | Working contained vertical | New real service families require their own declared adapters, substitute accounts, proof of control, effect sensors, and exact authorization; this fixture is not authority over arbitrary real accounts |
 | Arbitrary desktop-software UI testing | `engine run-software` launches separately owned primary/reproduction applications in disposable workspaces, binds every computer action to the exact measured process generation and HWND, dynamically discovers only visible enabled child controls, and verifies observed effects through deterministic workspace/UI projections. Fresh Windows acceptance passed click, a changing two-screen workflow, bounded typing, save, exact-window recording, decisive replay, portable reproduction, and cleanup | Working controlled Windows vertical; arbitrary-app and cross-platform compatibility unproven | A second independently implemented adapter and each supported OS pass the same fixture-owned click/type/save, cancellation, timeout, recovery, exact-window evidence, and fresh-reproduction suite |
-| Strong untrusted-agent isolation | P5 implements immutable controller/worker jobs, TLS 1.3 mutual-authentication contexts, certificate-bound signed messages, content-addressed inputs, exact network and secret brokers, controller-side hostile-evidence validation, cleanup/attestation/lifecycle receipts, and an exact Firecracker 1.16.1 launch compiler plus root-only Unix-API/pidfd/watchdog lifecycle. Kata is disabled pending review and gVisor remains a lower-assurance compatibility backend | Local policy, protocol, broker, lifecycle, adverse-input, and deterministic acceptance tests pass; no hostile job has run on an exact dedicated Linux/KVM worker and no independent isolation review exists | Provision and patch the dedicated worker, execute the live Firecracker and malicious-guest matrix against the exact kernel/microcode/VMM/policy/image set, verify cleanup, and obtain independent review |
+| Strong untrusted-agent isolation | P5 implements immutable controller/worker jobs, TLS 1.3 mutual-authentication contexts, certificate-bound signed messages, content-addressed inputs, exact network and secret brokers, disjoint per-job job/mediator UID/GID ranges, controller-side hostile-evidence validation, cleanup/attestation/lifecycle receipts, state-removal proof, and an exact Firecracker 1.16.1 launch compiler plus root-only Unix-API/pidfd/watchdog lifecycle. Kata is disabled pending review and gVisor remains a lower-assurance compatibility backend | Local policy, protocol, broker, lifecycle, adverse-input, and deterministic acceptance tests pass; no hostile job has run on an exact dedicated Linux/KVM worker and no independent isolation review exists | Provision and patch the dedicated worker, execute the live Firecracker and malicious-guest matrix against the exact kernel/microcode/VMM/policy/image set, verify cleanup, and obtain independent review |
 | Arbitrary third-party agents | On that admitted live gVisor boundary, `sova agent conform-oci`, `arena agent-run`, and `arena explore-web` can conditionally accept the strict `describe`/`self-test`/`respond` JSON protocol. Agents return messages or typed plans and never receive raw browser, target, host, or approval authority | Working contract and mandatory tests; live third-party image pending | Independently built digest-pinned agents pass signed conformance and controlled Arena experiments on a registered `runsc` host |
 | Persistent authenticated browser sessions | Opaque target-bound profile vault, cross-process exclusive leases, bounded stale recovery, manual headful login/CAPTCHA handoff, campaign integration, graceful shutdown, and an installed-Chrome two-process persistence proof pass without profile handle/path/cookie material entering traces or reports | Working, bounded | Founder-selected control-proven site login is completed manually, survives restart, and passes an authorized campaign without scope drift; site-specific compatibility remains external |
 | Broad computer-use execution | The dependency-free native Windows adapter now passes exact-HWND discovery plus real `computer.click` and `computer.type` mutation over owned click, changing-screen, and type/save fixtures. MELRA capability probes and the CUA read lane remain optional adapters whose provider-output/effectful conformance is not promoted to independent proof | Working, bounded; one mutation-capable adapter proven | At least two independently implemented adapters pass the same fixture-owned action/effect conformance suite |
@@ -31,25 +31,25 @@ secure, or independently validated beyond the stated boundary.
 | Independent causal validation | A strict three-phase blinded protocol separates label-free tasks, frozen predictions, and commitment-checked scoring; schemas, stochastic nondeterministic fixtures, Wilson intervals, abstention metrics, DSSE reviewer-key pins, tamper rejection, and predeclared gates pass | Working protocol; external study pending | A separately governed reviewer and real nondeterministic ground-truth dataset pass predeclared thresholds with intervention-fidelity review; a key signature alone never proves reviewer identity or independence |
 | Community deployment | Signed local/offline registry, staging/verification service, health contract, and hardened TLS deployment blueprint with mandatory immutable-image preflight, exact resolved-image equality, external operator-input validation/protected staging, and persistent-volume ownership repair exist | Blueprint/preflight test-validated; not hosted or production deployed | Operator completes the production controls listed above and independently security-reviews a public service; SOVA never silently uploads |
 
-## Final bounded-launch gate snapshot — 2026-08-28
+## Final bounded-launch gate snapshot — 2026-08-31
 
 - P4 is implementation-complete. P5 is locally implementation-complete but its
   exact dedicated Linux/KVM Firecracker and independent-review exit gates remain
   open. P6 machinery is locally accepted while all live field, production,
   external-review, and publication gates remain open.
-- The current public regression collected 2,604 tests: 2,574 passed, 30
+- The current public regression collected 2,664 tests: 2,634 passed, 30
   capability-gated lanes skipped, zero failed, and combined statement/branch
-  coverage reached 95.14%. Focused P6 and Registry-backup coverage is 97.72%
-  across 54 passing tests.
-- Ruff format/lint passed across 714 files; strict mypy passed across 516 source
+  coverage reached 95.15%. The focused privileged P5 boundary passed 79 tests at
+  96.20% selected combined statement/branch coverage.
+- Ruff format/lint passed across 732 files; strict mypy passed across 534 source
   and test files; parser-to-handler execution passed 148/148 commands; repository
-  policy and public-boundary checks each passed across 864 files.
+  policy and public-boundary checks passed.
 - The strict OSV dependency audit found no known vulnerabilities. The ten runtime
   dependency components declare Apache-2.0, BSD-3-Clause, MIT, MIT-0, or PSF-2.0
   compatible expressions in installed metadata.
 - Two source/wheel builds with the same source epoch were byte-identical. Both
-  contain all thirteen P6 and launch schemas plus both P5 Firecracker schemas,
-  and an isolated wheel environment installed 11 packages and returned
+  contain all 59 package schemas, including the P5 host/network and P6 work-order
+  contracts, and an isolated wheel environment installed 11 packages and returned
   `sova 0.1.0a0`. Exact artifact digests belong in the external candidate
   checksum/provenance record because this document is itself included in the
   sdist. A release commit and hosted provenance receipt remain mandatory.
@@ -57,7 +57,7 @@ secure, or independently validated beyond the stated boundary.
   passed. Hosted provenance attestation remains an exact-final-commit release
   gate and is not replaced by these local receipts.
 - Two consecutive P6 acceptance runs produced
-  `sha256:18d8806803330b3f81a56488005eb4813ba702ec56f1fd710d9114d5c3febf6b`.
+  `sha256:7d2486d1b71e757a526760fbc381a9735cae7d950752c4a2242f7c020fbc4187`.
   That receipt explicitly reports no live provider execution, blinded field
   targets, strongest-baseline result, public Registry, external reviews, tag, or
   publication.

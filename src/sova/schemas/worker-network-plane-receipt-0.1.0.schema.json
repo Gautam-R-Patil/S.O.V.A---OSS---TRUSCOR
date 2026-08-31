@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/worker-network-plane-receipt-0.1.0.schema.json",
+  "title": "SOVA worker network-plane receipt 0.1.0",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "jobId", "vmId", "planDigest", "completedAt", "enabled", "preparation", "cleanup", "failureCode", "status", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.worker-network-plane-receipt"},
+    "schemaVersion": {"const": "0.1.0"},
+    "jobId": {"type": "string", "minLength": 1},
+    "vmId": {"type": "string", "minLength": 1},
+    "planDigest": {"$ref": "#/$defs/digest"},
+    "completedAt": {"type": "string", "format": "date-time"},
+    "enabled": {"type": "boolean"},
+    "preparation": {"type": "object", "required": ["namespaceCreated", "firewallLoaded", "mediatorStarted", "mediatorProcessId", "mediatorReceiptSetDigest"], "properties": {"namespaceCreated": {"type": "boolean"}, "firewallLoaded": {"type": "boolean"}, "mediatorStarted": {"type": "boolean"}, "mediatorProcessId": {"type": ["integer", "null"], "minimum": 2}, "mediatorReceiptSetDigest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]}}, "additionalProperties": false},
+    "cleanup": {"type": "object", "required": ["mediatorTerminated", "hostRulesRemoved", "rootVethRemoved", "namespaceRemoved", "stateRemoved"], "properties": {"mediatorTerminated": {"type": "boolean"}, "hostRulesRemoved": {"type": "boolean"}, "rootVethRemoved": {"type": "boolean"}, "namespaceRemoved": {"type": "boolean"}, "stateRemoved": {"type": "boolean"}}, "additionalProperties": false},
+    "failureCode": {"type": ["string", "null"]},
+    "status": {"enum": ["complete", "failed"]},
+    "claims": {"type": "object", "required": ["liveHostObserved", "productionIsolationClaimAllowed", "escapeImpossible"], "properties": {"liveHostObserved": {"const": true}, "productionIsolationClaimAllowed": {"const": false}, "escapeImpossible": {"const": false}}, "additionalProperties": false},
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "complete"}}, "required": ["status"]}, "then": {"properties": {"failureCode": {"const": null}}}},
+    {"if": {"properties": {"status": {"const": "failed"}}, "required": ["status"]}, "then": {"properties": {"failureCode": {"type": "string", "minLength": 1}}}}
+  ],
+  "additionalProperties": false
+}

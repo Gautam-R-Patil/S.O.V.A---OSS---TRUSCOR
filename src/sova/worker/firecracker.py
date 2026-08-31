@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from ipaddress import IPv4Address, IPv4Network
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -21,6 +22,7 @@ MINIMUM_JOB_IDENTITY = 100_000
 MAXIMUM_JOB_IDENTITY = 600_000
 DEFAULT_SECCOMP_LEVEL = 2
 SHA256_HEX_LENGTH = 64
+_WORKER_CGNAT = IPv4Network("100.64.0.0/10")
 
 
 def _default_cgroup_base() -> Path:
@@ -192,6 +194,17 @@ def _cas_path(store: Path, digest: str) -> str:
     return str(store / algorithm / value[:2] / value)
 
 
+def worker_network_addresses(identity_slot: int) -> tuple[str, str, str, str]:
+    """Return deterministic guest/broker/root/mediator /30 addresses for one slot."""
+    if identity_slot < 0:
+        raise FormatError("SOVA-WORKER-NETWORK-SLOT", "identity slot cannot be negative")
+    offset = identity_slot * 8
+    if offset + 7 >= _WORKER_CGNAT.num_addresses:
+        raise FormatError("SOVA-WORKER-NETWORK-SLOT", "identity slot exceeds address capacity")
+    base = int(_WORKER_CGNAT.network_address) + offset
+    return tuple(f"{IPv4Address(base + item)}/30" for item in (2, 1, 5, 6))  # type: ignore[return-value]
+
+
 def build_firecracker_launch_plan(
     manifest: WorkerJobManifest,
     admission: WorkerAdmission,
@@ -281,7 +294,20 @@ def build_firecracker_launch_plan(
         ),
     )
     network_requests: tuple[tuple[str, dict[str, Any]], ...] = ()
+    boot_args = (
+        "reboot=k panic=1 pci=off 8250.nr_uarts=0 random.trust_cpu=on "
+        "ipv6.disable=1 module.sig_enforce=1"
+    )
     if manifest.limits.network_connection_limit > 0 and manifest.limits.network_bytes > 0:
+        guest_address, broker_address, _root_address, _mediator_address = worker_network_addresses(
+            identity_slot
+        )
+        guest_ip = guest_address.removesuffix("/30")
+        broker_ip = broker_address.removesuffix("/30")
+        boot_args += (
+            f" ip={guest_ip}::{broker_ip}:255.255.255.252:sova:eth0:off"
+            f" sova.network_proxy=http://{broker_ip}:8888"
+        )
         network_requests = (
             (
                 "/network-interfaces/eth0",
@@ -309,10 +335,7 @@ def build_firecracker_launch_plan(
             "/boot-source",
             {
                 "kernel_image_path": "/kernel",
-                "boot_args": (
-                    "reboot=k panic=1 pci=off 8250.nr_uarts=0 random.trust_cpu=on "
-                    "ipv6.disable=1 module.sig_enforce=1"
-                ),
+                "boot_args": boot_args,
             },
         ),
         (
@@ -382,4 +405,5 @@ __all__ = [
     "WorkerCleanupReceipt",
     "build_firecracker_launch_plan",
     "validate_cleanup_receipt",
+    "worker_network_addresses",
 ]

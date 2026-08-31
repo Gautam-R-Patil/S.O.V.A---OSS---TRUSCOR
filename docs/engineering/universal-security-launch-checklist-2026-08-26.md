@@ -279,7 +279,15 @@ and [P5 validation record](./p5-production-isolation-validation-2026-08-27.md)
 cover the completed P5-02 and P5-04 through P5-08 controls. The local acceptance
 suite also exercises the executable lifecycle side of P5-03 and all P5-09 classes,
 including exact jailer arguments, Unix-socket API sequencing, pidfd watchdog
-control, and cleanup receipts. P5-01, P5-03, P5-09, and P5-10 remain open until the exact dedicated Linux/KVM worker
+control, persistent exclusive identity slots, cleanup receipts, canonical mediator
+flow-receipt capture, deterministic disjoint per-job job/mediator UID/GID ranges,
+state-removal proof, and the deterministic per-job TAP/veth/nftables plan.
+The check-only host preflight and eleven-case exact-host receipt contracts are now
+implemented; preflight rejects reserved ranges already allocated in passwd/group,
+but these controls create no live receipt. The deterministic local P5 receipt is
+`sha256:966eab33cfe77257be63d67f8e515bc19b1bbb8d83d051b4fec7555bf2e2cfee`
+and explicitly keeps production claims false. P5-01, P5-03, P5-09, and P5-10
+remain open until the exact dedicated Linux/KVM worker
 executes the live matrix and an independent reviewer signs the same measured
 configuration; a WSL development probe is not that receipt.
 
@@ -323,8 +331,9 @@ green; rollback and incident procedures are tested.
 [P6 specification](../specifications/blinded-validation-registry-and-launch-0.1.md)
 and [research record](../research/p6-blinded-validation-and-launch-research-2026-08-27.md)
 and [P6 validation record](./p6-validation-and-launch-readiness-2026-08-27.md)
-cover the frozen-protocol machinery, five provenance/loss-reporting adapter
-boundaries, complete metric ledger, ten-control Registry readiness policy, local
+cover the frozen-protocol machinery, deterministic non-executing complete-matrix
+work orders, strict observation-ledger evaluation, five provenance/loss-reporting
+adapter boundaries, complete metric ledger, ten-control Registry readiness policy, local
 backup/restore rehearsal, and five-review release ledger. P6-04 and P6-06 are
 implemented. Signed role-scoped receipt ingestion and the exact-candidate launch
 dossier are also implemented, together with distinct-role/independent-review trust
@@ -340,6 +349,15 @@ production operator receipts, final-commit artifacts, independent/legal/security
 review, public results, or an explicitly authorized publication action.
 The recomputed dossier exposes those remaining states as sorted machine-readable
 hold reasons mapped to evaluation, Registry, review, and external-gate summaries.
+Current-tree validation passes `2,634` tests with `30` declared capability-gated
+skips and `95.15%` combined statement/branch coverage; all `148` CLI handlers,
+strict types, formatting, lint, dependency audit, acceptance, package-resource,
+reproducible-build, isolated-wheel, checksum, repository-policy, and public-boundary
+checks pass. The deterministic P6 acceptance receipt is
+`sha256:7d2486d1b71e757a526760fbc381a9735cae7d950752c4a2242f7c020fbc4187`
+and correctly keeps the P6 exit and publication gates false. These local receipts
+do not satisfy the unchecked real-provider, blinded-target, production Registry,
+independent-review, exact-release-provenance, or publication items above.
 
 ## 10. Change-control rule
 

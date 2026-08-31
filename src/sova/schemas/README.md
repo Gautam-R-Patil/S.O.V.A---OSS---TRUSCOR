@@ -45,12 +45,17 @@ evidence-aware capability-map report contract.
 - `worker-cleanup-receipt-0.1.0.schema.json` — exact-job teardown verification
 - `firecracker-launch-plan-0.1.0.schema.json` — jailer, cgroup, drive, device, and watchdog plan
 - `firecracker-execution-receipt-0.1.0.schema.json` — observed jailer/API/watchdog/process/cleanup lifecycle
+- `firecracker-network-plan-0.1.0.schema.json` — exact netns/TAP/veth/firewall/mediator topology
+- `worker-network-plane-receipt-0.1.0.schema.json` — observed mediator and network teardown evidence
+- `worker-host-preflight-receipt-0.1.0.schema.json` — self-measured exact-host prerequisites before live tests
+- `worker-exact-host-acceptance-receipt-0.1.0.schema.json` — complete positive and malicious-guest host matrix
 - `blinded-evaluation-protocol-0.1.0.schema.json` — frozen multi-provider, target, budget, and failure contract
 - `blinded-evaluation-report-0.1.0.schema.json` — complete-run P6 metric and limitation ledger
 - `external-benchmark-case-0.1.0.schema.json` — provenance-bound loss-reporting benchmark import
 - `registry-beta-readiness-0.1.0.schema.json` — ten-control operational deployment gate
 - `release-gate-ledger-0.1.0.schema.json` — exact-commit review and publication hold/ready decision
 - `evaluation-observation-ledger-0.1.0.schema.json` — signed complete observation set for one frozen evaluation protocol
+- `evaluation-work-order-set-0.1.0.schema.json` — complete non-executing lane/target/repetition run queue
 - `registry-operational-receipt-0.1.0.schema.json` — exact-candidate production Registry control receipt
 - `release-candidate-0.1.0.schema.json` — release commit and artifact/claims digest binding
 - `release-review-receipt-0.1.0.schema.json` — role-scoped exact-candidate review decision

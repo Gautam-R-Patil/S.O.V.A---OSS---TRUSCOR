@@ -25,9 +25,12 @@ from sova.worker.firecracker import (
     FirecrackerLaunchPlan,
     WorkerCleanupReceipt,
 )
+from sova.worker.network_plane import NetworkPlaneReceipt
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from sova.worker.network_plane import FirecrackerNetworkPlaneBackend
 
 _MAX_API_RESPONSE_BYTES = 64 * 1024
 _MAX_PID_BYTES = 32
@@ -45,6 +48,7 @@ _IP_BINARY = "/usr/sbin/ip"
 _EXPECTED_RESOURCE_LIMITS = 2
 _MIN_OPEN_FILES = 32
 _MAX_OPEN_FILES = 4096
+_NETWORK_EVIDENCE_PARTS = 2
 
 
 class _SocketLike(Protocol):
@@ -95,6 +99,8 @@ class FirecrackerExecutionReceipt:
     cleanup_receipt_digest: str
     cleanup_complete: bool
     failure_code: str | None = None
+    network_plan_digest: str | None = None
+    network_receipt_digest: str | None = None
 
     def to_mapping(self) -> dict[str, Any]:
         status = "cleanup-failed" if not self.cleanup_complete else self.execution_status
@@ -116,6 +122,8 @@ class FirecrackerExecutionReceipt:
             "executionStatus": self.execution_status,
             "cleanupReceiptDigest": self.cleanup_receipt_digest,
             "cleanupComplete": self.cleanup_complete,
+            "networkPlanDigest": self.network_plan_digest,
+            "networkReceiptDigest": self.network_receipt_digest,
             "failureCode": self.failure_code,
             "status": status,
             "claims": {
@@ -136,6 +144,7 @@ class FirecrackerExecutionReceipt:
 class FirecrackerLifecycleResult:
     execution: FirecrackerExecutionReceipt
     cleanup: WorkerCleanupReceipt
+    network: NetworkPlaneReceipt | None = None
 
 
 class FirecrackerLifecycleBackend(Protocol):
@@ -241,9 +250,11 @@ class PosixFirecrackerBackend:
         policy: FirecrackerHostPolicy,
         *,
         api_client: FirecrackerUnixApiClient | None = None,
+        network_plane: FirecrackerNetworkPlaneBackend | None = None,
     ) -> None:
         self.policy = policy
         self.api_client = api_client or FirecrackerUnixApiClient()
+        self.network_plane = network_plane
         self._pid_handles: dict[int, int] = {}
         self._plan_processes: dict[str, int] = {}
 
@@ -399,6 +410,8 @@ class PosixFirecrackerBackend:
         namespace = Path(plan.network_namespace)
         if namespace != self.policy.network_namespace_base / plan.vm_id:
             raise FormatError("SOVA-WORKER-HOST-PATH", "network namespace path drifted")
+        if self.network_plane is not None:
+            self.network_plane.prepare(plan)
         self._require_root_controlled(namespace)
         jailer_root = self.policy.chroot_base / self.policy.firecracker_binary.name
         if jailer_root.exists():
@@ -543,8 +556,19 @@ class PosixFirecrackerBackend:
             pass
         cgroup_removed = not cgroup.exists()
         namespace = Path(plan.network_namespace)
-        namespace_removed = not namespace.exists()
-        if namespace.exists() and namespace.parent == self.policy.network_namespace_base:
+        network_receipt = None
+        if self.network_plane is not None:
+            network_receipt = self.network_plane.cleanup(plan, completed_at=completed_at)
+        namespace_removed = (
+            network_receipt.cleanup_complete
+            if network_receipt is not None
+            else not namespace.exists()
+        )
+        if (
+            self.network_plane is None
+            and namespace.exists()
+            and namespace.parent == self.policy.network_namespace_base
+        ):
             result = subprocess.run(  # noqa: S603 - absolute root-owned host utility
                 [_IP_BINARY, "netns", "delete", plan.vm_id],
                 check=False,
@@ -579,6 +603,16 @@ class PosixFirecrackerBackend:
             writable_layer_removed=chroot_removed,
             secret_broker_revoked=secret_broker_revoked,
         )
+
+    def network_evidence(self, plan: FirecrackerLaunchPlan) -> tuple[str | None, str | None]:
+        if self.network_plane is None:
+            return None, None
+        return self.network_plane.evidence(plan)
+
+    def network_receipt(self, plan: FirecrackerLaunchPlan) -> NetworkPlaneReceipt | None:
+        if self.network_plane is None:
+            return None
+        return self.network_plane.receipt(plan)
 
 
 class FirecrackerLifecycleRunner:
@@ -626,10 +660,10 @@ class FirecrackerLifecycleRunner:
         watchdog_triggered = False
         execution_status = "failed"
         failure_code: str | None = None
-        prepared = False
+        prepare_attempted = False
         try:
+            prepare_attempted = True
             self.backend.prepare(plan)
-            prepared = True
             jailer_exit_code = self.backend.launch(plan)
             if jailer_exit_code != 0:
                 failure_code = "SOVA-WORKER-JAILER-EXIT"
@@ -694,7 +728,7 @@ class FirecrackerLifecycleRunner:
             secret_broker_revoked = revoke_secrets()
         except Exception:  # noqa: BLE001 - the cleanup receipt must preserve callback failure
             secret_broker_revoked = False
-        if prepared:
+        if prepare_attempted:
             try:
                 cleanup = self.backend.cleanup(
                     plan,
@@ -729,6 +763,30 @@ class FirecrackerLifecycleRunner:
             )
         cleanup_mapping = cleanup.to_mapping()
         validate_document(cleanup_mapping)
+        network_plan_digest: str | None = None
+        network_receipt_digest: str | None = None
+        network_evidence = getattr(self.backend, "network_evidence", None)
+        if callable(network_evidence):
+            observed_network = network_evidence(plan)
+            if (
+                isinstance(observed_network, tuple)
+                and len(observed_network) == _NETWORK_EVIDENCE_PARTS
+                and all(item is None or isinstance(item, str) for item in observed_network)
+            ):
+                network_plan_digest, network_receipt_digest = observed_network
+        network_receipt: NetworkPlaneReceipt | None = None
+        network_receipt_reader = getattr(self.backend, "network_receipt", None)
+        if callable(network_receipt_reader):
+            observed_receipt = network_receipt_reader(plan)
+            if isinstance(observed_receipt, NetworkPlaneReceipt):
+                observed_mapping = observed_receipt.to_mapping()
+                validate_document(observed_mapping)
+                if observed_mapping["contentDigest"] != network_receipt_digest:
+                    raise FormatError(
+                        "SOVA-WORKER-NETWORK-EVIDENCE",
+                        "network receipt digest drifted from lifecycle evidence",
+                    )
+                network_receipt = observed_receipt
         execution = FirecrackerExecutionReceipt(
             job_id=plan.job_id,
             vm_id=plan.vm_id,
@@ -746,9 +804,11 @@ class FirecrackerLifecycleRunner:
             cleanup_receipt_digest=str(cleanup_mapping["contentDigest"]),
             cleanup_complete=cleanup.complete,
             failure_code=failure_code,
+            network_plan_digest=network_plan_digest,
+            network_receipt_digest=network_receipt_digest,
         )
         validate_document(execution.to_mapping())
-        return FirecrackerLifecycleResult(execution, cleanup)
+        return FirecrackerLifecycleResult(execution, cleanup, network_receipt)
 
 
 __all__ = [

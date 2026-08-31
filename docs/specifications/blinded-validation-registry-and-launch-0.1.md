@@ -27,6 +27,17 @@ A valid protocol MUST bind:
 Raw answer keys MUST NOT appear in the protocol. Changing any bound field creates a
 new digest and therefore a new protocol.
 
+`scripts/freeze_p6_protocol.py` validates the complete derived protocol, requires
+an explicit operator assertion that no results have been observed, binds the
+expected release commit, writes canonically with exclusive creation, and never
+executes a target. The assertion is not an independent timestamp or custody proof.
+`scripts/compile_p6_work_orders.py` deterministically expands every
+`(lane, target, repetition)` tuple into a budgeted work order with a derived seed,
+target-authorization digest, and containment backend. Work orders carry neither an
+answer-key commitment nor execution/publication authority. Provider-, baseline-,
+and target-specific operators remain responsible for executing each authorized
+order and returning evidence-bound observations.
+
 ## 3. Observation ledger
 
 Every `(lane, target, repetition)` tuple MUST have at most one observation. Unknown,
@@ -50,6 +61,11 @@ Any budget exceedance or failed containment check makes the result
 `incomplete-or-inconclusive`. The report MUST NOT claim all vulnerabilities,
 generality, expert equivalence, causal harness contribution, or independent
 replication from local completion.
+
+`scripts/evaluate_p6_observations.py` accepts one frozen protocol and one canonical,
+digest-valid observation ledger, rejects cross-protocol binding, exclusively writes
+the recomputed report, and returns a nonzero status for incomplete or inconclusive
+results. It does not repair, discard, or rerun observations.
 
 ## 4. External adapters
 

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sova-oss.org/schemas/worker-exact-host-acceptance-receipt-0.1.0.schema.json",
+  "title": "SOVA worker exact-host acceptance receipt 0.1.0",
+  "type": "object",
+  "required": ["artifactType", "schemaVersion", "releaseCommit", "workerId", "measuredAt", "bindings", "requiredCaseIds", "cases", "missingCaseIds", "failedCaseIds", "status", "claims", "contentDigest"],
+  "properties": {
+    "artifactType": {"const": "sova.worker-exact-host-acceptance-receipt"},
+    "schemaVersion": {"const": "0.1.0"},
+    "releaseCommit": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
+    "workerId": {"type": "string", "minLength": 1},
+    "measuredAt": {"type": "string", "format": "date-time"},
+    "bindings": {"type": "object", "required": ["attestationDigest", "preflightReceiptDigest", "guestKernelDigest", "rootFilesystemDigest", "workerPolicyDigest"], "properties": {"attestationDigest": {"$ref": "#/$defs/digest"}, "preflightReceiptDigest": {"$ref": "#/$defs/digest"}, "guestKernelDigest": {"$ref": "#/$defs/digest"}, "rootFilesystemDigest": {"$ref": "#/$defs/digest"}, "workerPolicyDigest": {"$ref": "#/$defs/digest"}}, "additionalProperties": false},
+    "requiredCaseIds": {"type": "array", "minItems": 11, "maxItems": 11, "uniqueItems": true, "items": {"$ref": "#/$defs/caseId"}},
+    "cases": {"type": "array", "maxItems": 11, "items": {"type": "object", "required": ["caseId", "status", "startedAt", "completedAt", "executionReceiptDigest", "networkReceiptDigest", "evidenceDigest", "cleanupComplete", "expected", "observed"], "properties": {"caseId": {"$ref": "#/$defs/caseId"}, "status": {"enum": ["passed", "failed", "infrastructure-failure"]}, "startedAt": {"type": "string", "format": "date-time"}, "completedAt": {"type": "string", "format": "date-time"}, "executionReceiptDigest": {"$ref": "#/$defs/digest"}, "networkReceiptDigest": {"$ref": "#/$defs/digest"}, "evidenceDigest": {"$ref": "#/$defs/digest"}, "cleanupComplete": {"type": "boolean"}, "expected": {"type": "string", "minLength": 1, "maxLength": 1024}, "observed": {"type": "string", "minLength": 1, "maxLength": 4096}}, "additionalProperties": false}},
+    "missingCaseIds": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/caseId"}},
+    "failedCaseIds": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/caseId"}},
+    "status": {"enum": ["passed", "failed"]},
+    "claims": {"type": "object", "required": ["exactHostMatrixPassed", "selfMeasured", "independentlyReviewed", "productionIsolationClaimAllowed", "futureEscapeImpossible"], "properties": {"exactHostMatrixPassed": {"type": "boolean"}, "selfMeasured": {"const": true}, "independentlyReviewed": {"const": false}, "productionIsolationClaimAllowed": {"const": false}, "futureEscapeImpossible": {"const": false}}, "additionalProperties": false},
+    "contentDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "caseId": {"enum": ["positive-control", "resource-exhaustion", "output-bomb", "symlink-path-abuse", "device-mount-access", "metadata-service-access", "dns-rebinding", "secret-theft", "daemon-socket-access", "persistence", "cleanup"]}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "passed"}}, "required": ["status"]}, "then": {"properties": {"missingCaseIds": {"maxItems": 0}, "failedCaseIds": {"maxItems": 0}, "cases": {"minItems": 11}, "claims": {"properties": {"exactHostMatrixPassed": {"const": true}}}}}},
+    {"if": {"properties": {"status": {"const": "failed"}}, "required": ["status"]}, "then": {"properties": {"claims": {"properties": {"exactHostMatrixPassed": {"const": false}}}}}}
+  ],
+  "additionalProperties": false
+}

@@ -1,6 +1,6 @@
 {
   "artifactType": "sova.worker-deployment-policy",
-  "schemaVersion": "0.1.0",
+  "schemaVersion": "0.2.0",
   "status": "template-not-admitted",
   "workerId": "REPLACE_WITH_WORKER_ID",
   "firecrackerVersion": "1.16.1",
@@ -10,16 +10,36 @@
     "chrootBase": "/srv/sova-worker/jailer",
     "networkNamespaceBase": "/run/netns",
     "contentStore": "/srv/sova-worker/cas",
-    "cgroupBase": "/sys/fs/cgroup"
+    "cgroupBase": "/sys/fs/cgroup",
+    "ipBinary": "/usr/sbin/ip",
+    "nftBinary": "/usr/sbin/nft",
+    "setprivBinary": "/usr/bin/setpriv",
+    "networkMediatorBinary": "/usr/local/lib/sova-worker/sova-network-mediator",
+    "networkStateDirectory": "/run/sova-worker/network",
+    "identityLeaseDirectory": "/run/sova-worker/leases",
+    "hostKernelImage": "/usr/local/lib/sova-worker/host-kernel-image",
+    "microcodeImage": "/usr/local/lib/sova-worker/microcode-image",
+    "guestKernelImage": "/usr/local/lib/sova-worker/guest-kernel",
+    "rootFilesystemImage": "/usr/local/lib/sova-worker/rootfs.ext4",
+    "advisorySnapshot": "/usr/local/lib/sova-worker/advisories.json"
+  },
+  "network": {
+    "egressInterface": "REPLACE_WITH_INTERFACE",
+    "mediatorUidBase": 700000,
+    "mediatorGidBase": 700000,
+    "proxyPort": 8888
   },
   "pins": {
     "firecrackerDigest": "REPLACE_WITH_SHA256",
     "jailerDigest": "REPLACE_WITH_SHA256",
+    "ipDigest": "REPLACE_WITH_SHA256",
+    "nftDigest": "REPLACE_WITH_SHA256",
+    "setprivDigest": "REPLACE_WITH_SHA256",
+    "networkMediatorDigest": "REPLACE_WITH_SHA256",
     "hostKernelDigest": "REPLACE_WITH_SHA256",
     "microcodeDigest": "REPLACE_WITH_SHA256",
     "guestKernelDigest": "REPLACE_WITH_SHA256",
     "rootFilesystemDigest": "REPLACE_WITH_SHA256",
-    "workerPolicyDigest": "REPLACE_WITH_SHA256",
     "advisorySnapshotDigest": "REPLACE_WITH_SHA256"
   },
   "requiredControls": {
@@ -33,6 +53,7 @@
     "hostMountsAllowed": false,
     "pciEnabled": false,
     "ambientGuestNetwork": false,
+    "mediatorOnlyEgress": true,
     "independentReviewRequired": true
   }
 }

@@ -14,6 +14,8 @@ def test_p6_acceptance_receipt_is_stable_and_fail_closed() -> None:
     assert first["adapterCount"] == 5
     assert first["targetClassCount"] == 8
     assert first["predeclaredRunCount"] == 32
+    assert first["workOrderCount"] == 32
+    assert str(first["workOrderSetDigest"]).startswith("sha256:")
     assert first["p6ExitGatePassed"] is False
     assert first["claims"]["tagOrPublishAllowed"] is False
     assert first["claims"]["externalReviewsObtained"] is False

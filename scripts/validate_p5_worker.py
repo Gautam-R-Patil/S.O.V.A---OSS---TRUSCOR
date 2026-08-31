@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import zipfile
@@ -40,9 +41,11 @@ from sova.worker.firecracker import (
     FirecrackerHostPolicy,
     FirecrackerLaunchPlan,
     WorkerCleanupReceipt,
+    build_firecracker_launch_plan,
 )
 from sova.worker.lifecycle import FirecrackerLifecycleRunner
 from sova.worker.malicious import malicious_guest_matrix
+from sova.worker.network_plane import NetworkPlaneHostPolicy, build_firecracker_network_plan
 from sova.worker.protocol import (
     ProtocolMessage,
     ProtocolMessageType,
@@ -51,6 +54,8 @@ from sova.worker.protocol import (
     sign_protocol_message,
 )
 from sova.worker.service import WorkerAdmissionService
+
+_MISSING_NETWORK_PLAN = "P5 acceptance did not compile the required network plan"
 
 
 class _AcceptanceLifecycleBackend:
@@ -273,6 +278,20 @@ def main() -> int:
                 approved_jailer_digest=_digest("jailer"),
             ),
             worker_admission=admission,
+            network_policy=NetworkPlaneHostPolicy(
+                ip_binary=root / "bin" / "ip",
+                nft_binary=root / "bin" / "nft",
+                setpriv_binary=root / "bin" / "setpriv",
+                mediator_binary=root / "bin" / "sova-network-mediator",
+                state_directory=root / "network-state",
+                approved_ip_digest=_digest("ip"),
+                approved_nft_digest=_digest("nft"),
+                approved_setpriv_digest=_digest("setpriv"),
+                approved_mediator_digest=_digest("mediator"),
+                egress_interface="eth0",
+                mediator_uid_base=700_000,
+                mediator_gid_base=700_000,
+            ),
             allow_nonproduction=True,
         )
         accepted = service.admit_signed_job(
@@ -283,6 +302,42 @@ def main() -> int:
             identity_slot=7,
         )
         validate_document(accepted.launch_plan.to_mapping())
+        if accepted.network_plan is None:
+            raise AssertionError(_MISSING_NETWORK_PLAN)
+        validate_document(accepted.network_plan.to_mapping())
+        fixture_root = Path("C:/sova-p5-fixture" if os.name == "nt" else "/sova-p5-fixture")
+        fixture_host_policy = FirecrackerHostPolicy(
+            firecracker_binary=fixture_root / "bin" / "firecracker",
+            jailer_binary=fixture_root / "bin" / "jailer",
+            chroot_base=fixture_root / "jailer",
+            network_namespace_base=fixture_root / "netns",
+            content_store=fixture_root / "cas",
+            cgroup_base=fixture_root / "cgroup",
+            approved_firecracker_digest=_digest("firecracker"),
+            approved_jailer_digest=_digest("jailer"),
+        )
+        fixture_network_policy = NetworkPlaneHostPolicy(
+            ip_binary=fixture_root / "bin" / "ip",
+            nft_binary=fixture_root / "bin" / "nft",
+            setpriv_binary=fixture_root / "bin" / "setpriv",
+            mediator_binary=fixture_root / "bin" / "sova-network-mediator",
+            state_directory=fixture_root / "network-state",
+            approved_ip_digest=_digest("ip"),
+            approved_nft_digest=_digest("nft"),
+            approved_setpriv_digest=_digest("setpriv"),
+            approved_mediator_digest=_digest("mediator"),
+            egress_interface="eth0",
+            mediator_uid_base=700_000,
+            mediator_gid_base=700_000,
+        )
+        fixture_launch = build_firecracker_launch_plan(
+            manifest, admission, fixture_host_policy, identity_slot=7
+        )
+        fixture_network = build_firecracker_network_plan(
+            manifest, fixture_launch, fixture_network_policy
+        )
+        validate_document(fixture_launch.to_mapping())
+        validate_document(fixture_network.to_mapping())
         network = NetworkBroker(manifest)
         allowed_flow = network.authorize(
             hostname="example.com",
@@ -353,6 +408,8 @@ def main() -> int:
             cleanup.complete,
             lifecycle.execution.execution_status == "process-exited",
             lifecycle.execution.execution_mode == "simulated",
+            accepted.network_plan.enabled,
+            accepted.network_plan.to_mapping()["invariants"]["mediatorOnlyEgress"] is True,
             kata.status == "disabled",
             gvisor.status == "disabled",
         )
@@ -378,6 +435,8 @@ def main() -> int:
         "firecrackerVersionPin": FIRECRACKER_VERSION,
         "launchPlanValidated": True,
         "launchPlanFirecrackerVersion": accepted.launch_plan.firecracker_version,
+        "networkPlanDigest": fixture_network.digest,
+        "networkPlaneValidated": True,
         "evidenceReportDigest": evidence.report["contentDigest"],
         "cleanupReceiptDigest": cleanup.to_mapping()["contentDigest"],
         "lifecycleStateMachinePassed": lifecycle.execution.execution_status == "process-exited",

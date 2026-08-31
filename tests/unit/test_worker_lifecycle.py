@@ -214,7 +214,7 @@ def test_cleanup_failure_overrides_execution_and_prepare_errors_are_receipted(
     failed = _run(_plan(tmp_path), denied)
     assert failed["status"] == "failed"
     assert failed["failureCode"] == "SOVA-WORKER-HOST"
-    assert denied.events == ["prepare"]
+    assert denied.events == ["prepare", "cleanup"]
 
     timed_out = _Backend(prepare_error=subprocess.TimeoutExpired("jailer", 30))
     assert _run(_plan(tmp_path), timed_out)["failureCode"] == "SOVA-WORKER-JAILER-TIMEOUT"

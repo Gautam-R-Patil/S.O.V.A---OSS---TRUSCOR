@@ -3,7 +3,7 @@
   "$id": "https://sova-oss.org/schemas/firecracker-execution-receipt-0.1.0.schema.json",
   "title": "SOVA Firecracker execution receipt 0.1.0",
   "type": "object",
-  "required": ["artifactType", "schemaVersion", "jobId", "vmId", "manifestDigest", "launchPlanDigest", "executionMode", "startedAt", "completedAt", "jailerExitCode", "processId", "apiCalls", "instanceStarted", "watchdogTriggered", "executionStatus", "cleanupReceiptDigest", "cleanupComplete", "failureCode", "status", "claims", "contentDigest"],
+  "required": ["artifactType", "schemaVersion", "jobId", "vmId", "manifestDigest", "launchPlanDigest", "executionMode", "startedAt", "completedAt", "jailerExitCode", "processId", "apiCalls", "instanceStarted", "watchdogTriggered", "executionStatus", "cleanupReceiptDigest", "cleanupComplete", "networkPlanDigest", "networkReceiptDigest", "failureCode", "status", "claims", "contentDigest"],
   "properties": {
     "artifactType": {"const": "sova.firecracker-execution-receipt"},
     "schemaVersion": {"const": "0.1.0"},
@@ -35,6 +35,8 @@
     "executionStatus": {"enum": ["process-exited", "failed", "timed-out"]},
     "cleanupReceiptDigest": {"$ref": "#/$defs/digest"},
     "cleanupComplete": {"type": "boolean"},
+    "networkPlanDigest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+    "networkReceiptDigest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
     "failureCode": {"type": ["string", "null"], "minLength": 1},
     "status": {"enum": ["process-exited", "failed", "timed-out", "cleanup-failed"]},
     "claims": {

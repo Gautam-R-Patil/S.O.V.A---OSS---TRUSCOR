@@ -10,7 +10,9 @@
 ## Delivered boundary
 
 P6 adds strict contracts for an eight-target-class, four-lane blinded evaluation;
-five provenance- and loss-reporting external benchmark adapter boundaries; exact
+exclusive canonical protocol freezing; deterministic non-executing work orders for
+every lane/target/repetition tuple; strict observation-ledger evaluation; five
+provenance- and loss-reporting external benchmark adapter boundaries; exact
 expected-run and metric accounting; a ten-control Registry beta readiness policy;
 bounded deterministic local Registry backup, verification, and empty-root restore;
 and a five-review exact-release hold ledger. The subsequent operator integration
@@ -32,7 +34,7 @@ Source selection, licences, safety limits, and non-adoptions are in the
 
 | ID | State | Evidence |
 |---|---|---|
-| P6-01 | Open; machinery implemented | The protocol requires exact target, lane, provider, budget, seed, repetition, scoring, exclusion, failure, and answer-key-custody commitments and forbids an embedded answer key. A real study has not yet been frozen before result generation. |
+| P6-01 | Open; operator machinery implemented | The protocol requires exact target, lane, provider, budget, seed, repetition, scoring, exclusion, failure, and answer-key-custody commitments and forbids an embedded answer key. The freeze command validates the expected release commit and exclusively writes canonical bytes only after a no-results assertion; the work-order compiler expands the complete matrix without answer-key or execution authority. A real study has not yet been frozen before result generation, and the local assertion is not independent timestamp/custody proof. |
 | P6-02 | Open | Candidate, baseline, scripted, and weak-model lanes plus multiple provider families are mandatory, but no live provider/model comparison was run. |
 | P6-03 | Open | All eight target classes are mandatory and exact expected tuples are enforced. No blinded owned/licensed field-target suite was run. |
 | P6-04 | Implemented | Candidate adapters for Inspect AI/Inspect Evals, AgentDojo, OASB, XBEN/PentestGPT-style cases, and EthiBench require accepted licence, revision digest, authorization receipt, source identity, and loss reporting; they do not import raw cases, answer keys, or upstream truth. |
@@ -46,10 +48,23 @@ Source selection, licences, safety limits, and non-adoptions are in the
 
 ## Deterministic acceptance
 
+For a real study, keep target inputs, authorization receipts, provider credentials,
+answer keys, and observations outside the public checkout. The operator sequence is:
+
+```text
+python scripts/freeze_p6_protocol.py protocol-input.json frozen-protocol.json --expected-release-commit <commit> --ack-no-results-observed
+python scripts/compile_p6_work_orders.py frozen-protocol.json work-orders.json
+# authorized operators execute every work order and produce a signed observation ledger
+python scripts/evaluate_p6_observations.py frozen-protocol.json observations.json evaluation-report.json
+```
+
+None of these commands supplies target authority, provider credentials, independent
+answer-key custody, or permission to publish.
+
 The deterministic pre-dossier P6 acceptance fixture remains reproducible. Its
 current execution produced:
 
-`sha256:18d8806803330b3f81a56488005eb4813ba702ec56f1fd710d9114d5c3febf6b`
+`sha256:7d2486d1b71e757a526760fbc381a9735cae7d950752c4a2242f7c020fbc4187`
 
 The receipt reports `localImplementationAcceptancePassed=true` and
 `p6ExitGatePassed=false`. It also fixes all-vulnerabilities, blinded-field,
@@ -58,6 +73,7 @@ publication claims to `false`.
 
 Supporting deterministic digests:
 
+- complete 32-run work-order set: `sha256:ac1f34465584427f8eb3ff6777f49e483d9bb01b5aff9c2f792e014708b6537a`;
 - evaluation report: `sha256:40a60ed58d4fc489c1701f89fbf111c302a289894e66f542249f85b654ed5807`;
 - Registry readiness: `sha256:00d412e4fa10ae0ff5f3e5551174311d3ce99aa6d9efd40f748d7477fa87ffd2`;
 - release-gate ledger: `sha256:25575499d01de1fb5a8c05ed11ff97fb4ca79b9b43c40de541a7e9289e250d40`.
@@ -67,16 +83,16 @@ Supporting deterministic digests:
 | Gate | Result |
 |---|---|
 | Focused P6 and Registry-backup tests | `54 passed`; combined validation/backup statement-branch coverage `97.72%` |
-| Full repository suite | `2,574 passed`, `30 skipped`, zero failed in `936.72s` |
-| Full combined statement/branch coverage | `95.14%`; mandatory 95% gate passed |
-| Full Ruff format and lint | `714 files already formatted`; all checks passed |
-| Full strict mypy | no issues in `516` source/test files |
+| Full repository suite | `2,634 passed`, `30 skipped`, zero failed in `999.26s` |
+| Full combined statement/branch coverage | `95.15%`; mandatory 95% gate passed |
+| Full Ruff format and lint | `732 files already formatted`; all checks passed |
+| Full strict mypy | no issues in `534` source/test files |
 | CLI parser-to-handler execution audit | `148/148`; no unexecuted command |
-| Repository policy and public boundary | passed; `864` tracked or unignored files scanned by each gate |
+| Repository policy and public boundary | passed |
 | Dependency vulnerability audit | strict OSV audit: no known vulnerabilities found |
 | Runtime licence metadata | ten runtime components declare Apache-2.0, BSD-3-Clause, MIT, MIT-0, or PSF-2.0 compatible expressions |
 | Current working-tree distributions | two fixed-epoch builds were byte-identical. Exact artifact digests are kept in the external candidate checksum/provenance record because this validation document is included in the sdist. They are not final-release artifacts until the release commit and hosted provenance exist |
-| Package resources | all thirteen P6 and launch schemas plus both P5 Firecracker schemas were present in the rebuilt wheel and sdist |
+| Package resources | all `59` schemas, including the P5 network/host and P6 work-order contracts, were present in the rebuilt wheel and sdist |
 | Isolated-wheel smoke | installed 11 packages and returned `sova 0.1.0a0` |
 | Local SBOM | CycloneDX 1.6 runtime SBOM, 10 components, digest `sha256:7c0b232e416da442d2e09ada04c48632ec55f1ed8afc2396bf4e96d659bf4b3d` |
 | Local checksum verification | three declared files; no missing, undeclared, or mismatched files. The external candidate manifest carries the non-circular artifact and manifest digests |
