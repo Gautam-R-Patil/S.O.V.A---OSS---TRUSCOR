@@ -38,10 +38,10 @@ Phases 10-12 come last and only after everything above is green.
 | 7 | Prove the isolation | YOU + OTHER | ☐ 0/9 |
 | 8 | Deploy the Registry | YOU + OTHER | ☐ 0/7 |
 | 9 | Get independently reviewed | YOU + OTHER | ☐ 0/5 |
-| 10 | Reconcile every public claim | YOU + ME | ☐ 0/6 |
+| 10 | Reconcile every public claim | YOU + ME | ☐ 0/8 |
 | 11 | Final release evidence | WAITING | ☐ 0/5 |
 | 12 | Launch | YOU | ☐ 0/8 |
-| | **Total** | | **0 / 83** |
+| | **Total** | | **0 / 85** |
 
 ### Where the code stands today
 
@@ -202,7 +202,9 @@ ratings that this codebase does not support.*
 - [ ] **10.3** Check the GitHub repo description and social preview for retired claim language — **ME** — current text recorded
 - [ ] **10.4** Freeze README, docs, demo, Registry and release-note bytes for the release commit — **WAITING** — digests
 - [ ] **10.5** Bind the cleared paper, or an explicit no-paper release notice — **YOU** — decision recorded
-- [ ] **10.6** `sova release dossier` reports `publicClaimsReconciled=true` — **WAITING** — dossier output
+- [ ] **10.6** Revise the README heading "The headline capability: find the sleeper" — **ME** — sleeper search is a shipped mechanism, not the OSS headline claim; the body text below it is already correctly hedged and stays
+- [ ] **10.7** Add a claims-register row governing the OSS↔Engine capability boundary — **ME** — controls the exact wording of "OSS ships the mechanism, Engine has the tuned quality, OSS makes no parity claim"; no register row covers this today
+- [ ] **10.8** `sova release dossier` reports `publicClaimsReconciled=true` — **WAITING** — dossier output
 
 ---
 
@@ -235,14 +237,38 @@ the day. Nothing here ever happens automatically.*
 
 ---
 
-## What is deliberately NOT on this list
+## What SOVA OSS claims, and what it does not
 
-The blinded multi-provider study, matched scanner/agent baselines, and the
-eight-class field-target run. Those measure **SOVA as a tester**, which is SOVA
-Engine work, not open-source infrastructure. They stay mandatory before any
-comparative, superiority, coverage or field-performance claim — so no launch copy
-may say SOVA finds more than anything else — but they do not block this release.
-Recorded formally in the
+**SOVA OSS ships the complete mechanism.** Recon, mapping, exploration,
+methodology, adapters, oracles, evidence, reproduction, replay — and
+conditional-trigger ("sleeper") search. It genuinely attempts all of it, sleeper
+discovery included. Every one of those paths is open, auditable and extensible.
+Nothing is stubbed out or held back.
+
+**What it does not claim is quality.** Being *excellent* at sleeper discovery is
+the product of accumulated tuning and learned intelligence, and under
+[ADR-0003](../decisions/0003-open-source-and-proprietary-boundary.md) that stays
+with the proprietary SOVA Engine. So the OSS claims exactly this and no more:
+
+- it implements the mechanism, end to end, in the open;
+- it is the foundation others fork and specialize into very good testers;
+- it makes **no parity claim** with SOVA Engine, and no claim to find 99% or 100%
+  of what a tuned tester would find.
+
+**The constraint that keeps this honest.** ADR-0003 requires the public project to
+be *non-crippled* and forbids hiding an essential implementation behind an account,
+feature flag, proprietary plugin or network call. The Engine's advantage must
+therefore be learned intelligence and accumulated work applied *on top of* the open
+mechanism — never a mechanism removed from the OSS to widen the gap. Stripping
+capability out of the public tree to flatter the closed product would violate the
+constitution and forfeit exactly the contributor trust the ecosystem runs on.
+
+**Therefore not on this list:** the blinded multi-provider study, matched
+scanner/agent baselines, and the eight-class field-target run. Those measure
+detection *performance*, which is an Engine and research claim. They remain
+mandatory before any comparative, superiority, coverage or field-performance
+statement — including any statement that SOVA finds what other tools miss — but
+they do not block this release. Recorded formally in the
 [controlling gate ledger](./universal-security-launch-checklist-2026-08-26.md),
 which remains the machine-readable ledger that receipts and the release dossier
 cite. This file is the plan; that file is the ledger.
