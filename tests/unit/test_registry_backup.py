@@ -265,3 +265,52 @@ def test_restore_validates_one_immutable_archive_snapshot(
     monkeypatch.setattr(backup_module, "_read_backup", counted_read)
     restore_registry_backup(archive, destination)
     assert calls == 1
+
+
+def test_backup_read_is_bounded_by_file_size_not_the_configured_ceiling(
+    tmp_path: Path,
+) -> None:
+    """A large declared ceiling must not force a large allocation for a small archive.
+
+    ``_read_backup`` previously issued ``read(maximum_total_bytes + overhead + 1)``.
+    A bounded read preallocates its full request, so a kilobyte archive demanded
+    gigabytes and raised an untyped ``MemoryError`` out of the restore path on any
+    memory-constrained host. A one-terabyte ceiling makes that regression fail
+    deterministically regardless of how much memory the running machine has.
+    """
+    source = _source(tmp_path)
+    archive = tmp_path / "backup.zip"
+    create_registry_backup(source, archive)
+    assert archive.stat().st_size < 64 * 1024
+
+    terabyte_ceiling = RegistryBackupLimits(
+        maximum_files=100_000,
+        maximum_file_bytes=256 * 1024 * 1024,
+        maximum_total_bytes=1024**4,
+    )
+    assert verify_registry_backup(archive, limits=terabyte_ceiling)["status"] == "pass"
+
+    destination = tmp_path / "restore"
+    destination.mkdir()
+    restored = restore_registry_backup(archive, destination, limits=terabyte_ceiling)
+    assert restored["restoredFiles"] == 2
+
+
+def test_backup_rejects_an_oversized_archive_before_reading_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An archive larger than the ceiling fails closed with a typed limit error."""
+    source = _source(tmp_path)
+    archive = tmp_path / "backup.zip"
+    create_registry_backup(source, archive)
+
+    monkeypatch.setattr(backup_module, "_MAX_ARCHIVE_OVERHEAD_BYTES", 0)
+    tiny_ceiling = RegistryBackupLimits(
+        maximum_files=100_000,
+        maximum_file_bytes=256 * 1024 * 1024,
+        maximum_total_bytes=8,
+    )
+    with pytest.raises(FormatError) as rejection:
+        verify_registry_backup(archive, limits=tiny_ceiling)
+    assert rejection.value.issue.code == "SOVA-REGISTRY-BACKUP-LIMIT"

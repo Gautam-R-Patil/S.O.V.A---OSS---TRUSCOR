@@ -146,7 +146,15 @@ def _read_backup(
     maximum_archive_bytes = limits.maximum_total_bytes + _MAX_ARCHIVE_OVERHEAD_BYTES
     try:
         with archive_path.open("rb") as stream:
-            archive_bytes = stream.read(maximum_archive_bytes + 1)
+            # A bounded ``read`` preallocates its full request, so sizing the request
+            # from the configured ceiling would demand gigabytes for a kilobyte
+            # archive and fail with an untyped MemoryError. Measure the open
+            # descriptor instead, reject an oversized archive before allocating, and
+            # request only one byte beyond what the file actually holds.
+            observed_bytes = os.fstat(stream.fileno()).st_size
+            if observed_bytes > maximum_archive_bytes:
+                raise FormatError("SOVA-REGISTRY-BACKUP-LIMIT", "backup archive exceeds byte limit")
+            archive_bytes = stream.read(min(observed_bytes, maximum_archive_bytes) + 1)
     except OSError as error:
         raise FormatError("SOVA-REGISTRY-BACKUP-ZIP", "backup is not a valid ZIP") from error
     if len(archive_bytes) > maximum_archive_bytes:
