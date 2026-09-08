@@ -35,10 +35,42 @@ infrastructure-failure states instead of translating them into success.
 | P3 | Tool adapters and evidence normalization | **COMPLETE** | [P3 validation](./p3-security-adapter-validation-2026-08-27.md), 21-entry admission catalog, 12 promoted normalizers, authority-routed runner and failure matrix |
 | P4 | Oracle laboratory, reproduction, and coverage accounting | **COMPLETE** | [P4 validation](./p4-oracle-laboratory-validation-2026-08-27.md), blinded positive/adverse study, fresh reproduction, eight-dimensional coverage contract |
 | P5 | Production isolation and untrusted-agent worker | **LOCAL IMPLEMENTATION COMPLETE; EXIT GATE OPEN** | [P5 validation](./p5-production-isolation-validation-2026-08-27.md); exact Linux/KVM execution and independent review remain open |
-| P6 | Blinded validation, Registry beta, and public launch | **LOCAL IMPLEMENTATION COMPLETE; EXIT GATE OPEN** | [P6 validation](./p6-validation-and-launch-readiness-2026-08-27.md); live benchmark, production Registry, reviews, and publication remain open |
+| P6 | Blinded validation, Registry beta, and public launch | **LOCAL IMPLEMENTATION COMPLETE; EXIT GATE OPEN; PARTIALLY DEFERRED** | [P6 validation](./p6-validation-and-launch-readiness-2026-08-27.md); production Registry, reviews, final-commit provenance, and publication remain open. P6-01, P6-02, P6-03, and P6-05 are deferred to the Engine/research track by the 2026-09-08 rescope |
+| P7 | Ecosystem readiness and distribution | **OPEN** | New 2026-09-08 phase; no item is complete. Distribution, stability contract, adapter execution, contributor path, independent format implementation, and community-module safety triage |
 
 The table measures roadmap gates, not a marketing readiness percentage. A phase is
 complete only when every mandatory item and its exit gate are complete.
+
+## 2.1 Launch definition and 2026-09-08 rescope
+
+**Recorded reason (required by section 10).** The controlling launch definition was
+written as though SOVA OSS were primarily a security *tester* whose release had to
+be justified by its own measured field performance. That is not the product.
+
+[ADR-0003](../decisions/0003-open-source-and-proprietary-boundary.md) and
+[ADR-0005](../decisions/0005-topic-00-project-constitution.md) already state the
+correct boundary: **SOVA OSS is the open instrument and substrate; SOVA Engine is
+the separate proprietary TRUSCOR system.** The OSS release therefore has to prove
+that the *infrastructure* is complete, safe, extensible, independently
+implementable, and contributable — not that SOVA's own detection outperforms named
+baselines. Measured adversarial performance is an Engine and research claim.
+
+Consequently:
+
+- **P6-01, P6-02, P6-03, and P6-05 are deferred**, not deleted. They remain
+  mandatory before any comparative, superiority, coverage, or field-performance
+  claim under [ADR-0006](../decisions/0006-topic-01-evidence-go-no-go.md) Gates
+  01-A and 01-B, and before the Engine makes such a claim publicly. They are no
+  longer OSS launch-blocking. Their machinery stays shipped and supported.
+- The evaluation machinery those items drive (`freeze_p6_protocol.py`,
+  `compile_p6_work_orders.py`, `evaluate_p6_observations.py`) is itself part of the
+  released infrastructure and remains covered by P6-04 and P6-06.
+- **P7 is added** to carry the gates an infrastructure release actually has to pass.
+- Existing identifiers are unchanged so that every citing document, receipt, and
+  commit message stays valid.
+
+This rescope narrows what the launch *claims*, never what it *ships*. Deferring an
+evidence gate does not permit the claim that gate would have supported.
 
 ## 3. P0 — preserve and freeze the foundation
 
@@ -302,16 +334,26 @@ configuration; a WSL development probe is not that receipt.
 
 ## 9. P6 — blinded validation, Registry beta, and launch
 
-- [ ] **P6-01** Freeze a predeclared evaluation protocol, budgets, providers,
+> **P6-01, P6-02, P6-03, and P6-05 are DEFERRED to the Engine/research track** by
+> the [2026-09-08 rescope](#21-launch-definition-and-2026-09-08-rescope). They do
+> not block the OSS launch. They remain mandatory before any comparative,
+> superiority, coverage, or measured field-performance claim, and their unchecked
+> state continues to hold ADR-0006 Gates 01-A and 01-B at `NOT RUN - UNPROVEN`.
+
+- [ ] **P6-01** *(deferred — Engine/research)* Freeze a predeclared evaluation
+  protocol, budgets, providers,
   targets, baselines, scoring, exclusions, and failure rules before results exist.
-- [ ] **P6-02** Run multiple provider/model families plus scripted and weak-model
+- [ ] **P6-02** *(deferred — Engine/research)* Run multiple provider/model families
+  plus scripted and weak-model
   lanes; report the harness contribution separately from model capability.
-- [ ] **P6-03** Run blinded owned and licensed targets spanning web, API, package,
+- [ ] **P6-03** *(deferred — Engine/research)* Run blinded owned and licensed
+  targets spanning web, API, package,
   OCI, network, desktop, AI model/agent, and MCP/A2A classes.
 - [x] **P6-04** Add benchmark adapters for Inspect AI/Inspect Evals cybersecurity
   tasks, AgentDojo, OASB, PentestGPT/XBOW-compatible cases, EthiBench, and other
   datasets that pass licence, provenance, safety, and ground-truth review.
-- [ ] **P6-05** Compare against named scanner/tool and agent baselines under equal
+- [ ] **P6-05** *(deferred — Engine/research)* Compare against named scanner/tool
+  and agent baselines under equal
   access and budgets; retain failures and negative results.
 - [x] **P6-06** Measure workflow/surface coverage, confirmed findings, reproduction,
   precision/false positives, infrastructure failures, cost, latency, and containment.
@@ -371,6 +413,50 @@ checks pass. The deterministic P6 acceptance receipt is
 and correctly keeps the P6 exit and publication gates false. These local receipts
 do not satisfy the unchecked real-provider, blinded-target, production Registry,
 independent-review, exact-release-provenance, or publication items above.
+
+## 9.5 P7 — ecosystem readiness and distribution
+
+Added 2026-09-08. These are the gates an infrastructure release must pass: the
+substrate has to be installable, stable enough to build on, extensible in practice
+rather than in principle, independently implementable, and safe to accept
+contributions into.
+
+- [ ] **P7-01** Publish an installable distribution and a verified install path.
+  The package resolves and runs from a clean environment on Windows, macOS, and
+  Linux; `sova --version` and `sova doctor` succeed; the installation guide matches
+  observed behavior. A repository that cannot be installed has no ecosystem.
+- [ ] **P7-02** Publish an explicit API and schema stability contract. State which
+  artifact contracts, schemas, CLI surfaces, and Python interfaces are frozen under
+  [ADR-0002](../decisions/0002-versioning-and-lossless-migration.md) and which
+  remain experimental, and align the distribution's version and development-status
+  metadata with that statement. Downstream authors cannot build against a surface
+  whose stability is undeclared.
+- [ ] **P7-03** Expose admitted security-tool execution through the CLI, routed
+  through the existing authority kernel, containment, disclosure gate, and evidence
+  normalization. Execution must remain unavailable without an authority decision;
+  a normalized observation must still never become an automatic finding. Today
+  effectful adapter execution is reachable only from the Python API.
+- [ ] **P7-04** Prove the contributor path end to end. Ship a contributor guide for
+  building on the substrate, a second reference extension exercising a different
+  plug point from `examples/extensions/`, and one complete round trip in which an
+  independently authored playbook or extension is authored, signed, staged,
+  reviewed, and resolved through the Registry contracts.
+- [ ] **P7-05** Obtain one independent implementation result. A party other than
+  this repository parses, validates, and canonicalizes SOVA artifacts using only
+  the exported conformance kit, without the Python package, and reports the exact
+  vectors that passed and failed. This is the only real evidence that the format is
+  a substrate rather than one program's file layout.
+- [ ] **P7-06** Establish community-module safety triage before accepting public
+  contributions. Define and rehearse intake screening, dual-use review under
+  [`DUAL_USE_POLICY.md`](../../DUAL_USE_POLICY.md), the no-unpatched-payload rule,
+  maintainer escalation, and takedown, with a named responder and a stated response
+  target. A public module registry for offensive AI-security content cannot open
+  without this.
+
+**P7 exit gate:** a person who has never seen this repository can install SOVA,
+read what is stable, extend it at a declared plug point, run an admitted tool
+through the authority boundary, verify an artifact without the Python package, and
+submit a module through a review path with a named safety owner.
 
 ## 10. Change-control rule
 
