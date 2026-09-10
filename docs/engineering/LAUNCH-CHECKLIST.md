@@ -20,15 +20,18 @@ receipt, digest, URL, or signature named in the row.
 | **OTHER** | A third party — a reviewer, counsel, a volunteer. |
 | **WAITING** | I do it, but a YOU or OTHER row above has to land first. |
 
-**Phases 1-6 are my build work and run in sequence.**
+**Phase 0 comes first and changes what the rest is aiming at.**
+**Phases 1-6 are my build work and run in sequence after it.**
 **Phases 7, 8 and 9 are yours and other people's — start them NOW, today, because
 they run in parallel with everything I build and they are the long poles.**
-Phases 10-12 come last and only after everything above is green.
+Phases 10-12 close the release. **Phase 13 is mostly prepared before Phase 12 fires,
+not after** — a launch improvised on the day is a launch wasted.
 
 ### Progress
 
 | Phase | | Owner mix | Done |
 |---|---|---|---|
+| 0 | **Make it land** | ME + YOU | ☐ 0/18 |
 | 1 | Make it installable | ME + YOU | ☐ 0/9 |
 | 2 | Declare what is stable | YOU decides, ME writes | ☐ 0/8 |
 | 3 | Finish the toolkit | ME | ☐ 0/9 |
@@ -41,7 +44,8 @@ Phases 10-12 come last and only after everything above is green.
 | 10 | Reconcile every public claim | YOU + ME | ☐ 0/8 |
 | 11 | Final release evidence | WAITING | ☐ 0/5 |
 | 12 | Launch | YOU | ☐ 0/8 |
-| | **Total** | | **0 / 85** |
+| 13 | **Landing and aftermath** | YOU + ME | ☐ 0/10 |
+| | **Total** | | **0 / 113** |
 
 ### Where the code stands today
 
@@ -49,6 +53,38 @@ Verified 2026-09-08 on a clean run: **2,649 tests pass, 29 capability-gated skip
 zero failures**, 95.11% combined coverage, 149/149 CLI paths, Ruff and strict mypy
 clean, repository policy and public-boundary scans pass. The engineering is
 essentially done — this list is almost entirely evidence, distribution, and people.
+
+---
+
+## Phase 0 — Make it land
+
+*Everything here changes what "installable" is even supposed to look like, so it comes
+first. This phase is not polish. A great instrument nobody can find, start, or
+understand in sixty seconds is a failed project, and that is the most common way
+excellent open source dies.*
+
+**The psychology this phase serves.** People adopt a tool that respects their time,
+makes them feel competent, gives them something to show, and does not lie to them. Every
+row below buys one of those four.
+
+- [ ] **0.1** Rename the repository to `sova` — **YOU** — `S.O.V.A---OSS---TRUSCOR` is unsearchable, untypeable and unsayable
+- [ ] **0.2** Sweep every reference the rename breaks — **ME** — 23 references across 13 files including `src/sova/evidence/bundle.py`, `src/sova/adapters/security_catalog.py`, two test files, `NOTICE`, `CITATION.cff`, `pyproject.toml`, `README.md`, `CHANGELOG.md`, the community `Dockerfile` and `installation.md`; touches source, so the full gate must rerun
+- [ ] **0.3** Lazy-load the CLI to reach sub-200 ms cold start — **ME** — measured `sova --version` under 200 ms, down from 1,296 ms; `sova/cli.py` currently imports `acceptance`, `community`, `detonation` and `formats` purely to build the argparse tree
+- [ ] **0.4** Add a real UX target to the perf budget beside the regression ceiling — **ME** — the current budget measures "does not get worse", never "feels instant"
+- [ ] **0.5** Zero-config `sova check` that finds MCP servers already installed on the user's machine — **ME** — reads Claude Desktop and Cursor config; no target file, no manifest, no flags. This is the wedge
+- [ ] **0.6** Design the empty result so a clean machine still feels valuable — **ME** — "found nothing" must show what was checked, what could not be checked, and why; a blank pass is the worst possible first run
+- [ ] **0.7** Surface the local-first guarantee at first run — **ME** — nothing left your machine, no account, no telemetry, stated plainly where a new user sees it before they worry about it
+- [ ] **0.8** `npx sova` shim bootstrapping a managed Python via `uvx` — **ME** — MCP's native language is TypeScript, the TS SDK has passed 150M downloads and every major client is Node
+- [ ] **0.9** Shareable replay clip with a verify link — **ME** — short, captioned, opens at the decisive moment. The mechanism is ~80% built and unpackaged. This is the status object people post
+- [ ] **0.10** Record *the* demo — **ME + YOU** — the 60-second video at the top of the README. An asset, not a feature, and currently nobody owns it
+- [ ] **0.11** Rewrite the README around the demo — **ME** — opens with the clip and one command; the pre-alpha honesty moves below the fold where it builds trust instead of repelling
+- [ ] **0.12** One front door, not 149 — **ME** — the README teaches a single command; the other 148 stay fully supported and discoverable behind it
+- [ ] **0.13** Publish a cross-platform capability matrix — **ME** — what works on Windows, macOS and Linux. The native computer adapter is Windows-only and P-54 says cross-platform is unproven. A Mac user who installs cleanly and then hits dead commands is a worse outcome than one who never installed
+- [ ] **0.14** Make the honesty an asset, not a disclaimer — **ME** — "the tool that tells you what it could not determine" is rare and trusted in a field of overclaimers. Position `unknown` / `inconclusive` / `unsupported` as a feature on the front page
+- [ ] **0.15** Publish the `.sova` specification standalone, at its own URL, with the conformance kit beside it — **ME** — a format that lives only inside one program is a file layout, not a standard
+- [ ] **0.16** Reposition the Registry as **the Atlas of Reproducible Agent Vulnerabilities** — **ME** — ARVO exists for traditional software and is cited; there is no agent equivalent. Same machinery, a name that fills a gap the literature already named
+- [ ] **0.17** Decide how the README mentions SOVA Engine — **YOU** — ADR-0003 forbids the OSS being "a trial or upsell funnel". Whether and how the commercial product appears on the public front page is a trust decision
+- [ ] **0.18** Join the NIST CAISI AI Agent Standards Initiative, CSA agentic working group and OWASP Agentic Top 10 — **YOU** — nearly free, and the difference between a popular repo and the reference implementation. v4.7 called for this on month one and it never happened
 
 ---
 
@@ -234,6 +270,33 @@ the day. Nothing here ever happens automatically.*
 - [ ] **12.6** Change the website — **YOU**
 - [ ] **12.7** Announce — **YOU**
 - [ ] **12.8** Independently re-verify the published artifacts after release — **ME**
+
+---
+
+## Phase 13 — Landing and aftermath
+
+*Phase 12 makes SOVA public. This phase decides whether anyone notices, and whether the
+project survives it going well. Most of the rows below must be **prepared before** the
+Phase 12 actions fire — a launch you improvise on the day is a launch you waste.*
+
+### Before the announcement
+
+- [ ] **13.1** Define what success means, with numbers — **YOU + ME** — telemetry is off by design, so measurement is external: stars, PyPI downloads, forks, issues opened, Atlas entries, clips shared. Pick 30-day and 90-day targets. Without a target you cannot tell a good launch from a bad one, and you cannot iterate on the wedge if it misses
+- [ ] **13.2** Write the launch content per channel — **ME + YOU** — Show HN, r/netsec, r/LocalLLaMA, the MCP community and the agentic-security working groups each need different framing. Same truth, different entry point
+- [ ] **13.3** Sequence the launch across days, not one blast — **YOU** — decide order, timing and who posts. A single simultaneous push wastes the follow-up audience
+- [ ] **13.4** Prepare answers to the five hardest questions — **ME** — "how is this different from Promptfoo/garak", "why should I trust your evidence", "what does it actually find", "is this just a funnel for your paid product", "why is it pre-alpha". Being ready is the difference between a good thread and a bad one
+- [ ] **13.5** Name a support owner and a response target — **YOU** — Phase 6.6 names a *safety* responder; nobody owns ordinary issues. Week one of a landing launch produces real volume
+- [ ] **13.6** Set week-one triage capacity — **YOU + ME** — what gets answered, what gets labelled, what waits. An unanswered first issue is a permanent signal about the project
+
+### After the announcement
+
+- [ ] **13.7** Answer every first-week issue and discussion — **YOU + ME** — early responsiveness compounds; early silence is fatal and cannot be recovered later
+- [ ] **13.8** Publish a follow-up showing what real users found — **ME + YOU** — the second wave of attention comes from evidence the tool worked for someone who is not us
+- [ ] **13.9** Review at 30 days against 13.1 — **YOU + ME** — if the wedge missed, say so plainly and change it rather than repeating the launch
+- [ ] **13.10** Feed what was learned back into the wedge and the README — **ME** — the first hundred users will show which sentence they did not understand
+
+**Phase 13 exit gate:** the 30-day review is written down and honest, whether or not it
+is good news. A launch that is never measured cannot be repeated or corrected.
 
 ---
 
